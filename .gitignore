@@ -1,4 +1,7 @@
+# Android
 *.iml
+*.iml~
+*.iws
 .gradle
 /local.properties
 /.idea/caches
@@ -7,9 +10,165 @@
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
+/.idea/modules
+/.idea/compiler.xml
+/.idea/deploymentTargetDropDown.xml
+/.idea/deploymentTargetSelector.xml
+/.idea/jarRepositories.xml
+/.idea/gradle.xml
+/.idea/misc.xml
+/.idea/runConfigurations
+/.idea/vcs.xml
+/.idea/inspectionProfiles/Project_Default.xml
+/.idea/appInsightsSettings.xml
 .DS_Store
 /build
-/captures
+captures/
+screenshot-tests/build/
 .externalNativeBuild
 .cxx
 local.properties
+
+# IntelliJ IDEA
+.idea/
+
+# Android Studio
+*.keystore
+*.jks
+*.p12
+*.pem
+*.pfx
+*.p7b
+*.p7c
+*.der
+*.crt
+*.cer
+*.crl
+*.sst
+*.csr
+*.key
+
+# Log files
+*.log
+
+# Local configuration file (sdk path, etc)
+
+# Secrets folder (loaded from secrets repository)
+.secrets/
+
+# Firebase configuration
+app/google-services.json
+
+# Release builds (AAB files)
+*.aab
+
+# Debug
+debug.keystore
+debug.jks
+
+# Release
+release.keystore
+release.jks
+
+# APKs
+*.apk
+*.ap_
+*.apks
+
+# Generated files
+gen/
+generated/
+
+# Ignore gradle wrapper if not needed in your project
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Coverage
+coverage/
+*.ec
+
+# Android Lint
+lint/intermediates/
+lint/generated/
+lint/outputs/
+lint/reports/
+
+# Proguard
+proguard/
+
+# Dex
+.dex
+
+# Local checkouts
+*/.checkouts
+
+# Android cache
+.cache/
+
+# Android build cache
+.android/build-cache/
+.android/caches/
+
+# Android Studio profiler
+*.hprof
+
+# Android Studio navigation editor
+.navigation/
+
+# Android Studio device manager
+*.avd/
+
+# Android Studio emulator
+*.qemu_pipe
+
+# Android Studio screenshot
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.tif
+
+# Скриншоты сохраняем в гите
+!fastlane/metadata/android/**/*.png
+
+# Android Studio backup
+*.bak
+
+# Android Studio temporary files
+*.tmp
+
+# Android Studio crash reports
+*.crash
+
+# Android Studio logs
+
+# Android Studio metadata
+*.ipr
+
+# Android Studio caches
+*.swp
+*.swo
+*~
+
+# Documentation
+/.qwen
+
+# Ruby
+.rbenv-version
+.ruby-gemset
+*.gem
+vendor/bundle/
+.bundle/
+
+# Python
+scripts/__pycache__/
+*.pyc
+*.pyo
+__pycache__/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output/
