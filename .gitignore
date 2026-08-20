@@ -79,6 +79,9 @@ release.jks
 gen/
 generated/
 
+# Сгенерированный Android Studio файл миграции на daemon toolchain
+gradle/gradle-daemon-jvm.properties
+
 # Ignore gradle wrapper if not needed in your project
 !gradle/wrapper/gradle-wrapper.jar
 !gradle/wrapper/gradle-wrapper.properties
