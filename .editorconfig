@@ -1,0 +1,32 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+indent_style = space
+indent_size = 4
+continuation_indent_size = 4
+ij_continuation_indent_size = 4
+ij_kotlin_allow_trailing_comma = false
+ij_kotlin_allow_trailing_comma_on_call_site = false
+ij_kotlin_name_count_to_use_star_import = 999
+ij_kotlin_name_count_to_use_star_import_for_members = 999
+ij_kotlin_import_nested_classes = false
+ij_kotlin_packages_to_use_import_on_demand =
+ktlint_standard_function-naming = disabled
+# ponytail: package-name отключён — текущий namespace содержит underscore (шаблон Android Studio). Переименование пакета отдельной задачей.
+ktlint_standard_package-name = disabled
+
+[*.xml]
+indent_style = space
+indent_size = 4
+
+[*.md]
+trim_trailing_whitespace = false
+
+[app/src/main/**/*.kt]
+ktlint_standard_filename = disabled

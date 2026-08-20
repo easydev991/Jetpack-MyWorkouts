@@ -1,0 +1,13 @@
+# Автоматически генерируемые файлы
+fastlane/README.md
+
+# Gradle и build файлы
+**/build/**/*.md
+**/.gradle/**/*.md
+**/buildSrc/**/*.md
+**/app/build/**/*.md
+
+# Android системные файлы
+**/.externalNativeBuild/**/*.md
+**/.cxx/**/*.md
+**/captures/**/*.md
