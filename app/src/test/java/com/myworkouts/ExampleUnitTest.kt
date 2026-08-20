@@ -1,4 +1,4 @@
-package com.example.jetpack_myworkouts
+package com.myworkouts
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

@@ -32,20 +32,20 @@ python3 scripts/test_report.py
 ./gradlew test
 
 # Один тестовый класс
-./gradlew test --tests "com.example.jetpack_myworkouts.domain.usecase.CalculateWorkoutDurationUseCaseTest"
+./gradlew test --tests "com.myworkouts.domain.usecase.CalculateWorkoutDurationUseCaseTest"
 
 # По паттерну (Class содержит подстроку)
 ./gradlew test --tests "*WorkoutDurationTest"
 
 # Один тестовый метод
-./gradlew test --tests "com.example.jetpack_myworkouts.domain.usecase.CalculateWorkoutDurationUseCaseTest.calculate_when_same_day_then_returns_today"
+./gradlew test --tests "com.myworkouts.domain.usecase.CalculateWorkoutDurationUseCaseTest.calculate_when_same_day_then_returns_today"
 
 # Все тесты в пакете
-./gradlew test --tests "com.example.jetpack_myworkouts.ui.viewmodel.*"
+./gradlew test --tests "com.myworkouts.ui.viewmodel.*"
 
 # Несколько классов
-./gradlew test --tests "com.example.jetpack_myworkouts.domain.usecase.CalculateWorkoutDurationUseCaseTest" \
-                --tests "com.example.jetpack_myworkouts.domain.usecase.FormatWorkoutDurationUseCaseTest"
+./gradlew test --tests "com.myworkouts.domain.usecase.CalculateWorkoutDurationUseCaseTest" \
+                --tests "com.myworkouts.domain.usecase.FormatWorkoutDurationUseCaseTest"
 ```
 
 JUnit Platform понимает wildcard `*` как часть имени класса.

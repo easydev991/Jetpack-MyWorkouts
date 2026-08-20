@@ -8,8 +8,8 @@
 Unit-тесты лежат в `app/src/test/java/` и **зеркалят структуру main**:
 
 ```
-app/src/main/java/com/jetpack_myworkouts/domain/usecase/CalculateWorkoutDurationUseCase.kt
-app/src/test/java/com/jetpack_myworkouts/domain/usecase/CalculateWorkoutDurationUseCaseTest.kt
+app/src/main/java/com/myworkouts/domain/usecase/CalculateWorkoutDurationUseCase.kt
+app/src/test/java/com/myworkouts/domain/usecase/CalculateWorkoutDurationUseCaseTest.kt
 ```
 
 Правила:

@@ -36,8 +36,8 @@ fun calculate_when_same_day_then_returns_today() { }
 ### Файлы тестов в `app/src/test/`, зеркалят `app/src/main/`
 
 ```
-app/src/main/java/com/jetpack_myworkouts/domain/usecase/CalculateWorkoutDurationUseCase.kt
-app/src/test/java/com/jetpack_myworkouts/domain/usecase/CalculateWorkoutDurationUseCaseTest.kt
+app/src/main/java/com/myworkouts/domain/usecase/CalculateWorkoutDurationUseCase.kt
+app/src/test/java/com/myworkouts/domain/usecase/CalculateWorkoutDurationUseCaseTest.kt
 ```
 
 ### Имя тест-класса = `<Class>Test`
@@ -66,7 +66,7 @@ assertEquals(2, items.size, "Должно быть 2 элемента")
 
 ### `Logger` в тестах ViewModel
 
-`com.example.jetpack_myworkouts.util.NoOpLogger` — предпочтительный вариант:
+`com.myworkouts.util.NoOpLogger` — предпочтительный вариант:
 реализация `Logger`, которая ничего не делает. Альтернативно —
 `mockk(relaxed = true)` (relaxed-мок перехватывает любые вызовы
 без падения; см. правило 5 SKILL.md и `EXAMPLE.md`). Оба подхода
@@ -94,7 +94,7 @@ viewModel = WorkoutsScreenViewModel(
 
 ### `StubResourceProvider` в тестах Use Case
 
-`com.example.jetpack_myworkouts.data.provider.StubResourceProvider` —
+`com.myworkouts.data.provider.StubResourceProvider` —
 production-класс из `data/provider/`, специально сделанный
 заглушкой для тестов. Не пиши свою:
 

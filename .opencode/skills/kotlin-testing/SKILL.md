@@ -66,7 +66,7 @@ description: >
     `result.getOrThrow()` для happy path,
     `result.exceptionOrNull()` для проверки типа ошибки.
 11. **Logger в тестах ViewModel — `NoOpLogger` или `mockk(relaxed = true)`.**
-    `com.example.jetpack_myworkouts.util.NoOpLogger` — предпочтительный вариант.
+    `com.myworkouts.util.NoOpLogger` — предпочтительный вариант.
     `mockk(relaxed = true)` — тоже допустим (relaxed-мок перехватывает
     любые вызовы; правило 5 и `EXAMPLE.md` отражают оба подхода).
     Смешивать в одном тест-классе не нужно — выбери один.
@@ -77,11 +77,11 @@ description: >
   человекочитаемым отчётом через `scripts/test_report.py`
   (статистика + список упавших тестов + per-class таблица).
 - **Один класс**:
-  `./gradlew test --tests "com.example.jetpack_myworkouts.domain.usecase.CalculateWorkoutDurationUseCaseTest"`.
+  `./gradlew test --tests "com.myworkouts.domain.usecase.CalculateWorkoutDurationUseCaseTest"`.
 - **Поиск по паттерну**:
   `./gradlew test --tests "*WorkoutDurationTest"`.
 - **Один метод**:
-  `./gradlew test --tests "com.example.jetpack_myworkouts.domain.usecase.CalculateWorkoutDurationUseCaseTest.calculate_when_same_day_then_returns_today"`.
+  `./gradlew test --tests "com.myworkouts.domain.usecase.CalculateWorkoutDurationUseCaseTest.calculate_when_same_day_then_returns_today"`.
 - **Полная проверка**: `make check` — build + test + lint.
 
 ## First 60 seconds (triage template)

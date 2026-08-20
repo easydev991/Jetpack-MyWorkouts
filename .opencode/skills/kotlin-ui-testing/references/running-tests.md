@@ -66,7 +66,7 @@ make test-all
 (пример для unit-тестов из `kotlin-testing`, для androidTest — аналогично):
 
 ```bash
-./gradlew connectedDebugAndroidTest --tests "com.example.jetpack_myworkouts.ui.screens.events.WorkoutsScreenSortByTimeOfDayUiTest"
+./gradlew connectedDebugAndroidTest --tests "com.myworkouts.ui.screens.events.WorkoutsScreenSortByTimeOfDayUiTest"
 ```
 
 ## Зависимости androidTest (build.gradle.kts)

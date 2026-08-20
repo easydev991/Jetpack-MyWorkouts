@@ -18,8 +18,6 @@ ij_kotlin_name_count_to_use_star_import_for_members = 999
 ij_kotlin_import_nested_classes = false
 ij_kotlin_packages_to_use_import_on_demand =
 ktlint_standard_function-naming = disabled
-# ponytail: package-name отключён — текущий namespace содержит underscore (шаблон Android Studio). Переименование пакета отдельной задачей.
-ktlint_standard_package-name = disabled
 
 [*.xml]
 indent_style = space

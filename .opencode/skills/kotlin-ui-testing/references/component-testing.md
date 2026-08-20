@@ -4,7 +4,7 @@
 Activity. В Jetpack-MyWorkouts так тестируются `WorkoutDurationText`, `ColorSelector`,
 `WorkoutTagFilterDialog`, `SaveButton`, секции формы CreateEdit.
 
-Примеры: `app/src/androidTest/java/com/jetpack_myworkouts/ui/ds/WorkoutDurationTextTest.kt`,
+Примеры: `app/src/androidTest/java/com/myworkouts/ui/ds/WorkoutDurationTextTest.kt`,
 `ui/screens/createedit/ColorSelectorUiTest.kt`,
 `ui/screens/events/WorkoutTagFilterDialogTest.kt`.
 
@@ -64,7 +64,7 @@ composeTestRule.setContent {
 ## Изоляция зависимостей — TestViewModel
 
 Для тестов экрана CreateEdit используется factory-функция из
-`app/src/androidTest/java/com/jetpack_myworkouts/ui/screens/createedit/TestViewModel.kt`:
+`app/src/androidTest/java/com/myworkouts/ui/screens/createedit/TestViewModel.kt`:
 
 ```kotlin
 fun createTestViewModel(): WorkoutEditScreenViewModel =

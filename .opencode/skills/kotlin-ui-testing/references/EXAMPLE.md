@@ -1,7 +1,7 @@
 # EXAMPLE — канонические примеры
 
 Полные примеры тестов из реального кода Jetpack-MyWorkouts.
-Файлы: `app/src/androidTest/java/com/jetpack_myworkouts/...`
+Файлы: `app/src/androidTest/java/com/myworkouts/...`
 
 ## Компонентный UI-тест (без Activity)
 

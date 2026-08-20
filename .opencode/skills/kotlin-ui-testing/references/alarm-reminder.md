@@ -1,6 +1,6 @@
 # Alarm and WorkoutReminder — системные тесты
 
-Тесты системных компонентов в `app/src/androidTest/java/com/jetpack_myworkouts/reminder/`:
+Тесты системных компонентов в `app/src/androidTest/java/com/myworkouts/reminder/`:
 планировщик будильников и BroadcastReceiver уведомлений. Работают
 с реальными Android-сервисами (`AlarmManager`, `NotificationManager`),
 без Compose и без эмуляции.

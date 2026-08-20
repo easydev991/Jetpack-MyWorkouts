@@ -2,7 +2,7 @@
 
 Единственный интеграционный ViewModel-тест в проекте —
 `WorkoutDetailsScreenViewModelIntegrationTest.kt`
-(`app/src/androidTest/java/com/jetpack_myworkouts/ui/viewmodel/`).
+(`app/src/androidTest/java/com/myworkouts/ui/viewmodel/`).
 Он тестирует ViewModel с реальной in-memory Room БД и реальным
 репозиторием, в отличие от unit-тестов с фейками.
 
@@ -12,7 +12,7 @@
 
 ## MainDispatcherRule
 
-Общий хелпер — `app/src/androidTest/java/com/jetpack_myworkouts/test/MainDispatcherRule.kt`:
+Общий хелпер — `app/src/androidTest/java/com/myworkouts/test/MainDispatcherRule.kt`:
 
 ```kotlin
 @ExperimentalCoroutinesApi

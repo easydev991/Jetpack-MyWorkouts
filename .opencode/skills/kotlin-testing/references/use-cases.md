@@ -1,7 +1,7 @@
 # Use Cases
 
 Use Case в проекте — это `class` с `operator fun invoke(...)` в
-`com.example.jetpack_myworkouts.domain.usecase`. Тесты лежат в этом же пакете.
+`com.myworkouts.domain.usecase`. Тесты лежат в этом же пакете.
 
 ## Три формы Use Case
 

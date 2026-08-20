@@ -1,6 +1,6 @@
 # Room and Repository — интеграционные тесты данных
 
-Тесты слоя данных в `app/src/androidTest/java/com/jetpack_myworkouts/data/`:
+Тесты слоя данных в `app/src/androidTest/java/com/myworkouts/data/`:
 DAO, база, репозиторий. Используют реальную Room in-memory базу —
 быстро, без устройства хранения, с полным SQL-движком.
 

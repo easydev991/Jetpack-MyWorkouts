@@ -10,10 +10,10 @@
 `BuildWorkoutReminderUseCaseTest` — clock-зависимый use case с валидацией.
 
 ```kotlin
-package com.example.jetpack_myworkouts.domain.usecase
+package com.myworkouts.domain.usecase
 
-import com.example.jetpack_myworkouts.domain.model.WorkoutReminderIntervalUnit
-import com.example.jetpack_myworkouts.domain.model.WorkoutReminderMode
+import com.myworkouts.domain.model.WorkoutReminderIntervalUnit
+import com.myworkouts.domain.model.WorkoutReminderMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -76,17 +76,17 @@ class BuildWorkoutReminderUseCaseTest {
 ## 2. ViewModel с FakeWorkoutRepository + DataStore
 
 `WorkoutsScreenViewModelTest` (фрагмент). Полный файл — в
-`app/src/test/java/com/jetpack_myworkouts/ui/viewmodel/WorkoutsScreenViewModelTest.kt`.
+`app/src/test/java/com/myworkouts/ui/viewmodel/WorkoutsScreenViewModelTest.kt`.
 
 ```kotlin
-package com.example.jetpack_myworkouts.ui.viewmodel
+package com.myworkouts.ui.viewmodel
 
-import com.example.jetpack_myworkouts.data.preferences.UserPreferencesDataStore
-import com.example.jetpack_myworkouts.domain.model.DisplayOption
-import com.example.jetpack_myworkouts.domain.model.Workout
-import com.example.jetpack_myworkouts.domain.model.SortOrder
-import com.example.jetpack_myworkouts.domain.repository.WorkoutRepository
-import com.example.jetpack_myworkouts.util.Logger
+import com.myworkouts.data.preferences.UserPreferencesDataStore
+import com.myworkouts.domain.model.DisplayOption
+import com.myworkouts.domain.model.Workout
+import com.myworkouts.domain.model.SortOrder
+import com.myworkouts.domain.repository.WorkoutRepository
+import com.myworkouts.util.Logger
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -209,11 +209,11 @@ class WorkoutsScreenViewModelTest {
 ## 3. Mapper (entity ↔ domain)
 
 ```kotlin
-package com.example.jetpack_myworkouts.data.database
+package com.myworkouts.data.database
 
-import com.example.jetpack_myworkouts.data.database.entity.WorkoutEntity
-import com.example.jetpack_myworkouts.domain.model.DisplayOption
-import com.example.jetpack_myworkouts.domain.model.Workout
+import com.myworkouts.data.database.entity.WorkoutEntity
+import com.myworkouts.domain.model.DisplayOption
+import com.myworkouts.domain.model.Workout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -253,7 +253,7 @@ class WorkoutMapperTest {
 `BackupImportRealFilesTest` (фрагмент):
 
 ```kotlin
-package com.example.jetpack_myworkouts.domain.usecase
+package com.myworkouts.domain.usecase
 
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -292,11 +292,11 @@ class BackupImportRealFilesTest {
 
 ## Где искать ещё
 
-- `app/src/test/java/com/jetpack_myworkouts/domain/usecase/CalculateWorkoutDurationUseCaseTest.kt` — pure use case, временные кейсы, явный `currentDate`.
-- `app/src/test/java/com/jetpack_myworkouts/domain/usecase/FormatWorkoutDurationUseCaseTest.kt` — MockK для одного интерфейса + `StubResourceProvider`.
-- `app/src/test/java/com/jetpack_myworkouts/domain/model/WorkoutDurationTest.kt` — sealed-class проверки.
-- `app/src/test/java/com/jetpack_myworkouts/ui/viewmodel/WorkoutDetailsScreenViewModelTest.kt` — `SavedStateHandle`, `currentTimeMillisProvider`, `FakeWorkoutReminderManager`.
-- `app/src/test/java/com/jetpack_myworkouts/data/repository/WorkoutReminderRepositoryImplTest.kt` — `FakeWorkoutReminderDao` для repository.
-- `app/src/test/java/com/jetpack_myworkouts/reminder/DefaultWorkoutReminderManagerTest.kt` — несколько Fake'ов одновременно.
-- `app/src/test/java/com/jetpack_myworkouts/data/database/DisplayOptionConverterTest.kt` — converter + round-trip.
-- `app/src/test/java/com/jetpack_myworkouts/ui/state/WorkoutDetailsStateTest.kt` — sealed-state equality.
+- `app/src/test/java/com/myworkouts/domain/usecase/CalculateWorkoutDurationUseCaseTest.kt` — pure use case, временные кейсы, явный `currentDate`.
+- `app/src/test/java/com/myworkouts/domain/usecase/FormatWorkoutDurationUseCaseTest.kt` — MockK для одного интерфейса + `StubResourceProvider`.
+- `app/src/test/java/com/myworkouts/domain/model/WorkoutDurationTest.kt` — sealed-class проверки.
+- `app/src/test/java/com/myworkouts/ui/viewmodel/WorkoutDetailsScreenViewModelTest.kt` — `SavedStateHandle`, `currentTimeMillisProvider`, `FakeWorkoutReminderManager`.
+- `app/src/test/java/com/myworkouts/data/repository/WorkoutReminderRepositoryImplTest.kt` — `FakeWorkoutReminderDao` для repository.
+- `app/src/test/java/com/myworkouts/reminder/DefaultWorkoutReminderManagerTest.kt` — несколько Fake'ов одновременно.
+- `app/src/test/java/com/myworkouts/data/database/DisplayOptionConverterTest.kt` — converter + round-trip.
+- `app/src/test/java/com/myworkouts/ui/state/WorkoutDetailsStateTest.kt` — sealed-state equality.

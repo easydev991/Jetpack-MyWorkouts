@@ -1,7 +1,7 @@
 # Compose selectors — поиск нод, действия, assertions
 
 Работа с `ComposeTestRule` в UI-тестах Jetpack-MyWorkouts. Все примеры —
-из реальных тестов `app/src/androidTest/java/com/jetpack_myworkouts/ui/`.
+из реальных тестов `app/src/androidTest/java/com/myworkouts/ui/`.
 
 ## Создание правила
 

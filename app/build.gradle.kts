@@ -8,13 +8,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.jetpack_myworkouts"
+    namespace = "com.myworkouts"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.jetpack_myworkouts"
+        applicationId = "com.myworkouts"
         minSdk = 26
         targetSdk = 37
         versionCode = 1
