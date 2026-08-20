@@ -171,7 +171,7 @@ val formattedDate = date.format(formatter)
 
 ## Локализованные сообщения об ошибках
 
-### Сетевые ошибки (не применимо в JetpackDays, но для примера)
+### Сетевые ошибки (не применимо в Jetpack-MyWorkouts, но для примера)
 
 ```xml
 <string name="error_network">Ошибка сети. Проверьте подключение к интернету.</string>
@@ -255,9 +255,9 @@ Log.i(TAG, "Loaded $count items")
 Log.d(TAG, "Starting data export")
 ```
 
-## Работа с ResourceProvider в проекте JetpackDays
+## Работа с ResourceProvider в проекте Jetpack-MyWorkouts
 
-В JetpackDays используется `ResourceProvider` для доступа к строковым ресурсам:
+В Jetpack-MyWorkouts используется `ResourceProvider` для доступа к строковым ресурсам:
 
 ```kotlin
 class DaysFormatter(
