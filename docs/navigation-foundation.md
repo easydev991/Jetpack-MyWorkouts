@@ -4,7 +4,8 @@
 > ponytail-ревью (убраны `RootScreenViewModel`, `Log.d`, `NavigationBarContent`-обёртка,
 > `Box+Text` плейсхолдеры и `@Preview`). Коммиты на `main`:
 > `97743b3` → `f8f7f1f` (foundation) + `bd2a77f` (обновление JUnit 6.1.3)
-> + `a96a7f2` (ponytail-рефакторинг) + `dac396c` (FAB insets как в JetpackDays).
+> + `a96a7f2` (ponytail-рефакторинг) + `dac396c` (FAB insets как в JetpackDays)
+> + `96eb61f` (план актуализирован под FAB insets) + `07bcc24` (отмечена ручная проверка).
 
 Фундамент навигации по образцу `JetpackDays`: `Scaffold` с `NavigationBar` (две
 вкладки — «Тренировки» и «Ещё») и `NavHost` с двумя destinations. На экране
@@ -13,8 +14,10 @@
 
 Стек и библиотеки — как в `JetpackDays`:
 `androidx.navigation:navigation-compose 2.9.8`,
-`androidx.lifecycle:lifecycle-viewmodel-compose 2.11.0`,
-`org.junit.jupiter:junit-jupiter 5.11.0` + `junit-platform-launcher` (unit-тесты на JUnit 5).
+`org.junit.jupiter:junit-jupiter 6.1.3` + `junit-platform-launcher 6.1.3` (unit-тесты на JUnit 5).
+`androidx.lifecycle:lifecycle-viewmodel-compose` не подключаем — `ViewModel` для корневой
+навигации избыточен (см. решение §3 Этапа в docs/`navigation-foundation.md` и коммит
+`a96a7f2` «Рефакторинг: убран VM, NavigationBar инлайнен»).
 Иконки — только из `material-icons-core` (добавляется явно, в `composeBom` его нет):
 `Icons.Filled.Home`, `Icons.Filled.Menu`, `Icons.Filled.Add`. `material-icons-extended`
 не подключаем — расширенный набор ради двух иконок не нужен.

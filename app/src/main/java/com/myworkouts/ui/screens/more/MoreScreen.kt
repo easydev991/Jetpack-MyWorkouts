@@ -1,5 +1,9 @@
 package com.myworkouts.ui.screens.more
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -14,6 +18,9 @@ import com.myworkouts.R
 fun MoreScreen(modifier: Modifier = Modifier) {
     Scaffold(
         modifier = modifier,
+        // System nav bar inset уже учтён NavigationBar в RootScreen;
+        // здесь оставляем только горизонтальные insets (displayCutout и т.п.).
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
         topBar = {
             TopAppBar(title = { Text(stringResource(R.string.more_title)) })
         }
