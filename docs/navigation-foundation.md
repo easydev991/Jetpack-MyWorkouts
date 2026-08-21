@@ -139,7 +139,10 @@ JUnit 5 инфраструктура (`junit-jupiter`, `junit-platform-launcher`
 - [x] `app/src/main/java/com/myworkouts/ui/screens/more/MoreScreen.kt`
   - `@OptIn(ExperimentalMaterial3Api::class)`
   - `@Composable fun MoreScreen(modifier: Modifier = Modifier)`.
-  - `Scaffold` с `topBar = { TopAppBar(title = { Text(stringResource(R.string.more_title)) }) }`.
+  - `Scaffold(modifier, contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal), topBar = { TopAppBar(...) })` —
+    только горизонтальные insets: вертикальный `safeDrawing` уже учтён
+    `NavigationBar` в `RootScreen` (симметрично `MainScreen`). Иначе при
+    появлении контента (список и т.п.) тело уедет вверх на высоту system nav bar.
   - Тело `Scaffold` пустое.
 
 ## Этап 5. Корневой экран с навигацией
@@ -154,8 +157,9 @@ JUnit 5 инфраструктура (`junit-jupiter`, `junit-platform-launcher`
   - `Scaffold(modifier, contentWindowInsets = WindowInsets(0, 0, 0, 0), bottomBar = { NavigationBar { ... } }) { paddingValues -> NavHost(...) }` —
     `NavigationBar` в Compose сама учитывает system nav bar inset через свой
     параметр `windowInsets` (default `NavigationBarDefaults.windowInsets`), поэтому
-    outer Scaffold обнуляет свои insets; иначе внутренний `MainScreen` вычтет
-    их повторно и FAB уедет вверх (см. коммит `dac396c`).
+    outer Scaffold обнуляет свои insets; иначе вложенные `MainScreen`/`MoreScreen`
+    вычтут их повторно — и FAB уедет вверх, и контент любого inner-экрана
+    уедет под `NavigationBar` (см. коммит `dac396c`).
   - `NavigationBar` инлайнен в `bottomBar` (после ponytail-ревью отдельный
     `NavigationBarContent` wrapper с одним вызовом признан оверкилом).
     Список вкладок берётся из `Screen.AllTabs`; `paddingValues` обязательно
