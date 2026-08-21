@@ -50,7 +50,6 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
     testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)
@@ -71,6 +70,9 @@ detekt {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // ponytail: при пустом test source set (сейчас тестов нет после удаления RootScreenViewModelTest)
+    // не валить сборку — allowOnNoTests/failOnNoDiscoveredTests=false.
+    failOnNoDiscoveredTests = false
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
