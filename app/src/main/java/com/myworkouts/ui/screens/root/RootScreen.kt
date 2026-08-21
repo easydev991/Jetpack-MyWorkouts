@@ -1,5 +1,6 @@
 package com.myworkouts.ui.screens.root
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -26,6 +27,10 @@ fun RootScreen(modifier: Modifier = Modifier) {
     val currentRoute = navBackStackEntry?.destination?.route
     Scaffold(
         modifier = modifier,
+        // NavigationBar сама учитывает system nav bar inset (NavigationBarDefaults.windowInsets),
+        // поэтому обнуляем contentWindowInsets, иначе вложенный MainScreen вычтет его дважды
+        // и FAB уедет вверх на ~2× высоту system nav bar.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             NavigationBar {
                 Screen.AllTabs.forEach { screen ->
