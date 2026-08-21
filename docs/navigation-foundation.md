@@ -1,0 +1,214 @@
+# Навигация: фундамент (две вкладки + FAB)
+
+Фундамент навигации по образцу `JetpackDays`: `Scaffold` с `NavigationBar` (две
+вкладки — «Тренировки» и «Ещё») и `NavHost` с двумя destinations. На экране
+«Тренировки» — `FloatingActionButton` с `Icons.Filled.Add`, по нажатию только
+запись в `Log`. Все строки локализованы (ru/en).
+
+Стек и библиотеки — как в `JetpackDays`:
+`androidx.navigation:navigation-compose 2.9.8`,
+`androidx.lifecycle:lifecycle-viewmodel-compose 2.11.0`,
+`org.junit.jupiter:junit-jupiter 5.11.0` + `junit-platform-launcher` (unit-тесты на JUnit 5).
+Иконки — только из `material-icons-core` (уже в `composeBom`):
+`Icons.Filled.Home`, `Icons.Filled.Menu`, `Icons.Filled.Add`. `material-icons-extended`
+не подключаем — расширенный набор ради двух иконок не нужен.
+
+> **Отход от `JetpackDays` по иконкам:** план выбирает `Icons.Filled.Home` и
+> `Icons.Filled.Menu`; в `JetpackDays/Screen.kt:19,25` стоят
+> `Icons.AutoMirrored.Filled.List` и `Icons.Filled.MoreVert`. Это собственный
+> выбор для тематики тренировок, а не копирование образца.
+
+---
+
+## Цели
+
+- Завести две вкладки `NavigationBar` с локализованными подписями.
+- `RootScreen` с `NavHost` на два пункта: `main` (стартовый) и `more`.
+- `MainScreen` — `Scaffold` с `floatingActionButton`, `onClick = Log.d(...)`.
+- `MoreScreen` — `Scaffold` с пустым телом и заголовком.
+- Локализация: «Тренировки» / «Ещё», плюс описание FAB.
+- Зарегистрировать `RootScreen` как корневой composable в `MainActivity`.
+
+---
+
+## Этап 1. Зависимости и строки
+
+- [ ] `gradle/libs.versions.toml`
+  - в `[versions]`:
+    - `navigationCompose = "2.9.8"`
+    - `lifecycleViewmodelCompose = "2.11.0"`
+    - `junitJupiter = "5.11.0"`
+    - `junitPlatform = "1.11.0"`  // синхронно с `junitJupiter`
+  - в `[libraries]`:
+    - `androidx-navigation-compose`
+    - `androidx-lifecycle-viewmodel-compose`
+    - `junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junitJupiter" }`
+    - `junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junitPlatform" }`
+  - версии Compose BOM / Kotlin / AGP / detekt / ktlint — оставить как есть.
+  - **не добавлять** `material-icons-extended` и версию `material`: иконки берём
+    из core (`material-icons-core` уже подтягивается через `composeBom`).
+- [ ] `app/build.gradle.kts`
+  - в `dependencies`:
+    - `implementation(libs.androidx.navigation.compose)`
+    - `implementation(libs.androidx.lifecycle.viewmodel.compose)`
+    - `testImplementation(libs.junit.jupiter)`
+    - `testRuntimeOnly(libs.junit.platform.launcher)`
+  - добавить блок `tasks.withType<Test> { useJUnitPlatform() }` (по образцу
+    `JetpackDays/app/build.gradle.kts:148–150`), иначе Gradle не подхватит
+    JUnit 5 тесты.
+- [ ] `app/src/main/res/values/strings.xml` (ru):
+  - `<string name="workouts_title">Тренировки</string>` (заголовок вкладки и TopBar)
+  - `<string name="more_title">Ещё</string>` (заголовок вкладки и TopBar)
+  - `<string name="add_workout">Добавить тренировку</string>` (contentDescription FAB)
+- [ ] `app/src/main/res/values-en/strings.xml` (en):
+  - `<string name="workouts_title">Workouts</string>`
+  - `<string name="more_title">More</string>`
+  - `<string name="add_workout">Add workout</string>`
+  - Намеренно одна строка на вкладку — используется и в `NavigationBarItem.label`,
+    и в `TopAppBar.title`. Дублировать `tab_*` / `screen_*` не нужно.
+- [ ] Проверка: `make help` → `make format && make lint` без ошибок.
+
+## Этап 2. Sealed `Screen` (навигационные маршруты)
+
+- [ ] `app/src/main/java/com/myworkouts/navigation/Screen.kt`
+  - `sealed class Screen(val route: String, val icon: ImageVector, val titleResId: Int)` —
+    по образцу `JetpackDays` (`Screen.kt:12–15`): `val` сразу в сигнатуре,
+    иначе `screen.route`/`screen.icon`/`screen.titleResId` в `NavigationBarContent`
+    (см. Этап 5) не компилируются.
+  - **Отход от `JetpackDays`:** `icon` и `titleResId` здесь **non-null**.
+    В `JetpackDays/Screen.kt:14–15` они `ImageVector?` и `Int?` (nullable)
+    — там есть экраны без иконок (`ThemeIcon`, `ItemDetail`, …).
+    Для двух вкладок MyWorkouts nullable избыточен, и это убирает `!!` в
+    `NavigationBarContent` (см. Этап 5). Возвращать к nullable — только если
+    появятся destinations без иконок (отдельные экраны вне табов).
+  - `object Main : Screen(route = "main", icon = Icons.Filled.Home, titleResId = R.string.workouts_title)`
+  - `object More : Screen(route = "more", icon = Icons.Filled.Menu, titleResId = R.string.more_title)`
+  - Иконки — только из `core` (`Icons.Filled.Home`, `Icons.Filled.Menu`).
+  - `val AllTabs = listOf(Main, More)` — **единственный источник истины** для
+    порядка вкладок. Используется в `RootScreen` (`NavigationBarContent`) и
+    не дублируется ни в `RootScreenViewModel`, ни в `RootScreen.items`.
+    Ponytail: один список на весь модуль, не три.
+
+## Этап 3. ViewModel корневого экрана (минимальный state)
+
+> Здесь крошечная логика — один unit-тест на JUnit 5 фиксирует контракт.
+> Тестовые имена и маркеры — по `kotlin-testing` skill.
+>
+> Отступление от правила AGENTS.md (`StateFlow + SharingStarted.WhileSubscribed(5000)`):
+> `SharingStarted` опускаем — для единственного `MutableStateFlow` без `stateIn`
+> он избыточен. Это намеренное сужение правила для foundation.
+>
+> Замечание про образец: `JetpackDays/RootScreenViewModel.kt` использует
+> `mutableStateOf` (Compose `State<Screen>`), а в `NavigationBarContent`
+> (`RootScreenComponents.kt:57`) — `val currentTab by viewModel.currentTab`
+> без `collectAsState()`. Это формально работает, но противоречит AGENTS.md.
+> Мы идём строже: `MutableStateFlow` + `.collectAsState()` в UI.
+
+- [ ] `app/src/main/java/com/myworkouts/ui/viewmodel/RootScreenViewModel.kt`
+  - класс `: ViewModel()`.
+  - Импорт `com.myworkouts.navigation.Screen.AllTabs` **не нужен**: VM хранит
+    только текущую вкладку, список берётся из `Screen.AllTabs` в UI-слое.
+  - `private val _currentTab = MutableStateFlow<Screen>(Screen.Main)`
+  - `val currentTab: StateFlow<Screen> = _currentTab.asStateFlow()`
+  - `fun switchTab(tab: Screen) { _currentTab.value = tab }` —
+    проверка `if (tab in tabs)` декоративна: sealed class с двумя `object`
+    гарантирует валидность на уровне компилятора.
+- [ ] `app/src/test/java/com/myworkouts/ui/viewmodel/RootScreenViewModelTest.kt`
+  - JUnit 5: `import org.junit.jupiter.api.Test`. Без `kotlin.test`.
+  - Имена в snake_case, маркеры `// Given` / `// When` / `// Then`:
+    - `when_view_model_created_then_default_tab_is_main`
+    - `when_switch_to_more_then_current_tab_is_more`
+    - `when_switch_back_to_main_from_more_then_current_tab_is_main`
+  - В теле каждого теста — три маркера. Без `!!`. Моки не нужны.
+  - В третьем тесте `// Given viewModel.switchTab(Screen.More)` обязателен —
+    без этого шага имя `back_to_main_from_more` теряет смысл.
+
+## Этап 4. Экраны (composable destinations)
+
+> Вёрстка без поведенческой логики — TDD не применяется, только прямые шаги.
+> `TopAppBar` помечен `@ExperimentalMaterial3Api` — нужен opt-in.
+
+- [ ] `app/src/main/java/com/myworkouts/ui/screens/main/MainScreen.kt`
+  - `@OptIn(ExperimentalMaterial3Api::class)`
+  - `@Composable fun MainScreen(modifier: Modifier = Modifier, onFabClick: () -> Unit = {})`.
+  - `Scaffold` с `topBar = { TopAppBar(title = { Text(stringResource(R.string.workouts_title)) }) }`
+    и `floatingActionButton = { FloatingActionButton(onClick = onFabClick) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_workout)) } }`.
+  - В теле `Scaffold` — `Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.workouts_title)) }`
+    (заглушка, чтобы визуально убедиться, что экран рендерится; `Box` нужен
+    — без него `Text` в `Scaffold` body прилипнет сверху-слева).
+  - `@Preview(showBackground = true) @Composable fun MainScreenPreview() { JetpackMyWorkoutsTheme { MainScreen() } }`.
+- [ ] `app/src/main/java/com/myworkouts/ui/screens/more/MoreScreen.kt`
+  - `@OptIn(ExperimentalMaterial3Api::class)`
+  - `@Composable fun MoreScreen(modifier: Modifier = Modifier)`.
+  - `Scaffold` с `topBar = { TopAppBar(title = { Text(stringResource(R.string.more_title)) }) }`.
+  - В теле `Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.more_title)) }` — заглушка.
+  - `@Preview(showBackground = true) @Composable fun MoreScreenPreview() { JetpackMyWorkoutsTheme { MoreScreen() } }`.
+
+## Этап 5. Корневой экран с навигацией
+
+- [ ] `app/src/main/java/com/myworkouts/ui/screens/root/RootScreen.kt`
+  - `@OptIn(ExperimentalMaterial3Api::class)` на `RootScreen` и `NavigationBarContent`.
+  - В импортах нужен `import android.util.Log` — без него сниппет c `Log.d(...)`
+    в `MainScreen`-destination не компилируется as-is.
+  - `RootScreen(modifier: Modifier = Modifier, viewModel: RootScreenViewModel = viewModel())` —
+    параметр `viewModel` с дефолтом через `viewModel()` (`lifecycle-viewmodel-compose`),
+    чтобы публичная сигнатура `RootScreen` совпадала с `MainActivity` (см. Этап 6).
+  - `val navController = rememberNavController()`.
+  - `val currentTab by viewModel.currentTab.collectAsState()`.
+  - `Scaffold(bottomBar = { NavigationBarContent(Screen.AllTabs, currentTab, navController) }) { paddingValues -> NavHost(navController, startDestination = Screen.Main.route, modifier = Modifier.padding(paddingValues)) { ... } }` —
+    список вкладок берётся из `Screen.AllTabs` (см. Этап 2); `paddingValues`
+    обязательно пробрасываются, иначе контент уйдёт под `NavigationBar`
+    (образец: `JetpackDays/.../RootScreenComponents.kt:303–307`).
+  - `NavHost` со вложенным builder:
+    - `composable(Screen.Main.route) { MainScreen(onFabClick = { Log.d("MainScreen", "FAB нажата — добавить тренировку") }) }`
+    - `composable(Screen.More.route) { MoreScreen() }`
+  - `NavigationBarContent` — приватный composable в этом же файле,
+    `@OptIn(ExperimentalMaterial3Api::class)`:
+    - для каждой `screen` рисует
+      `NavigationBarItem(icon = Icon(screen.icon, contentDescription = stringResource(screen.titleResId)), label = { Text(stringResource(screen.titleResId)) }, selected = currentTab == screen, onClick = { viewModel.switchTab(screen); navController.navigate(screen.route) { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } })`.
+  - `testTag` сейчас **не добавляем** — мёртвые модификаторы без UI-тестов.
+    Вернуть, когда стартует задача «UI-тесты навигации».
+
+## Этап 6. Подключение в `MainActivity`
+
+- [ ] `app/src/main/java/com/myworkouts/MainActivity.kt`
+  - удалить `Greeting` / `GreetingPreview`.
+  - в `setContent { JetpackMyWorkoutsTheme { RootScreen() } }`.
+  - `RootScreen` — `viewModel` подхватится через дефолтный параметр
+    `viewModel: RootScreenViewModel = viewModel()` из Этап 5.
+- [ ] Сборка: `make build` (или `make assembleDebug`) — без ошибок.
+- [ ] `make test` — JUnit 5 тесты (`useJUnitPlatform()`) подхватят
+    `RootScreenViewModelTest`. Compose-тесты не добавляем — выйдем за рамки
+    foundation.
+
+---
+
+## Проверка результата
+
+- [ ] Запустить приложение, убедиться:
+  - стартовый экран — «Тренировки» с FAB «+»;
+  - переключение вкладки «Ещё» меняет экран;
+  - контент экрана не уходит под `NavigationBar` (визуально сверху-снизу
+    есть отступы, `Modifier.padding(paddingValues)` отрабатывает);
+  - повторное нажатие активной вкладки не дублирует destination
+    (`launchSingleTop = true` + `restoreState = true`);
+  - заголовки вкладок и описания FAB подгружаются на ru/en
+    (через системные настройки / `adb shell setprop persist.sys.locale`).
+- [ ] `Logcat` → фильтр `MainScreen` → нажатие FAB пишет
+  «FAB нажата — добавить тренировку».
+- [ ] `make format && make lint && make test` — зелёные.
+
+---
+
+## Что отложено (понадобится дальше, не в этом плане)
+
+- Реальные `ViewModel` доменных экранов и проброс зависимостей через
+  `AppModule` (DI) — добавляется по мере появления фич.
+- Аналитика (`AnalyticsService`) — перенесём из `JetpackDays`, позже.
+- Логирование через `util/Logger` вместо прямого `android.util.Log` — когда
+  появится общий логгер.
+- Условное скрытие `bottomBar` (как `shouldShowNavigationBar` в
+  `JetpackDays`) — нужно, когда добавятся вложенные экраны, не участвующие
+  в табах.
+- Compose-тесты экрана / BottomBar / FAB + `testTag` — отдельная задача
+  «UI-тесты навигации», повесим в `androidTest/`.
