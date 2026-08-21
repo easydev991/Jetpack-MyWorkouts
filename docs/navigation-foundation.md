@@ -159,10 +159,14 @@
     чтобы публичная сигнатура `RootScreen` совпадала с `MainActivity` (см. Этап 6).
   - `val navController = rememberNavController()`.
   - `val currentTab by viewModel.currentTab.collectAsState()`.
-  - `Scaffold(bottomBar = { NavigationBarContent(Screen.AllTabs, currentTab, navController) }) { paddingValues -> NavHost(navController, startDestination = Screen.Main.route, modifier = Modifier.padding(paddingValues)) { ... } }` —
+  - `Scaffold(bottomBar = { NavigationBarContent(Screen.AllTabs, currentTab, onTabSelected = viewModel::switchTab, navController) }) { paddingValues -> NavHost(navController, startDestination = Screen.Main.route, modifier = Modifier.padding(paddingValues)) { ... } }` —
     список вкладок берётся из `Screen.AllTabs` (см. Этап 2); `paddingValues`
     обязательно пробрасываются, иначе контент уйдёт под `NavigationBar`
     (образец: `JetpackDays/.../RootScreenComponents.kt:303–307`).
+    **Сигнатура `NavigationBarContent` отличается от плана:** добавлен 4-й параметр
+    `onTabSelected: (Screen) -> Unit` (callback вместо прямого `viewModel`) — иначе
+    `viewModel.switchTab(...)` в `onClick` неоткуда взять. Передаётся через
+    `viewModel::switchTab`.
   - `NavHost` со вложенным builder:
     - `composable(Screen.Main.route) { MainScreen(onFabClick = { Log.d("MainScreen", "FAB нажата — добавить тренировку") }) }`
     - `composable(Screen.More.route) { MoreScreen() }`
