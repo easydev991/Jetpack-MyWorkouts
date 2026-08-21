@@ -9,7 +9,7 @@
 `androidx.navigation:navigation-compose 2.9.8`,
 `androidx.lifecycle:lifecycle-viewmodel-compose 2.11.0`,
 `org.junit.jupiter:junit-jupiter 5.11.0` + `junit-platform-launcher` (unit-тесты на JUnit 5).
-Иконки — только из `material-icons-core` (уже в `composeBom`):
+Иконки — только из `material-icons-core` (добавляется явно, в `composeBom` его нет):
 `Icons.Filled.Home`, `Icons.Filled.Menu`, `Icons.Filled.Add`. `material-icons-extended`
 не подключаем — расширенный набор ради двух иконок не нужен.
 
@@ -45,12 +45,16 @@
     - `junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junitJupiter" }`
     - `junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junitPlatform" }`
   - версии Compose BOM / Kotlin / AGP / detekt / ktlint — оставить как есть.
-  - **не добавлять** `material-icons-extended` и версию `material`: иконки берём
-    из core (`material-icons-core` уже подтягивается через `composeBom`).
+  - добавить `androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }`
+    в `[libraries]` (без `version.ref` — версия приходит из `composeBom`). `material-icons-core`
+    **не входит** в `composeBom`, его нужно объявить явно.
+  - **не добавлять** `material-icons-extended` и версию `material`: расширенный набор ради
+    двух иконок не нужен.
 - [ ] `app/build.gradle.kts`
   - в `dependencies`:
     - `implementation(libs.androidx.navigation.compose)`
     - `implementation(libs.androidx.lifecycle.viewmodel.compose)`
+    - `implementation(libs.androidx.compose.material.icons.core)`
     - `testImplementation(libs.junit.jupiter)`
     - `testRuntimeOnly(libs.junit.platform.launcher)`
   - добавить блок `tasks.withType<Test> { useJUnitPlatform() }` (по образцу
