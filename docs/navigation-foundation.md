@@ -4,7 +4,7 @@
 > ponytail-ревью (убраны `RootScreenViewModel`, `Log.d`, `NavigationBarContent`-обёртка,
 > `Box+Text` плейсхолдеры и `@Preview`). Коммиты на `main`:
 > `97743b3` → `f8f7f1f` (foundation) + `bd2a77f` (обновление JUnit 6.1.3)
-> + следующий коммит с рефакторингом.
+> + `a96a7f2` (ponytail-рефакторинг) + `dac396c` (FAB insets как в JetpackDays).
 
 Фундамент навигации по образцу `JetpackDays`: `Scaffold` с `NavigationBar` (две
 вкладки — «Тренировки» и «Ещё») и `NavHost` с двумя destinations. На экране
@@ -127,8 +127,11 @@ JUnit 5 инфраструктура (`junit-jupiter`, `junit-platform-launcher`
 - [x] `app/src/main/java/com/myworkouts/ui/screens/main/MainScreen.kt`
   - `@OptIn(ExperimentalMaterial3Api::class)`
   - `@Composable fun MainScreen(modifier: Modifier = Modifier)`.
-  - `Scaffold` с `topBar = { TopAppBar(title = { Text(stringResource(R.string.workouts_title)) }) }`
-    и `floatingActionButton = { FloatingActionButton(onClick = { /* ponytail: FAB placeholder */ }) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_workout)) } }`.
+  - `Scaffold(modifier, contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal), topBar = { TopAppBar(...) }, floatingActionButton = { FAB(...) })` —
+    только горизонтальные insets: вертикальный `safeDrawing` уже учтён
+    `NavigationBar` в `RootScreen`, иначе FAB уедет вверх на ~2× высоту
+    system nav bar (см. коммит `dac396c`).
+  - `floatingActionButton = { FloatingActionButton(onClick = { /* ponytail: FAB placeholder */ }) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_workout)) } }`.
   - Тело `Scaffold` пустое — список тренировок добавится отдельной фичей.
 - [x] `app/src/main/java/com/myworkouts/ui/screens/more/MoreScreen.kt`
   - `@OptIn(ExperimentalMaterial3Api::class)`
@@ -145,8 +148,12 @@ JUnit 5 инфраструктура (`junit-jupiter`, `junit-platform-launcher`
     нативный источник «текущей вкладки» из Jetpack Navigation. Никаких
     `MutableStateFlow`, никакого `ViewModel`.
   - `val currentRoute = navBackStackEntry?.destination?.route`.
-  - `Scaffold(bottomBar = { NavigationBar { Screen.AllTabs.forEach { screen -> ... } } }) { paddingValues -> NavHost(...) }` —
-    `NavigationBar` инлайнен в `bottomBar` (после ponytail-ревью отдельный
+  - `Scaffold(modifier, contentWindowInsets = WindowInsets(0, 0, 0, 0), bottomBar = { NavigationBar { ... } }) { paddingValues -> NavHost(...) }` —
+    `NavigationBar` в Compose сама учитывает system nav bar inset через свой
+    параметр `windowInsets` (default `NavigationBarDefaults.windowInsets`), поэтому
+    outer Scaffold обнуляет свои insets; иначе внутренний `MainScreen` вычтет
+    их повторно и FAB уедет вверх (см. коммит `dac396c`).
+  - `NavigationBar` инлайнен в `bottomBar` (после ponytail-ревью отдельный
     `NavigationBarContent` wrapper с одним вызовом признан оверкилом).
     Список вкладок берётся из `Screen.AllTabs`; `paddingValues` обязательно
     пробрасываются, иначе контент уйдёт под `NavigationBar`.
@@ -184,7 +191,9 @@ JUnit 5 инфраструктура (`junit-jupiter`, `junit-platform-launcher`
   - повторное нажатие активной вкладки не дублирует destination
     (`launchSingleTop = true` + `restoreState = true`);
   - заголовки вкладок и описания FAB подгружаются на ru/en
-    (через системные настройки / `adb shell setprop persist.sys.locale`).
+    (через системные настройки / `adb shell setprop persist.sys.locale`);
+  - FAB по оси Y находится на одном уровне с эталоном `JetpackDays`
+    (визуально 16dp над нижним краем NavigationBar, **не** поверх неё).
 - [x] `make format && make lint && make test && make build` — зелёные.
 
 > Ручной пункт («Запустить приложение…») требует устройства и остаётся на
