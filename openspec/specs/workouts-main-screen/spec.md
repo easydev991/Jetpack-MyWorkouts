@@ -48,4 +48,3 @@ The strings used by the workouts tab — `workouts_title` (for both `NavigationB
 - **WHEN** the device locale is `en`
 - **THEN** the workouts tab label is "Workouts"
 - **AND** the FAB `contentDescription` is "Add workout"
-

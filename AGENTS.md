@@ -67,7 +67,14 @@ Room (planned), DataStore (planned). Manual DI — factory methods, без Hilt.
 
 ## Project Structure
 
-`app/src/main/java/com/myworkouts/` сейчас: `MainActivity.kt` + `ui/theme/`.
+`app/src/main/java/com/myworkouts/` сейчас:
+- `MainActivity.kt`
+- `navigation/Screen.kt` (sealed class `Screen` + `Screen.AllTabs`)
+- `ui/theme/Theme.kt` + `Typography.kt` + `Color.kt`
+- `ui/screens/main/MainScreen.kt`
+- `ui/screens/more/MoreScreen.kt`
+- `ui/screens/root/RootScreen.kt` (NavHost + NavigationBar)
+
 Целевая структура (по образцу JetpackDays):
 
 ```

@@ -77,4 +77,3 @@ TBD - created by archiving change navigation-foundation. Update Purpose after ar
 - **WHEN** the code is read
 - **THEN** `RootScreen.kt` has no `viewModel()` call
 - **AND** no class named `RootScreenViewModel` exists in the project
-
