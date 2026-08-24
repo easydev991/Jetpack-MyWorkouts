@@ -18,8 +18,8 @@ android {
         applicationId = "com.myworkouts"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = project.findProperty("VERSION_CODE")?.toString()?.toInt() ?: 1
+        versionName = project.findProperty("VERSION_NAME")?.toString() ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -37,6 +37,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
