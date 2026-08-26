@@ -11,17 +11,35 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.navigation.BottomTabs
 import com.myworkouts.navigation.Screen
+import com.myworkouts.ui.screens.appearance.AppearanceScreen
 import com.myworkouts.ui.screens.main.MainScreen
 import com.myworkouts.ui.screens.more.MoreScreen
+import com.myworkouts.ui.viewmodel.AppearanceViewModel
 
+/**
+ * Корневой экран с нижней навигацией и вложенными маршрутами.
+ *
+ * `AppSettingsDataStore` создаётся один раз в `MainActivity.onCreate` и
+ * передаётся сюда параметром — повторное создание внутри `RootScreen`
+ * приведёт к `There are multiple DataStores active for the same file`.
+ *
+ * @param dataStore единый экземпляр [AppSettingsDataStore] для всего приложения
+ * @param modifier внешний модификатор для [Scaffold]
+ */
 @Composable
-fun RootScreen(modifier: Modifier = Modifier) {
+fun RootScreen(
+    dataStore: AppSettingsDataStore,
+    modifier: Modifier = Modifier
+) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -33,12 +51,12 @@ fun RootScreen(modifier: Modifier = Modifier) {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             NavigationBar {
-                Screen.AllTabs.forEach { screen ->
-                    val title = stringResource(screen.titleResId)
+                BottomTabs.forEach { tab ->
+                    val title = stringResource(tab.titleResId)
                     NavigationBarItem(
-                        selected = currentRoute == screen.route,
+                        selected = currentRoute == tab.route,
                         onClick = {
-                            navController.navigate(screen.route) {
+                            navController.navigate(tab.route) {
                                 popUpTo(navController.graph.findStartDestination().id) {
                                     saveState = true
                                 }
@@ -46,7 +64,9 @@ fun RootScreen(modifier: Modifier = Modifier) {
                                 restoreState = true
                             }
                         },
-                        icon = { Icon(screen.icon, contentDescription = title) },
+                        icon = {
+                            Icon(tab.icon, contentDescription = title)
+                        },
                         label = { Text(title) }
                     )
                 }
@@ -59,7 +79,16 @@ fun RootScreen(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(paddingValues)
         ) {
             composable(Screen.Main.route) { MainScreen() }
-            composable(Screen.More.route) { MoreScreen() }
+            composable(Screen.More.route) { MoreScreen(navController = navController) }
+            composable(Screen.Appearance.route) {
+                AppearanceScreen(
+                    viewModel =
+                        viewModel(
+                            factory = AppearanceViewModel.factory(dataStore)
+                        ),
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
         }
     }
 }

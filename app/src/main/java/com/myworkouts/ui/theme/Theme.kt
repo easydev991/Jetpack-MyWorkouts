@@ -9,6 +9,8 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import com.myworkouts.domain.model.AppTheme
+import com.myworkouts.domain.model.isDark
 
 private val DarkColorScheme =
     darkColorScheme(
@@ -33,21 +35,34 @@ private val LightColorScheme =
      */
     )
 
+// ponytail: appTheme non-null (MainActivity передаёт значение сразу
+// через collectAsState(initial=SYSTEM) — null-период невозможен).
+// Inline `Build.VERSION.SDK_INT >= S` для dynamicColor (а не helper
+// isDynamicColorsAvailable) — единственный consumer на этом уровне.
+// Если добавятся ещё Composable с тем же чеком — вынести (см.
+// design.md Decisions 4, 7).
 @Composable
 fun JetpackMyWorkoutsTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    appTheme: AppTheme = AppTheme.SYSTEM,
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    val useDarkTheme = appTheme.isDark(darkTheme)
+
     val colorScheme =
         when {
             dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
                 val context = LocalContext.current
-                if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+                if (useDarkTheme) {
+                    dynamicDarkColorScheme(context)
+                } else {
+                    dynamicLightColorScheme(context)
+                }
             }
 
-            darkTheme -> DarkColorScheme
+            useDarkTheme -> DarkColorScheme
             else -> LightColorScheme
         }
 

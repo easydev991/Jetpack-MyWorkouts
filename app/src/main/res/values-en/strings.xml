@@ -4,4 +4,15 @@
     <string name="more_title">More</string>
     <string name="add_workout">Add workout</string>
     <string name="app_version">App version: %1$s</string>
+
+    <!-- Appearance Screen -->
+    <string name="appearance_title">Appearance</string>
+    <string name="app_theme">App theme</string>
+    <string name="dynamic_colors">Dynamic colors</string>
+    <string name="use_dynamic_colors">Use dynamic colors</string>
+    <string name="dynamic_colors_hint">When this setting is enabled, system colors from Android 12+ based on device wallpaper will be used</string>
+    <string name="light">Light</string>
+    <string name="dark">Dark</string>
+    <string name="system">System</string>
+    <string name="back">Back</string>
 </resources>

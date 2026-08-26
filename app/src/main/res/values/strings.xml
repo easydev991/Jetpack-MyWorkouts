@@ -4,4 +4,15 @@
     <string name="more_title">Ещё</string>
     <string name="add_workout">Добавить тренировку</string>
     <string name="app_version">Версия приложения: %1$s</string>
+
+    <!-- Appearance Screen -->
+    <string name="appearance_title">Оформление приложения</string>
+    <string name="app_theme">Тема приложения</string>
+    <string name="dynamic_colors">Динамические цвета</string>
+    <string name="use_dynamic_colors">Использовать динамические цвета</string>
+    <string name="dynamic_colors_hint">При включении этой настройки будут использоваться системные цвета Android 12+ на основе обоев устройства</string>
+    <string name="light">Светлая</string>
+    <string name="dark">Тёмная</string>
+    <string name="system">Системная</string>
+    <string name="back">Назад</string>
 </resources>

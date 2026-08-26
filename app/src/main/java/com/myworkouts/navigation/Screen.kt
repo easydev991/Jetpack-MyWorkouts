@@ -6,24 +6,56 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.myworkouts.R
 
+/**
+ * Маршруты экранов приложения.
+ *
+ * Содержит только `route` — без UI-метаданных (icon, title). Они живут
+ * отдельно в [BottomTab], потому что у нижней навигации и у самих экранов
+ * разные потребности: экрану из таба нужен только маршрут, а элементу
+ * `NavigationBarItem` — ещё и иконка с заголовком. Слияние через
+ * nullable-поля приводит к `?.let { ... }.orEmpty()` в цикле таба.
+ */
 sealed class Screen(
+    val route: String
+) {
+    /** Главный экран — список тренировок (нижняя навигация). */
+    object Main : Screen(route = "main")
+
+    /** Экран «Ещё» — точка входа в дополнительные настройки (нижняя навигация). */
+    object More : Screen(route = "more")
+
+    /** Экран «Оформление приложения» — выбор темы и динамических цветов (не в нижней навигации). */
+    object Appearance : Screen(route = "appearance")
+}
+
+/**
+ * Описание нижней вкладки навигации.
+ *
+ * @property route маршрут экрана (см. [Screen])
+ * @property icon иконка для `NavigationBarItem`
+ * @property titleResId строковый ресурс заголовка вкладки
+ */
+// ponytail: Screen хранит только route; UI-метаданные вынесены сюда.
+// Слить через nullable-поля в Screen нельзя — сломает NavigationBarItem
+// (?.let/orEmpty в цикле). При добавлении ещё одного не-tab экрана —
+// расширять BottomTabs/BottomTab не надо (см. design.md Decision 1).
+data class BottomTab(
     val route: String,
     val icon: ImageVector,
     val titleResId: Int
-) {
-    object Main : Screen(
-        route = "main",
-        icon = Icons.Filled.Home,
-        titleResId = R.string.workouts_title
-    )
+)
 
-    object More : Screen(
-        route = "more",
-        icon = Icons.Filled.Menu,
-        titleResId = R.string.more_title
+/** Список нижних вкладок в порядке отрисовки слева направо. */
+val BottomTabs: List<BottomTab> =
+    listOf(
+        BottomTab(
+            route = Screen.Main.route,
+            icon = Icons.Filled.Home,
+            titleResId = R.string.workouts_title
+        ),
+        BottomTab(
+            route = Screen.More.route,
+            icon = Icons.Filled.Menu,
+            titleResId = R.string.more_title
+        )
     )
-
-    companion object {
-        val AllTabs: List<Screen> = listOf(Main, More)
-    }
-}

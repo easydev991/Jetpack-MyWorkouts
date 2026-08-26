@@ -11,8 +11,8 @@ Kotlin + Compose + MVVM + Clean Architecture (manual DI, без Hilt).
 
 ## Stack
 
-Jetpack Compose + Material3, Navigation Compose (planned), ViewModel + StateFlow,
-Room (planned), DataStore (planned). Manual DI — factory methods, без Hilt.
+Jetpack Compose + Material3, Navigation Compose, ViewModel + StateFlow,
+DataStore. Room (planned). Manual DI — без Hilt.
 
 Версии — `gradle/libs.versions.toml`, конфиг — `gradle.properties`,
 `app/build.gradle.kts`. **JDK 17 обязателен** для сборки и detekt.
@@ -21,8 +21,11 @@ Room (planned), DataStore (planned). Manual DI — factory methods, без Hilt.
 
 ## Build
 
-Сборка/тесты/линт — через `Makefile` (`make help` — список). Перед коммитом:
+`make help` — список целей. Перед коммитом:
 `make format && make lint && make test`.
+
+`make install` ставит APK на подключённый adb-девайс
+(`./gradlew installDebug`).
 
 ---
 
@@ -69,22 +72,15 @@ Room (planned), DataStore (planned). Manual DI — factory methods, без Hilt.
 
 `app/src/main/java/com/myworkouts/` сейчас:
 - `MainActivity.kt`
-- `navigation/Screen.kt` (sealed class `Screen` + `Screen.AllTabs`)
-- `ui/theme/Theme.kt` + `Typography.kt` + `Color.kt`
-- `ui/screens/main/MainScreen.kt`
-- `ui/screens/more/MoreScreen.kt`
-- `ui/screens/root/RootScreen.kt` (NavHost + NavigationBar)
+- `data/preferences/AppSettingsDataStore.kt`
+- `domain/model/AppTheme.kt`
+- `navigation/Screen.kt` (только `route`) + `BottomTab` + `BottomTabs`
+- `ui/screens/{main,more,root,appearance}/`
+- `ui/state/AppearanceUiState.kt`
+- `ui/theme/{Color,Theme,Type}.kt` ← `Type`, не `Typography`
+- `ui/viewmodel/AppearanceViewModel.kt`
 
-Целевая структура (по образцу JetpackDays):
-
-```
-data/{database,preferences,repository}/      # Room/DataStore
-domain/{exception,model,repository,usecase}/
-ui/{ds,screens,state,theme,viewmodel}/
-navigation/      # sealed class Screen + BottomNav
-di/              # AppModule (manual)
-util/            # Logger, AppConstants
-MyWorkoutsApplication.kt
-```
+`di/`, `util/`, `MyWorkoutsApplication.kt` ещё не созданы — manual DI в
+пределах фичи, без центрального модуля.
 
 Тесты зеркалят source в `app/src/test/` и `app/src/androidTest/`.

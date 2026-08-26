@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Горизонтальный отступ внутри кнопок экрана «Ещё». -->
+    <dimen name="button_horizontal_padding">16dp</dimen>
+</resources>
