@@ -259,11 +259,11 @@ it's a plain snapshot of two settings).
 
 ### Requirement: JetpackMyWorkoutsTheme applies AppTheme
 
-`JetpackMyWorkoutsTheme` SHALL accept `darkTheme: Boolean =
-isSystemInDarkTheme()`, `appTheme: AppTheme = AppTheme.SYSTEM`,
-`dynamicColor: Boolean = true`, and `content: @Composable () -> Unit`.
-The composable SHALL compute `val useDarkTheme = appTheme.isDark(darkTheme)`.
-When `dynamicColor` is `true` AND `Build.VERSION.SDK_INT >=
+`JetpackMyWorkoutsTheme` SHALL accept `appTheme: AppTheme =
+AppTheme.SYSTEM`, `dynamicColor: Boolean = true`, and
+`content: @Composable () -> Unit`. The composable SHALL compute
+`val useDarkTheme = appTheme.isDark(isSystemInDarkTheme())`. When
+`dynamicColor` is `true` AND `Build.VERSION.SDK_INT >=
 Build.VERSION_CODES.S`, it SHALL use `dynamicLightColorScheme` /
 `dynamicDarkColorScheme(context)` based on `useDarkTheme`; otherwise
 it SHALL use the static `LightColorScheme` / `DarkColorScheme`.
@@ -271,20 +271,23 @@ it SHALL use the static `LightColorScheme` / `DarkColorScheme`.
 #### Scenario: SYSTEM theme follows isSystemInDarkTheme
 
 - **WHEN** `JetpackMyWorkoutsTheme(appTheme = AppTheme.SYSTEM,
-  darkTheme = true, dynamicColor = false)` is composed
+  dynamicColor = false)` is composed AND `isSystemInDarkTheme()`
+  returns `true`
 - **THEN** `useDarkTheme = true` and `DarkColorScheme` is used
 
 #### Scenario: LIGHT theme overrides system
 
 - **WHEN** `JetpackMyWorkoutsTheme(appTheme = AppTheme.LIGHT,
-  darkTheme = true, dynamicColor = false)` is composed
+  dynamicColor = false)` is composed
 - **THEN** `useDarkTheme = false` and `LightColorScheme` is used
+  regardless of `isSystemInDarkTheme()`
 
 #### Scenario: DARK theme overrides system
 
 - **WHEN** `JetpackMyWorkoutsTheme(appTheme = AppTheme.DARK,
-  darkTheme = false, dynamicColor = false)` is composed
+  dynamicColor = false)` is composed
 - **THEN** `useDarkTheme = true` and `DarkColorScheme` is used
+  regardless of `isSystemInDarkTheme()`
 
 ### Requirement: MainActivity creates DataStore and subscribes directly
 

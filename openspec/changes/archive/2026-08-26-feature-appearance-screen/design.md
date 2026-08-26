@@ -105,7 +105,7 @@ BottomTab(Screen.More.route, Icons.Filled.Menu, R.string.more_title),
 села.
 
 **Breaking:** `tab-navigation/spec.md` (`Screen.icon`/`titleResId` non-null
-+ `AllTabs: List<Screen>`) устарел → обновится при архивации этого change.
+- `AllTabs: List<Screen>`) устарел → обновится при архивации этого change.
 
 ### 2. `MainActivity` подписывается на DataStore напрямую (без
 `MainActivityViewModel`)
@@ -121,7 +121,7 @@ val isDarkTheme = theme.isDark(isSystemInDarkTheme())
 
 **Альтернативы (что было в плане):** `MainActivityViewModel` с
 `dataStore.theme.stateIn(...)` + `dataStore.useDynamicColors.stateIn(...)`
-+ `companion factory(dataStore)`.
+- `companion factory(dataStore)`.
 
 **Почему отвергнуто:** `MainActivity` — единственный consumer двух
 потоков. `collectAsState` уже даёт `State<T>` с lifecycle-aware
@@ -202,6 +202,7 @@ active for the same file`. Поэтому `RootScreen(dataStore: AppSettingsData
 ### 6. `AppTheme.isDark(systemDark: Boolean): Boolean` extension
 
 **Решение:** extension в `AppTheme.kt`:
+
 ```
 fun AppTheme.isDark(systemDark: Boolean): Boolean = when (this) {
     AppTheme.LIGHT -> false
@@ -218,7 +219,7 @@ fun AppTheme.isDark(systemDark: Boolean): Boolean = when (this) {
 даёт одно место истины для семантики `AppTheme → dark/light`. Ponytail:
 single source of truth без лишних абстракций.
 
-### 7. `JetpackMyWorkoutsTheme` принимает `appTheme: AppTheme = SYSTEM`,
+### 7. `JetpackMyWorkoutsTheme` принимает `appTheme: AppTheme = SYSTEM`
 non-null
 
 **Решение:** `JetpackMyWorkoutsTheme(darkTheme: Boolean = isSystemInDarkTheme(),
@@ -408,7 +409,7 @@ over-engineering. **Trigger-watch:** если в UI добавятся async-с�
 - `e228c7c` — локализация ru/en (Этап 7).
 - `83b85df` + `1686746` — `AppearanceScreen` + androidTest (Этап 8).
 - `7a9a2e3` — `Screen.Appearance` (с `BottomTab`/`BottomTabs`-рефакторингом)
-  + `RootScreen` + `MainActivity` (Этап 9).
+  - `RootScreen` + `MainActivity` (Этап 9).
 - `8c039fc` — `MoreScreen` androidTest (Этап 10).
 - `085a68a` — центрирование кнопки + регресс-тест (Этап 11).
 - `083b8e8` — сжатие §11 плана после ручной верификации (doc-only).

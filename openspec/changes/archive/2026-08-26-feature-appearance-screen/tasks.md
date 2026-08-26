@@ -144,7 +144,7 @@
   с `MaterialRadioButton(selected, onClick = null)` + `Text`.
 - [x] 7.7 Реализовать private `DynamicColorsSection(useDynamicColors, onDynamicColorsChange)`:
   `Text(dynamic_colors)` + `Row(SpaceBetween) { Text(use_dynamic_colors, weight=1f); Switch(...) }`
-  + `Text(dynamic_colors_hint, bodySmall)`.
+  - `Text(dynamic_colors_hint, bodySmall)`.
 - [x] 7.8 Создать `app/src/androidTest/java/com/myworkouts/ui/screens/appearance/AppearanceScreenTest.kt`
   с `@RunWith(Parameterized::class)` + 3 параметрами (`AppTheme.entries`)
   и 2 тестами (6 кейсов): `appearance_screen_theme_radio_button_selected`

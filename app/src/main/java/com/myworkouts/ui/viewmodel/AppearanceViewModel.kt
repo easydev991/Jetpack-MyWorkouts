@@ -40,11 +40,14 @@ class AppearanceViewModel(
             }
     }
 
-    /** UI State экрана. Объединяет поток настроек из DataStore. */
-    // ponytail: combine в один stateIn; два отдельных stateIn = два
-    // collectAsState в UI + ручной data class-merge. Если появятся
-    // независимые подписки на theme/useDynamicColors — переделать на
-    // раздельные Flow (см. design.md Decision 8).
+    /**
+     * UI State экрана. Объединяет поток настроек из DataStore.
+     *
+     * @implNote combine в один stateIn; два отдельных stateIn = два
+     * collectAsState в UI + ручной data class-merge. Если появятся
+     * независимые подписки на theme/useDynamicColors — переделать на
+     * раздельные Flow.
+     */
     val uiState: StateFlow<AppearanceUiState> =
         combine(
             dataStore.theme,

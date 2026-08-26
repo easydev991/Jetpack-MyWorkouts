@@ -35,21 +35,28 @@ private val LightColorScheme =
      */
     )
 
-// ponytail: appTheme non-null (MainActivity передаёт значение сразу
-// через collectAsState(initial=SYSTEM) — null-период невозможен).
-// Inline `Build.VERSION.SDK_INT >= S` для dynamicColor (а не helper
-// isDynamicColorsAvailable) — единственный consumer на этом уровне.
-// Если добавятся ещё Composable с тем же чеком — вынести (см.
-// design.md Decisions 4, 7).
+/**
+ * Применяет к переданному контенту тему оформления приложения.
+ *
+ * @param appTheme предпочитаемая тема (`LIGHT` / `DARK` / `SYSTEM`)
+ * @param content  Compose-контент, который нужно обернуть темой
+ *
+ * @implNote `appTheme` non-null (MainActivity передаёт значение сразу
+ * через `collectAsState(initial = SYSTEM)` — null-период невозможен).
+ * `darkTheme` inlined в `appTheme.isDark(isSystemInDarkTheme())` —
+ * единственный caller (MainActivity) не передавал параметр.
+ * Inline `Build.VERSION.SDK_INT >= S` для dynamicColor (а не helper
+ * isDynamicColorsAvailable) — единственный consumer на этом уровне.
+ * Если добавятся ещё Composable с тем же чеком — вынести.
+ */
 @Composable
 fun JetpackMyWorkoutsTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     appTheme: AppTheme = AppTheme.SYSTEM,
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val useDarkTheme = appTheme.isDark(darkTheme)
+    val useDarkTheme = appTheme.isDark(isSystemInDarkTheme())
 
     val colorScheme =
         when {

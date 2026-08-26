@@ -36,13 +36,14 @@ import com.myworkouts.navigation.Screen
  * «Оформление приложения». По мере появления новых кнопок структура может
  * вырасти до `Column + Spacer(weight(1f))` (см. план в
  * `docs/appearance-screen-plan.md` §9.2).
+ *
+ * @implNote NavController обязательный (callback-обёртка — лишний
+ * indirection при единственном вызове в RootScreen). Row(fillMaxWidth,
+ * Arrangement.Center) центрирует кнопку только по горизонтали, не
+ * затрагивая BottomCenter версию. Если добавится второй вызов
+ * MoreScreen (превью/тест) — ввести callback-обёртку или
+ * rememberNavController.
  */
-// ponytail: NavController обязательный (callback-обёртка — лишний
-// indirection при единственном вызове в RootScreen). Row(fillMaxWidth,
-// Arrangement.Center) центрирует кнопку только по горизонтали, не
-// затрагивая BottomCenter версию. Если добавится второй вызов
-// MoreScreen (превью/тест) — ввести callback-обёртку или
-// rememberNavController (см. design.md Decisions 11, 12).
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MoreScreen(

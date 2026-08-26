@@ -29,16 +29,17 @@ sealed class Screen(
 }
 
 /**
- * Описание нижней вкладки навигации.
+ * Описание нижней вкладки для `NavigationBarItem`.
  *
- * @property route маршрут экрана (см. [Screen])
+ * @property route маршрут для навигации
  * @property icon иконка для `NavigationBarItem`
  * @property titleResId строковый ресурс заголовка вкладки
+ *
+ * @implNote Screen хранит только route; UI-метаданные вынесены сюда.
+ * Слить через nullable-поля в Screen нельзя — сломает NavigationBarItem
+ * (?.let/orEmpty в цикле). При добавлении ещё одного не-tab экрана —
+ * расширять BottomTabs/BottomTab не надо.
  */
-// ponytail: Screen хранит только route; UI-метаданные вынесены сюда.
-// Слить через nullable-поля в Screen нельзя — сломает NavigationBarItem
-// (?.let/orEmpty в цикле). При добавлении ещё одного не-tab экрана —
-// расширять BottomTabs/BottomTab не надо (см. design.md Decision 1).
 data class BottomTab(
     val route: String,
     val icon: ImageVector,

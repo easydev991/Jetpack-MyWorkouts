@@ -19,25 +19,24 @@ import kotlinx.coroutines.flow.map
  */
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "appearance_prefs")
 
-/**
- * Ключи для хранения настроек в DataStore.
- */
-private object PreferencesKeys {
-    val THEME_KEY = stringPreferencesKey("theme")
-    val USE_DYNAMIC_COLORS_KEY = booleanPreferencesKey("use_dynamic_colors")
-}
+/** DataStore-ключ для выбранной темы. */
+private val THEME_KEY = stringPreferencesKey("theme")
+
+/** DataStore-ключ для переключателя динамических цветов. */
+private val USE_DYNAMIC_COLORS_KEY = booleanPreferencesKey("use_dynamic_colors")
 
 /**
  * Реализация DataStore для настроек оформления приложения.
  *
  * @param context контекст приложения (должен быть applicationContext —
  * иначе DataStore ругнётся на утечку при уничтожении Activity)
+ *
+ * @implNote class, не MyWorkoutsApplication (одна зависимость — лишняя
+ * сущность). Хранит ровно 2 ключа (theme/use_dynamic_colors). Новые
+ * ключи — точечно по фичам, имя файла appearance_prefs НЕ менять
+ * (миграция DataStore). Если появится 2-я зависимость от DataStore —
+ * вынести в MyWorkoutsApplication.
  */
-// ponytail: class, не MyWorkoutsApplication (одна зависимость — лишняя
-// сущность). Хранит ровно 2 ключа (theme/use_dynamic_colors). Новые
-// ключи — точечно по фичам, имя файла appearance_prefs НЕ менять
-// (миграция DataStore). Если появится 2-я зависимость от DataStore —
-// вынести в MyWorkoutsApplication (см. design.md Decisions 5, 13).
 class AppSettingsDataStore(
     private val context: Context
 ) {
@@ -48,7 +47,7 @@ class AppSettingsDataStore(
      */
     suspend fun setTheme(theme: AppTheme) {
         context.dataStore.edit { preferences ->
-            preferences[PreferencesKeys.THEME_KEY] = theme.name
+            preferences[THEME_KEY] = theme.name
         }
     }
 
@@ -59,7 +58,7 @@ class AppSettingsDataStore(
      */
     suspend fun setUseDynamicColors(useDynamicColors: Boolean) {
         context.dataStore.edit { preferences ->
-            preferences[PreferencesKeys.USE_DYNAMIC_COLORS_KEY] = useDynamicColors
+            preferences[USE_DYNAMIC_COLORS_KEY] = useDynamicColors
         }
     }
 
@@ -71,7 +70,7 @@ class AppSettingsDataStore(
         context.dataStore.data
             .map { preferences ->
                 @Suppress("SwallowedException")
-                preferences[PreferencesKeys.THEME_KEY]?.let { themeName ->
+                preferences[THEME_KEY]?.let { themeName ->
                     try {
                         AppTheme.valueOf(themeName)
                     } catch (e: IllegalArgumentException) {
@@ -87,6 +86,6 @@ class AppSettingsDataStore(
     val useDynamicColors: Flow<Boolean> =
         context.dataStore.data
             .map { preferences ->
-                preferences[PreferencesKeys.USE_DYNAMIC_COLORS_KEY] ?: true
+                preferences[USE_DYNAMIC_COLORS_KEY] ?: true
             }
 }

@@ -14,15 +14,16 @@ enum class AppTheme {
 }
 
 /**
- * Разрешает [AppTheme] в конкретный dark/light для UI.
+ * Возвращает true, если приложение должно рендериться в тёмной теме.
  *
- * @param systemDark текущее состояние системной темы (от `isSystemInDarkTheme()`);
+ * [systemDark] — текущая системная тема (результат `isSystemInDarkTheme()`),
  * используется только если [this] == [AppTheme.SYSTEM]
  * @return true, если приложение должно рендериться в тёмной теме
+ *
+ * @implNote единая точка истины AppTheme→dark/light. Дублировать
+ * inline-when в MainActivity/Theme.kt нельзя — рассинхрон при
+ * добавлении новой темы.
  */
-// ponytail: единая точка истины AppTheme→dark/light. Дублировать
-// inline-when в MainActivity/Theme.kt нельзя — рассинхрон при
-// добавлении новой темы (см. design.md Decision 6).
 fun AppTheme.isDark(systemDark: Boolean): Boolean =
     when (this) {
         AppTheme.LIGHT -> false

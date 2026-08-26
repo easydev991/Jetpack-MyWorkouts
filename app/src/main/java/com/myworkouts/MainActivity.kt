@@ -25,15 +25,21 @@ import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
  * the same file`).
  */
 class MainActivity : ComponentActivity() {
+    /**
+     * Запускает Compose-граф: создаёт DataStore, подписывается на настройки
+     * темы и динамических цветов, перекрашивает статус-бар под текущую тему.
+     *
+     * @implNote MainActivityViewModel не создан (YAGNI). Два collectAsState
+     * на dataStore.{theme,useDynamicColors} — то же, что VM/factory +
+     * stateIn(WhileSubscribed), но без 3 кейсов тестов на VM.
+     * Двухфазный enableEdgeToEdge: первый вызов до
+     * `setContent` (для cold-start), второй — в `LaunchedEffect(isDarkTheme)`
+     * (для рантайм-переключения).
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Единственный DataStore на всё приложение (см. KDoc).
-        // ponytail: MainActivityViewModel не создан (YAGNI). Два collectAsState
-        // на dataStore.{theme,useDynamicColors} — то же, что VM/factory +
-        // stateIn(WhileSubscribed), но без 3 кейсов тестов на VM (см.
-        // design.md Decision 2). Двухфазный enableEdgeToEdge — см. ниже.
         val dataStore = AppSettingsDataStore(applicationContext)
 
         setContent {

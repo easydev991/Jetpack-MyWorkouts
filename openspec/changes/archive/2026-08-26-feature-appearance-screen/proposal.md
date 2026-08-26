@@ -84,7 +84,7 @@ UI (включая статус-бар).
   центрирования через `getBoundsInRoot()`).
 - Покрываем unit-test: `AppThemeTest` (1) + `AppearanceViewModelTest`
   (8 кейсов: 3 `update_theme` через `@EnumSource` + 2 `update_dynamic_colors`
-  + 3 `ui_state` через `@MethodSource`).
+  - 3 `ui_state` через `@MethodSource`).
 - `make format && make lint && make test` — все три зелёные.
   `make android-test` — `AppearanceScreenTest` +
   `AppearanceScreenStaticTest` + `MoreScreenTest` зелёные.
@@ -118,7 +118,7 @@ UI (включая статус-бар).
   (**BREAKING** — ранее в `tab-navigation/spec.md` `Screen` содержал
   `icon`/`titleResId` non-null). Дополнительно: `AllTabs: List<Screen>`
   удаляется; вместо него — `data class BottomTab(route, icon, titleResId)`
-  + `val BottomTabs: List<BottomTab>`. `Main`/`More` остаются объектами
+  - `val BottomTabs: List<BottomTab>`. `Main`/`More` остаются объектами
   `Screen` (без изменений в `route`); `Appearance` добавляется как
   новый объект `Screen`. `RootScreen` теперь принимает
   `dataStore: AppSettingsDataStore` параметром.

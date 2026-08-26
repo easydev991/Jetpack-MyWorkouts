@@ -18,6 +18,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -35,20 +36,20 @@ import androidx.compose.ui.unit.dp
 import com.myworkouts.R
 import com.myworkouts.domain.model.AppTheme
 import com.myworkouts.ui.viewmodel.AppearanceViewModel
-import androidx.compose.material3.RadioButton as MaterialRadioButton
 
 /**
  * Экран «Оформление приложения»: выбор темы и переключатель динамических цветов.
  *
  * @param viewModel ViewModel с состоянием настроек и методами обновления
  * @param onBackClick Обработчик нажатия на кнопку «Назад» в TopAppBar
+ *
+ * @implNote ThemeRadioRow/DynamicColorsSection inline (без
+ * common/RadioButton.kt и common/DynamicColors.kt — YAGNI для одного
+ * места использования) + internal State + Content-wrapper для
+ * детерминированных тестов (assertDoesNotExist не зависит от SDK_INT).
+ * Если радиокнопка/dynamicColors понадобятся во втором экране — вынести
+ * в common/.
  */
-// ponytail: ThemeRadioRow/DynamicColorsSection inline (без
-// common/RadioButton.kt и common/DynamicColors.kt — YAGNI для одного
-// места использования) + internal State + Content-wrapper для
-// детерминированных тестов (assertDoesNotExist не зависит от SDK_INT).
-// Если радиокнопка/dynamicColors понадобятся во втором экране — вынести
-// в common/ (см. design.md Decisions 3, 4, 9).
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppearanceScreen(
@@ -76,23 +77,14 @@ fun AppearanceScreen(
     )
 }
 
-/**
- * Состояние экрана «Оформление приложения» для UI-тестов.
- *
- * @property theme Текущая выбранная тема
- * @property useDynamicColors Использовать динамические цвета
- * @property onThemeChange Обработчик выбора темы
- * @property onDynamicColorsChange Обработчик переключения динамических цветов
- * @property isDynamicColorsAvailable Доступны ли динамические цвета на устройстве
- * @property onBackClick Обработчик нажатия «Назад»
- */
+/** Test-only state для AppearanceScreenContent. */
 internal data class AppearanceScreenState(
-    val theme: AppTheme = AppTheme.SYSTEM,
-    val useDynamicColors: Boolean = true,
-    val onThemeChange: (AppTheme) -> Unit = {},
-    val onDynamicColorsChange: (Boolean) -> Unit = {},
-    val isDynamicColorsAvailable: Boolean = true,
-    val onBackClick: () -> Unit = {}
+    val theme: AppTheme,
+    val useDynamicColors: Boolean,
+    val onThemeChange: (AppTheme) -> Unit,
+    val onDynamicColorsChange: (Boolean) -> Unit,
+    val isDynamicColorsAvailable: Boolean,
+    val onBackClick: () -> Unit
 )
 
 /**
@@ -103,7 +95,7 @@ internal data class AppearanceScreenState(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun AppearanceScreenContent(state: AppearanceScreenState = AppearanceScreenState()) {
+internal fun AppearanceScreenContent(state: AppearanceScreenState) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -183,7 +175,7 @@ private fun ThemeSection(
 }
 
 /**
- * Одна строка радио-кнопки в секции выбора темы: `MaterialRadioButton` + label.
+ * Одна строка радио-кнопки в секции выбора темы: `RadioButton` + label.
  *
  * `Modifier.selectable` ставит `Selected` semantic на родительский Row —
  * его ловят тесты через `hasAnyChild(hasText(label))` в unmerged-дереве.
@@ -209,7 +201,7 @@ private fun ThemeRadioRow(
                 .height(56.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MaterialRadioButton(
+        RadioButton(
             selected = selected,
             onClick = null
         )
