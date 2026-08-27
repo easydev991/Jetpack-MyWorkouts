@@ -43,6 +43,10 @@ fun RootScreen(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    // Нижняя навигация только на табах; на не-tab экранах (например,
+    // Appearance) её прячем, иначе лишний NavigationBarItem "More" висит
+    // над TopAppBar и выглядит как регрессия.
+    val shouldShowBottomBar = currentRoute in BottomTabs.map { it.route }
     Scaffold(
         modifier = modifier,
         // NavigationBar сама учитывает system nav bar inset (NavigationBarDefaults.windowInsets),
@@ -50,25 +54,27 @@ fun RootScreen(
         // и FAB уедет вверх на ~2× высоту system nav bar.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            NavigationBar {
-                BottomTabs.forEach { tab ->
-                    val title = stringResource(tab.titleResId)
-                    NavigationBarItem(
-                        selected = currentRoute == tab.route,
-                        onClick = {
-                            navController.navigate(tab.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            if (shouldShowBottomBar) {
+                NavigationBar {
+                    BottomTabs.forEach { tab ->
+                        val title = stringResource(tab.titleResId)
+                        NavigationBarItem(
+                            selected = currentRoute == tab.route,
+                            onClick = {
+                                navController.navigate(tab.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = {
-                            Icon(tab.icon, contentDescription = title)
-                        },
-                        label = { Text(title) }
-                    )
+                            },
+                            icon = {
+                                Icon(tab.icon, contentDescription = title)
+                            },
+                            label = { Text(title) }
+                        )
+                    }
                 }
             }
         }
