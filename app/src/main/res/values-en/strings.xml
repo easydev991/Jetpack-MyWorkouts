@@ -15,4 +15,10 @@
     <string name="dark">Dark</string>
     <string name="system">System</string>
     <string name="back">Back</string>
+
+    <!-- Feedback -->
+    <string name="feedback_send">Send feedback</string>
+    <string name="feedback_subject">%1$s: Feedback</string>
+    <string name="feedback_body">Android version: %1$s\nApp version: %2$s\n---\nWhat can be improved in the app?\n\n</string>
+    <string name="feedback_no_email_client">No email client found</string>
 </resources>

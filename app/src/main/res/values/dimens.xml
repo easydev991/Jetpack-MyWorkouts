@@ -2,4 +2,6 @@
 <resources>
     <!-- Горизонтальный отступ внутри кнопок экрана «Ещё». -->
     <dimen name="button_horizontal_padding">16dp</dimen>
+    <!-- Вертикальный отступ между кнопками экрана «Ещё». -->
+    <dimen name="spacing_xxsmall">4dp</dimen>
 </resources>

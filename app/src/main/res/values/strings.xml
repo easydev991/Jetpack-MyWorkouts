@@ -15,4 +15,10 @@
     <string name="dark">Тёмная</string>
     <string name="system">Системная</string>
     <string name="back">Назад</string>
+
+    <!-- Feedback -->
+    <string name="feedback_send">Отправить обратную связь</string>
+    <string name="feedback_subject">%1$s: Обратная связь</string>
+    <string name="feedback_body">Версия Android: %1$s\nВерсия приложения: %2$s\n---\nЧто можно улучшить в приложении?\n\n</string>
+    <string name="feedback_no_email_client">Почтовый клиент не найден</string>
 </resources>

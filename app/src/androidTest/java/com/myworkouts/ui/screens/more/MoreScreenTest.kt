@@ -71,6 +71,20 @@ class MoreScreenTest {
             .assertIsDisplayed()
     }
 
+    /** Проверяет, что кнопка «Отправить обратную связь» отображается на экране. */
+    @Test
+    fun more_screen_when_displayed_then_shows_feedback_send_button() {
+        // Given
+        composeTestRule.setContent {
+            MoreScreenWithNavHost()
+        }
+
+        // Then
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.feedback_send))
+            .assertIsDisplayed()
+    }
+
     /**
      * Проверяет, что клик по кнопке «Оформление приложения» переводит
      * навигацию на маршрут [Screen.Appearance].

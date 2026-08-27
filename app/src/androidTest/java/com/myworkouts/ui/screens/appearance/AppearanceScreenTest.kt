@@ -68,6 +68,7 @@ class AppearanceScreenTest(
                         useDynamicColors = true,
                         onThemeChange = onThemeChange,
                         onDynamicColorsChange = {},
+                        isDynamicColorsAvailable = true,
                         onBackClick = onBackClick
                     )
             )
