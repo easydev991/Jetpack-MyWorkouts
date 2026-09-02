@@ -2,7 +2,7 @@
 
 Даёт пользователю способ отправить отзыв о приложении — сообщить о проблеме или предложить улучшение — через системный почтовый клиент с предзаполненной темой и телом письма.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Feedback button is displayed on MoreScreen
 

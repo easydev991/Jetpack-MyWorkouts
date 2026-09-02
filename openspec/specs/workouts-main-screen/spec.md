@@ -1,7 +1,11 @@
 # workouts-main-screen Specification
 
 ## Purpose
-TBD - created by archiving change navigation-foundation. Update Purpose after archive.
+
+Главный экран тренировок: каркас со `TopAppBar`, заголовком и FAB
+(плейсхолдер под будущий сценарий создания записи), с локализованными
+ru/en подписями и корректной обработкой системных отступов.
+
 ## Requirements
 ### Requirement: MainScreen Scaffold with TopAppBar
 

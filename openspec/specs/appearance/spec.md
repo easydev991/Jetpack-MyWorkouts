@@ -1,7 +1,11 @@
 # appearance Specification
 
 ## Purpose
-TBD — created by archiving change feature-appearance-screen. Update Purpose after archive.
+
+Экран настройки внешнего вида приложения: выбор темы (системная, светлая,
+тёмная) и динамических цветов Material You, с сохранением выбора в
+DataStore и применением темы ко всему приложению.
+
 ## Requirements
 
 ### Requirement: Appearance screen renders theme selection

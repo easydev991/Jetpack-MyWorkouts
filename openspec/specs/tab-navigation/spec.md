@@ -1,7 +1,11 @@
 # tab-navigation Specification
 
 ## Purpose
-TBD - created by archiving change navigation-foundation. Update Purpose after archive.
+
+Нижняя навигация приложения: три вкладки, sealed-класс маршрутов и
+`RootScreen` с `NavHost` — переключение вкладок без потери их состояния,
+без ViewModel и без лишних отступов от системных панелей.
+
 ## Requirements
 ### Requirement: App entry point delegates to RootScreen
 

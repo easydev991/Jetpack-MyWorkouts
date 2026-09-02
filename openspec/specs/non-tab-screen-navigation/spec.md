@@ -1,7 +1,11 @@
 # non-tab-screen-navigation Specification
 
 ## Purpose
-TBD — created by archiving change feature-appearance-screen. Update Purpose after archive.
+
+Метаданные маршрутов навигации: sealed-класс `Screen` с маршрутами
+внекладочных экранов и `BottomTab` с UI-метаданными вкладок нижней
+навигации.
+
 ## Requirements
 
 ### Requirement: Screen sealed class holds only route

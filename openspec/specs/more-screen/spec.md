@@ -1,7 +1,11 @@
 # more-screen Specification
 
 ## Purpose
-TBD - created by archiving change navigation-foundation. Update Purpose after archive.
+
+Экран «Ещё»: точка входа во второстепенные функции — версия приложения,
+переход к настройкам внешнего вида и отправке отзыва, с локализованными
+ru/en подписями.
+
 ## Requirements
 ### Requirement: MoreScreen Scaffold with TopAppBar
 
