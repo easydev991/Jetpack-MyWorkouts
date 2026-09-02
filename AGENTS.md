@@ -12,7 +12,7 @@ Kotlin + Compose + MVVM + Clean Architecture (manual DI, без Hilt).
 ## Stack
 
 Jetpack Compose + Material3, Navigation Compose, ViewModel + StateFlow,
-DataStore. Room (planned). Manual DI — без Hilt.
+DataStore, Room. Manual DI — без Hilt.
 
 Версии — `gradle/libs.versions.toml`, конфиг — `gradle.properties`,
 `app/build.gradle.kts`. **JDK 17 обязателен** для сборки и detekt.
@@ -35,6 +35,12 @@ DataStore. Room (planned). Manual DI — без Hilt.
 `kotlin-ui-testing` (androidTest, JUnit 4).
 
 `make test` — JVM. `make android-test` — на подключённом устройстве.
+
+**TDD для логики**: use-cases, ViewModel, репозитории, валидация —
+сначала падающий тест, потом реализация (red-green-refactor).
+Не применяется к верстке/навигации — там Compose UI-тесты по факту.
+При планировании задач (openspec `tasks.md`) тесты идут перед
+реализацией: задача «тест на X» — раньше задачи «реализация X».
 
 ---
 
@@ -70,10 +76,12 @@ DataStore. Room (planned). Manual DI — без Hilt.
 
 ## Project Structure
 
-`app/src/main/java/com/myworkouts/` сейчас:
+`app/src/main/java/com/myworkouts/`:
 - `MainActivity.kt`
+- `data/db/` — Room: entities, DAOs, `WorkoutDatabase`, стандартные упражнения
 - `data/preferences/AppSettingsDataStore.kt`
-- `domain/model/AppTheme.kt`
+- `data/repository/` — `RoomWorkoutDataRepository`, `EntryValidator`
+- `domain/model/` — `AppTheme`, `Exercise`, `ExerciseCategory`, `ExerciseEntry`
 - `navigation/Screen.kt` (только `route`) + `BottomTab` + `BottomTabs`
 - `ui/screens/{main,more,root,appearance}/`
 - `ui/state/AppearanceUiState.kt`
@@ -81,6 +89,7 @@ DataStore. Room (planned). Manual DI — без Hilt.
 - `ui/viewmodel/AppearanceViewModel.kt`
 
 `di/`, `util/`, `MyWorkoutsApplication.kt` ещё не созданы — manual DI в
-пределах фичи, без центрального модуля.
+пределах фичи (`AppSettingsDataStore` создаётся один раз в `MainActivity`),
+без центрального модуля.
 
 Тесты зеркалят source в `app/src/test/` и `app/src/androidTest/`.
