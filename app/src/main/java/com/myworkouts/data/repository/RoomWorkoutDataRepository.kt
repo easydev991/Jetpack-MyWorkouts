@@ -1,5 +1,6 @@
 package com.myworkouts.data.repository
 
+import android.database.sqlite.SQLiteConstraintException
 import com.myworkouts.data.db.ExerciseDao
 import com.myworkouts.data.db.ExerciseEntryDao
 import com.myworkouts.data.db.toDomain
@@ -91,4 +92,44 @@ class RoomWorkoutDataRepository(
 
     /** Возвращает запись по идентификатору или `null`. */
     suspend fun getEntry(id: Long): Result<ExerciseEntry?> = runCatching { exerciseEntryDao.getById(id)?.toDomain() }
+
+    /**
+     * Удаляет запись о выполнении по идентификатору. Отсутствующий id —
+     * успех без эффекта (идемпотентность, spec-сценарий «Удаление
+     * несуществующей записи»); нештатные ошибки БД — `Result.failure`.
+     */
+    suspend fun deleteEntry(id: Long): Result<Unit> = runCatching { exerciseEntryDao.deleteById(id) }
+
+    /**
+     * Удаляет упражнение из каталога по идентификатору (design.md
+     * Decision 2):
+     * - отсутствующий id → `Result.failure` («упражнение не найдено») —
+     *   операция не идемпотентна, в отличие от [deleteEntry];
+     * - стандартное упражнение (`isCustom = false`) → `Result.failure`
+     *   («стандартное упражнение нельзя удалить»);
+     * - FK-нарушение (у упражнения есть записи) → `Result.failure`
+     *   («у этого упражнения есть записи, удалите их сначала»);
+     *   прочие исключения — generic `Result.failure`.
+     */
+    @Suppress("ReturnCount")
+    suspend fun deleteExercise(id: Long): Result<Unit> {
+        // 2 ранних return — сами бизнес-правила (нет id / стандартное);
+        // разворачивать их во вложенные условия хуже (ponytail).
+        val exercise =
+            exerciseDao.getById(id)?.toDomain()
+                ?: return Result.failure(
+                    IllegalStateException("Упражнение не найдено")
+                )
+        if (!exercise.isCustom) {
+            return Result.failure(
+                IllegalStateException("Стандартное упражнение нельзя удалить")
+            )
+        }
+        return runCatching { exerciseDao.deleteById(id) }.recoverCatching { e ->
+            if (e is SQLiteConstraintException) {
+                error("У этого упражнения есть записи, удалите их сначала")
+            }
+            throw e
+        }
+    }
 }

@@ -47,4 +47,8 @@ interface ExerciseDao {
     /** Возвращает упражнение по идентификатору или `null`, если не найдено. */
     @Query("SELECT * FROM exercises WHERE id = :id")
     suspend fun getById(id: Long): ExerciseEntity?
+
+    /** Удаляет упражнение по идентификатору. Отсутствующий id — успех без эффекта. */
+    @Query("DELETE FROM exercises WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }

@@ -29,4 +29,8 @@ interface ExerciseEntryDao {
     /** Возвращает запись по идентификатору или `null`, если не найдена. */
     @Query("SELECT * FROM exercise_entries WHERE id = :id")
     suspend fun getById(id: Long): ExerciseEntryEntity?
+
+    /** Удаляет запись по идентификатору. Отсутствующий id — успех без эффекта. */
+    @Query("DELETE FROM exercise_entries WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }

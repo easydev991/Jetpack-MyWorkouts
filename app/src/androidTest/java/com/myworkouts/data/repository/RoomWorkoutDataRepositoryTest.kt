@@ -34,6 +34,12 @@ import org.junit.runner.RunWith
  *   `isCustom`.
  * - «Изменение подходов и повторов» — `updateEntry` обновляет поля и
  *   проставляет `modifiedAt = now`, `createdAt` не трогает.
+ * - «Удаление записи о выполнении» — `deleteEntry` удаляет запись,
+ *   повторный вызов с тем же id — успех (идемпотентность).
+ * - «Удаление упражнения из каталога» — пользовательское упражнение
+ *   без записей удаляется; стандартное и упражнение с записями
+ *   неудаляемы (`Result.isFailure`); несуществующий id упражнения —
+ *   ошибка.
  */
 @RunWith(AndroidJUnit4::class)
 class RoomWorkoutDataRepositoryTest {
@@ -343,5 +349,143 @@ class RoomWorkoutDataRepositoryTest {
                 after?.isCustom ?: true
             )
             assertEquals("Подтягивания", after?.name)
+        }
+
+    @Test
+    fun deleteEntry_withExistingId_succeeds_andRepeatedCallIsIdempotent() =
+        runBlocking {
+            // Given — запись, добавленная через репозиторий
+            val entryId =
+                repository
+                    .addEntry(
+                        ExerciseEntry(
+                            id = 0L,
+                            exerciseId = 1L,
+                            workoutId = null,
+                            date = 1_700_000_000_000L,
+                            sets = 3,
+                            reps = 8,
+                            weightKg = null,
+                            durationSec = null,
+                            comment = null,
+                            createdAt = 1L,
+                            modifiedAt = 1L
+                        )
+                    ).getOrThrow()
+
+            // When
+            val result = repository.deleteEntry(entryId)
+
+            // Then — запись удалена
+            assertTrue(result.isSuccess)
+            assertEquals(null, database.exerciseEntryDao().getById(entryId))
+
+            // Then — повторное удаление того же id — успех
+            // (spec-сценарий «Удаление несуществующей записи»)
+            assertTrue(
+                "Повторное deleteEntry должно быть успехом (идемпотентность)",
+                repository.deleteEntry(entryId).isSuccess
+            )
+        }
+
+    @Test
+    fun deleteExercise_withCustomExerciseWithoutEntries_succeeds_andMissingIdFails() =
+        runBlocking {
+            // Given — пользовательское упражнение без записей
+            val customId =
+                repository
+                    .addExercise(
+                        Exercise(
+                            id = 0L,
+                            name = "Отжимания на турнике",
+                            category = ExerciseCategory.PULL,
+                            isCustom = true,
+                            comment = null,
+                            createdAt = 1_700_000_000_000L
+                        )
+                    ).getOrThrow()
+
+            // When
+            val result = repository.deleteExercise(customId)
+
+            // Then — упражнение удалено из каталога
+            assertTrue(result.isSuccess)
+            assertEquals(null, database.exerciseDao().getById(customId))
+
+            // Then — несуществующий id → ошибка
+            // (spec-сценарий «Удаление несуществующего упражнения отклоняется»)
+            assertTrue(
+                "Удаление несуществующего упражнения должно завершаться ошибкой",
+                repository.deleteExercise(9_999L).isFailure
+            )
+        }
+
+    @Test
+    fun deleteExercise_withStandardExercise_returnsFailure_andExerciseRemains() =
+        runBlocking {
+            // Given — стандартное упражнение из setUp («Подтягивания»)
+            val standardId =
+                database
+                    .exerciseDao()
+                    .observeExercises("")
+                    .first()
+                    .single { it.name == "Подтягивания" }
+                    .id
+
+            // When
+            val result = repository.deleteExercise(standardId)
+
+            // Then — отказ, упражнение остаётся в каталоге
+            assertTrue(
+                "Удаление стандартного упражнения должно быть отклонено",
+                result.isFailure
+            )
+            assertEquals(standardId, database.exerciseDao().getById(standardId)?.id)
+        }
+
+    @Test
+    fun deleteExercise_withCustomExerciseHavingEntries_returnsFailure_andNothingIsDeleted() =
+        runBlocking {
+            // Given — пользовательское упражнение с одной записью
+            val customId =
+                repository
+                    .addExercise(
+                        Exercise(
+                            id = 0L,
+                            name = "Становая тяга",
+                            category = ExerciseCategory.PULL,
+                            isCustom = true,
+                            comment = null,
+                            createdAt = 1_700_000_000_000L
+                        )
+                    ).getOrThrow()
+            val entryId =
+                repository
+                    .addEntry(
+                        ExerciseEntry(
+                            id = 0L,
+                            exerciseId = customId,
+                            workoutId = null,
+                            date = 1_700_000_000_000L,
+                            sets = 5,
+                            reps = 5,
+                            weightKg = 100.0,
+                            durationSec = null,
+                            comment = null,
+                            createdAt = 1L,
+                            modifiedAt = 1L
+                        )
+                    ).getOrThrow()
+
+            // When
+            val result = repository.deleteExercise(customId)
+
+            // Then — отказ; упражнение и записи остаются
+            assertTrue(
+                "FK-нарушение должно превращаться в Result.failure",
+                result.isFailure
+            )
+            assertEquals(customId, database.exerciseDao().getById(customId)?.id)
+            assertEquals(entryId, database.exerciseEntryDao().getById(entryId)?.id)
         }
 }
