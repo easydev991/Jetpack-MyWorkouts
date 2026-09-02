@@ -21,4 +21,19 @@
     <string name="feedback_subject">%1$s: Обратная связь</string>
     <string name="feedback_body">Версия Android: %1$s\nВерсия приложения: %2$s\n---\nЧто можно улучшить в приложении?\n\n</string>
     <string name="feedback_no_email_client">Почтовый клиент не найден</string>
+
+    <!-- Standard exercises (prepopulate catalog, см. design.md Decision 4) -->
+    <string name="exercise_pullups">Подтягивания</string>
+    <string name="exercise_australian_pullups">Австралийские подтягивания</string>
+    <string name="exercise_squats">Приседания</string>
+    <string name="exercise_pushups">Отжимания</string>
+    <string name="exercise_pushups_knees">Отжимания на коленях</string>
+    <string name="exercise_lunges">Выпады</string>
+    <string name="exercise_bars">Отжимания на брусьях</string>
+    <string name="exercise_plank">Планка</string>
+    <string name="exercise_crunches">Скручивания</string>
+    <string name="exercise_hanging_leg_raises">Подъёмы ног в висе</string>
+    <string name="exercise_pistol_squats">Приседания пистолетиком</string>
+    <string name="exercise_running">Бег</string>
+    <string name="exercise_jump_rope">Скакалка</string>
 </resources>

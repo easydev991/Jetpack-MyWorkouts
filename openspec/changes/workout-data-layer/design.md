@@ -102,7 +102,7 @@ SQLite отклонит вставку несуществующего упраж
 
 ```
 fun exercises(query: String): Flow<List<Exercise>>
-suspend fun addExercise(exercise: Exercise): Result<Long>   // id = 0 → новое
+suspend fun addExercise(exercise: Exercise): Result<Long>   // только insert; для обновления — updateExercise
 suspend fun updateExercise(exercise: Exercise): Result<Unit>
 suspend fun addEntry(entry: ExerciseEntry): Result<Long>
 suspend fun updateEntry(entry: ExerciseEntry): Result<Unit>   // ставит modifiedAt
@@ -116,15 +116,19 @@ suspend fun getEntry(id: Long): Result<ExerciseEntry?>
 экранируются — YAGNI для каталога из 13 названий; при заметном росте
 каталога или поиске по комментариям добавить `ESCAPE '\'`.
 
-### Decision 6: Валидация — одна точка, в репозитории
+### Decision 6: Валидация полей — одна точка, в репозитории
 
-`addEntry`/`updateEntry` валидируют (подходы ≥ 1; повторы — null или ≥ 1;
-вес — null или ≥ 0; workoutId — только null: тренировки появятся отдельной
-миграцией, без неё колонка должна оставаться пустой; упражнение существует)
-и возвращают `Result.failure` без записи в БД. Валидатор — pure-функция,
-покрытая JVM-тестами.
-Альтернативы: CHECK-констрейнты в БД (дублируют логику и хуже диагностика)
-или валидация в UI (не защищает от будущих немодальных вызовов) — отклонены.
+`addEntry`/`updateEntry` прогоняют запись через pure-функцию `EntryValidator`
+(подходы ≥ 1; повторы — null или ≥ 1; вес — null или ≥ 0; workoutId — только
+null: тренировки появятся отдельной миграцией, без неё колонка должна
+оставаться пустой) и возвращают `Result.failure` без записи в БД. Валидатор
+покрыт JVM-тестами. Существование упражнения валидатор не проверяет — за это
+отвечает FK `exercise_entries.exercise_id → exercises.id` (`NO_ACTION`,
+см. Decision 3): SQLite отклоняет insert с несуществующим `exerciseId`,
+`runCatching` в репозитории превращает ошибку в `Result.failure`.
+Альтернативы: CHECK-констрейнты в БД на поля (дублируют логику и хуже
+диагностика) или валидация в UI (не защищает от будущих немодальных вызовов)
+— отклонены.
 
 ### Decision 7: Schema export в `app/schemas/`
 

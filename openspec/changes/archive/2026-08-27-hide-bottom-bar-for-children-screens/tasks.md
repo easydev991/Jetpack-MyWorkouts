@@ -22,7 +22,7 @@
 ## 2. Верификация
 
 - [x] 2.1 Ручная проверка на эмуляторе (через `android-debug-bridge`
-  + `make install`):
+  - `make install`):
   - На табе `Main` (`Screen.Main.route`) — `NavigationBar` видна,
     `Workouts` `NavigationBarItem` `selected`.
   - На табе `More` (`Screen.More.route`) — `NavigationBar` видна,
