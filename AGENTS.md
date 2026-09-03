@@ -51,6 +51,9 @@ DataStore, Room. Manual DI — без Hilt.
 - `Result<T>` с `try/catch` в use-cases.
 - StateFlow + `SharingStarted.WhileSubscribed(5000)` в ViewModel.
 - `LazyColumn` с `key = { it.id }`.
+- **Preview обязательны** для всех composable-компонентов: светлая + тёмная
+  (`UI_MODE_NIGHT_YES`), `showBackground = true, locale = "ru"`, обёртка в
+  `MyWorkoutsTheme`, ключевые состояния компонента рядом в Column.
 - **Offline-only**: никаких сетевых зависимостей (Retrofit/OkHttp/Ktor).
 
 ---
