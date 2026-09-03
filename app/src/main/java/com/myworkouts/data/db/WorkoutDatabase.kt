@@ -40,13 +40,14 @@ abstract class WorkoutDatabase : RoomDatabase() {
          *
          * Названия резолвятся до регистрации callback'а (он не имеет доступа
          * к [Context], design.md Decision 4): `standardExercises(context)`
-         * возвращает готовые пары «название + категория», которые замыкаются
-         * в callback и вставляются одной транзакцией при первом создании БД.
+         * возвращает готовые записи «название + категория + тип измерения»,
+         * которые замыкаются в callback и вставляются одной транзакцией
+         * при первом создании БД.
          *
          * @param context Контекст приложения (должен быть `applicationContext`,
          *   иначе Room ругнётся на утечку при уничтожении Activity)
-         * @param standardExercises Готовые пары «название + категория» для
-         *   prepopulate (см. [standardExercises])
+         * @param standardExercises Готовые записи для prepopulate
+         *   (см. [standardExercises])
          */
         fun create(
             context: Context,
@@ -69,12 +70,13 @@ abstract class WorkoutDatabase : RoomDatabase() {
                                         arrayOf(
                                             exercise.name,
                                             exercise.category.name,
-                                            now
+                                            now,
+                                            exercise.measuredBy.name
                                         )
                                     db.execSQL(
                                         "INSERT INTO exercises " +
-                                            "(name, category, is_custom, comment, created_at) " +
-                                            "VALUES (?, ?, 0, NULL, ?)",
+                                            "(name, category, is_custom, comment, created_at, measured_by) " +
+                                            "VALUES (?, ?, 0, NULL, ?, ?)",
                                         args
                                     )
                                 }

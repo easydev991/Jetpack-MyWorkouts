@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.domain.model.ExerciseCategory
+import com.myworkouts.domain.model.ExerciseMeasuredBy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
@@ -150,6 +151,28 @@ class StandardExercisesLocalizationTest {
         assertEquals(true, categories.contains(ExerciseCategory.LEGS))
         assertEquals(true, categories.contains(ExerciseCategory.CORE))
         assertEquals(true, categories.contains(ExerciseCategory.CARDIO))
+    }
+
+    @Test
+    fun standardExercises_measuredBy_timeOnlyForPlankAndJumpRope() {
+        // Given — планка и скакалка на время, остальные 11 на повторы
+        val timeNames =
+            setOf(
+                ru.getString(R.string.exercise_plank),
+                ru.getString(R.string.exercise_jump_rope)
+            )
+
+        // When
+        val exercises = standardExercises(ru)
+
+        // Then
+        val actualTimeNames =
+            exercises
+                .filter { it.measuredBy == ExerciseMeasuredBy.TIME }
+                .map { it.name }
+                .toSet()
+        assertEquals(timeNames, actualTimeNames)
+        assertEquals(11, exercises.count { it.measuredBy == ExerciseMeasuredBy.REPS })
     }
 
     @Test

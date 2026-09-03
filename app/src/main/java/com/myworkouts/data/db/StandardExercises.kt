@@ -3,6 +3,7 @@ package com.myworkouts.data.db
 import android.content.Context
 import com.myworkouts.R
 import com.myworkouts.domain.model.ExerciseCategory
+import com.myworkouts.domain.model.ExerciseMeasuredBy
 
 /**
  * Список из 13 стандартных упражнений для prepopulate каталога.
@@ -11,9 +12,11 @@ import com.myworkouts.domain.model.ExerciseCategory
  * локализация фиксируется строкой, прочитанной из ресурсов в момент первого
  * запуска (design.md Decision 4, Risks). Полнота и корректность набора —
  * контракт, проверяемый [com.myworkouts.androidTest.data.db.WorkoutDatabaseTest]
- * (spec-сценарий «Первый запуск приложения»).
+ * (spec-сценарий «Первый запуск приложения»). Тип измерения: планка
+ * и скакалка — `TIME`, остальные — `REPS` (дефолт).
  *
- * @return Список из ровно 13 пар «название + категория», без дублей
+ * @return Список из ровно 13 записей «название + категория + тип
+ *   измерения», без дублей
  */
 fun standardExercises(context: Context): List<StandardExercise> =
     listOf(
@@ -47,7 +50,8 @@ fun standardExercises(context: Context): List<StandardExercise> =
         ),
         StandardExercise(
             name = context.getString(R.string.exercise_plank),
-            category = ExerciseCategory.CORE
+            category = ExerciseCategory.CORE,
+            measuredBy = ExerciseMeasuredBy.TIME
         ),
         StandardExercise(
             name = context.getString(R.string.exercise_crunches),
@@ -67,6 +71,7 @@ fun standardExercises(context: Context): List<StandardExercise> =
         ),
         StandardExercise(
             name = context.getString(R.string.exercise_jump_rope),
-            category = ExerciseCategory.CARDIO
+            category = ExerciseCategory.CARDIO,
+            measuredBy = ExerciseMeasuredBy.TIME
         )
     )

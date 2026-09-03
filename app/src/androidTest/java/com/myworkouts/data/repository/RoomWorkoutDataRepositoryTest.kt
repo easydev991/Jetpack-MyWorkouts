@@ -8,6 +8,7 @@ import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
+import com.myworkouts.domain.model.ExerciseMeasuredBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -166,6 +167,37 @@ class RoomWorkoutDataRepositoryTest {
         }
 
     @Test
+    fun addEntry_forRepsMeasuredExercise_withOnlyDuration_succeeds() =
+        runBlocking {
+            // Given — упражнение из setUp имеет measuredBy = REPS (дефолт
+            // entity); запись без повторов, только длительность
+            // (spec-сценарий «Слой данных не навязывает соответствие»)
+            val entry =
+                ExerciseEntry(
+                    id = 0L,
+                    exerciseId = 1L,
+                    workoutId = null,
+                    date = 1_700_000_000_000L,
+                    sets = 1,
+                    reps = null,
+                    weightKg = null,
+                    durationSec = 60,
+                    comment = null,
+                    createdAt = 1L,
+                    modifiedAt = 1L
+                )
+
+            // When
+            val result = repository.addEntry(entry)
+
+            // Then — валидация не учитывает measuredBy, запись сохранена
+            assertTrue(result.isSuccess)
+            val fetched = repository.getEntry(result.getOrThrow()).getOrThrow()
+            assertEquals(null, fetched?.reps)
+            assertEquals(60, fetched?.durationSec)
+        }
+
+    @Test
     fun addEntry_withInvalidSets_returnsFailure_withoutTouchingDatabase() =
         runBlocking {
             // Given — валидатор должен отклонить до попытки записи в БД
@@ -273,6 +305,67 @@ class RoomWorkoutDataRepositoryTest {
             )
             assertEquals("широкий хват", fetched.comment)
             assertEquals(ExerciseCategory.PULL, fetched.category)
+        }
+
+    @Test
+    fun addExercise_withoutExplicitMeasuredBy_savesAndReturnsReps() =
+        runBlocking {
+            // Given — пользовательское упражнение без явного типа измерения
+            // (spec-сценарий «Тип измерения по умолчанию при создании»)
+            val exercise =
+                Exercise(
+                    id = 0L,
+                    name = "Стойка на руках",
+                    category = ExerciseCategory.PUSH,
+                    isCustom = true,
+                    comment = null,
+                    createdAt = 1_700_000_000_000L
+                )
+
+            // When
+            val id =
+                repository
+                    .addExercise(exercise)
+                    .getOrThrow()
+
+            // Then — дефолт REPS сохранён и читается обратно
+            val fetched =
+                repository
+                    .exercises("")
+                    .first()
+                    .single { it.id == id }
+            assertEquals(ExerciseMeasuredBy.REPS, fetched.measuredBy)
+        }
+
+    @Test
+    fun addExercise_withMeasuredByTime_readBackAsTime() =
+        runBlocking {
+            // Given — упражнение «на время»
+            // (spec-сценарий «Создание упражнения «на время»»)
+            val exercise =
+                Exercise(
+                    id = 0L,
+                    name = "Стойка на руках",
+                    category = ExerciseCategory.PUSH,
+                    isCustom = true,
+                    comment = null,
+                    createdAt = 1_700_000_000_000L,
+                    measuredBy = ExerciseMeasuredBy.TIME
+                )
+
+            // When
+            val id =
+                repository
+                    .addExercise(exercise)
+                    .getOrThrow()
+
+            // Then
+            val fetched =
+                repository
+                    .exercises("")
+                    .first()
+                    .single { it.id == id }
+            assertEquals(ExerciseMeasuredBy.TIME, fetched.measuredBy)
         }
 
     @Test

@@ -14,6 +14,8 @@ package com.myworkouts.domain.model
  * @property isCustom `true` — создано пользователем; `false` — стандартное
  * @property comment Опциональный комментарий к упражнению
  * @property createdAt Момент создания записи в каталоге (epoch millis)
+ * @property measuredBy Тип измерения нагрузки; по умолчанию `REPS` —
+ *   большинство упражнений на повторы
  */
 data class Exercise(
     val id: Long,
@@ -21,5 +23,6 @@ data class Exercise(
     val category: ExerciseCategory,
     val isCustom: Boolean,
     val comment: String?,
-    val createdAt: Long
+    val createdAt: Long,
+    val measuredBy: ExerciseMeasuredBy = ExerciseMeasuredBy.REPS
 )

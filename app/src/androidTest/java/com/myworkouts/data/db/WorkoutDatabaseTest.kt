@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.domain.model.ExerciseCategory
+import com.myworkouts.domain.model.ExerciseMeasuredBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -129,6 +130,28 @@ class WorkoutDatabaseTest {
                     actualNames
                 )
             }
+        }
+
+    @Test
+    fun createDatabase_thenMeasuredByAssignedToExpectedExercises() =
+        runBlocking {
+            // Given — планка и скакалка на время, остальные 11 на повторы
+            val timeNames = setOf("Планка", "Скакалка")
+
+            // When
+            val all = database.exerciseDao().observeExercises("").first()
+
+            // Then
+            val timeExercises =
+                all
+                    .filter { it.measuredBy == ExerciseMeasuredBy.TIME.name }
+                    .map { it.name }
+                    .toSet()
+            assertEquals(timeNames, timeExercises)
+            assertEquals(
+                11,
+                all.count { it.measuredBy == ExerciseMeasuredBy.REPS.name }
+            )
         }
 
     @Test

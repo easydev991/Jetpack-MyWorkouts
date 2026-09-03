@@ -11,7 +11,9 @@ import androidx.room.PrimaryKey
  * (design.md Decision 1, spec: «Единый каталог»). Категория хранится строкой
  * — `name` доменного enum [com.myworkouts.domain.model.ExerciseCategory];
  * маппинг в Mappers.kt. Тип `category` намеренно не типизирован в entity —
- * enum остаётся в доменном слое (design.md Decision 2).
+ * enum остаётся в доменном слое (design.md Decision 2). Тип измерения
+ * `measured_by` хранится так же — строкой имени
+ * [com.myworkouts.domain.model.ExerciseMeasuredBy].
  *
  * @property id Автогенерируемый идентификатор
  * @property name Название упражнения
@@ -19,6 +21,9 @@ import androidx.room.PrimaryKey
  * @property isCustom `true` — создано пользователем; `false` — стандартное
  * @property comment Опциональный комментарий к упражнению (техника, хват)
  * @property createdAt Момент создания записи каталога (epoch millis)
+ * @property measuredBy Имя типа измерения (`REPS`/`TIME`); дефолт `"REPS"` —
+ *   Kotlin-дефолт конструктора (не SQL DEFAULT), именованные вызовы
+ *   без поля продолжают компилироваться
  */
 @Entity(tableName = "exercises")
 data class ExerciseEntity(
@@ -30,5 +35,7 @@ data class ExerciseEntity(
     val isCustom: Boolean,
     val comment: String? = null,
     @ColumnInfo(name = "created_at")
-    val createdAt: Long
+    val createdAt: Long,
+    @ColumnInfo(name = "measured_by")
+    val measuredBy: String = "REPS"
 )

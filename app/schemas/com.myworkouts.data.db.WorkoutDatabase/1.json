@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "b4ecb78a43b900e385f7d102a2900c97",
+    "identityHash": "9d8a038a965b89fd8c549d59de325df5",
     "entities": [
       {
         "tableName": "exercises",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `is_custom` INTEGER NOT NULL, `comment` TEXT, `created_at` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `is_custom` INTEGER NOT NULL, `comment` TEXT, `created_at` INTEGER NOT NULL, `measured_by` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -41,6 +41,12 @@
             "fieldPath": "createdAt",
             "columnName": "created_at",
             "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "measuredBy",
+            "columnName": "measured_by",
+            "affinity": "TEXT",
             "notNull": true
           }
         ],
@@ -160,7 +166,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b4ecb78a43b900e385f7d102a2900c97')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9d8a038a965b89fd8c549d59de325df5')"
     ]
   }
 }

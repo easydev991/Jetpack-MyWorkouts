@@ -3,6 +3,7 @@ package com.myworkouts.data.db
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
+import com.myworkouts.domain.model.ExerciseMeasuredBy
 
 /**
  * Маппинг entity ↔ domain.
@@ -12,7 +13,7 @@ import com.myworkouts.domain.model.ExerciseEntry
  * «любую» категорию (design.md Decision 2): если категория испорчена
  * (ручной дамп БД), `valueOf` падает с `IllegalArgumentException` —
  * тихая подстановка хуже падения, испорченные данные должны быть видны
- * сразу.
+ * сразу. Тип измерения `measuredBy` переводится тем же способом.
  */
 
 internal fun ExerciseEntity.toDomain(): Exercise =
@@ -22,7 +23,8 @@ internal fun ExerciseEntity.toDomain(): Exercise =
         category = ExerciseCategory.valueOf(category),
         isCustom = isCustom,
         comment = comment,
-        createdAt = createdAt
+        createdAt = createdAt,
+        measuredBy = ExerciseMeasuredBy.valueOf(measuredBy)
     )
 
 internal fun Exercise.toEntity(): ExerciseEntity =
@@ -32,7 +34,8 @@ internal fun Exercise.toEntity(): ExerciseEntity =
         category = category.name,
         isCustom = isCustom,
         comment = comment,
-        createdAt = createdAt
+        createdAt = createdAt,
+        measuredBy = measuredBy.name
     )
 
 internal fun ExerciseEntryEntity.toDomain(): ExerciseEntry =
