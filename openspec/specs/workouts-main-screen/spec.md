@@ -17,15 +17,16 @@ ru/en подписями и корректной обработкой систе
 - **THEN** the `TopAppBar` displays "Тренировки"
 - **AND** the `Scaffold` body is empty
 
-### Requirement: MainScreen FAB is a placeholder
+### Requirement: FAB главного экрана открывает экран создания записи
 
-`MainScreen`'s `Scaffold` SHALL include `floatingActionButton = { FloatingActionButton(onClick = { /* placeholder */ }) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_workout)) } }`. The `onClick` body SHALL be a placeholder — real "add workout" logic belongs to a separate change.
+Тап по FAB на `MainScreen` SHALL открывать экран создания записи о
+выполнении. Остальное поведение `MainScreen` (заголовок, отступы,
+остальные требования) не меняется.
 
-#### Scenario: FAB is visible and pressable
+#### Scenario: Тап по FAB открывает экран создания записи
 
-- **WHEN** the user is on the `Main` tab
-- **THEN** a `FloatingActionButton` with `Icons.Filled.Add` is rendered above the `NavigationBar`
-- **AND** tapping the FAB does not crash the app (placeholder no-op)
+- **WHEN** пользователь находится на вкладке «Тренировки» и нажимает FAB
+- **THEN** открывается экран создания записи о выполнении
 
 ### Requirement: MainScreen Scaffold uses horizontal-only safeDrawing insets
 
