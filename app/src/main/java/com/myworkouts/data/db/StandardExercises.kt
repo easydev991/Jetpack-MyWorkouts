@@ -12,8 +12,8 @@ import com.myworkouts.domain.model.ExerciseMeasuredBy
  * локализация фиксируется строкой, прочитанной из ресурсов в момент первого
  * запуска (design.md Decision 4, Risks). Полнота и корректность набора —
  * контракт, проверяемый [com.myworkouts.androidTest.data.db.WorkoutDatabaseTest]
- * (spec-сценарий «Первый запуск приложения»). Тип измерения: планка
- * и скакалка — `TIME`, остальные — `REPS` (дефолт).
+ * (spec-сценарий «Первый запуск приложения»). Тип измерения: бег, планка
+ * и скакалка — `TIME`, остальные 10 — `REPS` (дефолт).
  *
  * @return Список из ровно 13 записей «название + категория + тип
  *   измерения», без дублей
@@ -67,7 +67,8 @@ fun standardExercises(context: Context): List<StandardExercise> =
         ),
         StandardExercise(
             name = context.getString(R.string.exercise_running),
-            category = ExerciseCategory.CARDIO
+            category = ExerciseCategory.CARDIO,
+            measuredBy = ExerciseMeasuredBy.TIME
         ),
         StandardExercise(
             name = context.getString(R.string.exercise_jump_rope),

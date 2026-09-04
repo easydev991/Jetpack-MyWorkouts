@@ -611,7 +611,9 @@ style:
     maxJumpCount: 1
   MagicNumber:
     active: true
-    excludes: ['**/test/**', '**/androidTest/**', '**/*.kts', '**/Color.kt', '**/Theme.kt']
+    # *Preview*.kt — compose-превью состоят из литеральных sample-значений
+    # (даты, длительности) — как Color.kt, это данные для отображения
+    excludes: ['**/test/**', '**/androidTest/**', '**/*.kts', '**/Color.kt', '**/Theme.kt', '**/*Preview*.kt']
     ignoreNumbers:
       - '-1'
       - '0'

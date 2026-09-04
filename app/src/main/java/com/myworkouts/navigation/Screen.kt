@@ -26,6 +26,13 @@ sealed class Screen(
 
     /** Экран «Оформление приложения» — выбор темы и динамических цветов (не в нижней навигации). */
     object Appearance : Screen(route = "appearance")
+
+    /**
+     * Экран создания записи о выполнении (не в нижней навигации).
+     * Для будущего редактирования — отдельный маршрут `entry_edit/{id}`
+     * на тот же composable (design.md Decision 3).
+     */
+    object EntryCreate : Screen(route = "entry_create")
 }
 
 /**

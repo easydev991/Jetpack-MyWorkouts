@@ -17,9 +17,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.myworkouts.R
 
+/**
+ * Главный экран — вкладка «Тренировки».
+ *
+ * @param onAddEntryClick Тап по FAB: открыть экран создания записи.
+ *   MainScreen не знает о навигации — маршрутизацией занимается RootScreen.
+ * @param modifier внешний модификатор
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(modifier: Modifier = Modifier) {
+fun MainScreen(
+    onAddEntryClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Scaffold(
         modifier = modifier,
         // System nav bar inset уже учтён NavigationBar в RootScreen;
@@ -29,7 +39,7 @@ fun MainScreen(modifier: Modifier = Modifier) {
             TopAppBar(title = { Text(stringResource(R.string.workouts_title)) })
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { /* ponytail: FAB placeholder, вернуть onClick с реальным действием */ }) {
+            FloatingActionButton(onClick = onAddEntryClick) {
                 Icon(
                     Icons.Filled.Add,
                     contentDescription = stringResource(R.string.add_workout)

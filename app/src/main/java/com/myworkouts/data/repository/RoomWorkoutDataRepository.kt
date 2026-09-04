@@ -11,12 +11,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 /**
- * Репозиторий данных тренировок: каталог упражнений и записи о выполнении.
+ * Room-реализация [WorkoutDataRepository]: каталог упражнений и записи
+ * о выполнении.
  *
- * Concrete-класс — design.md Decision 5: интерфейс появится в следующем
- * change вместе с первым ViewModel-тестом, которому нужен fake-репозиторий
- * на `MutableStateFlow`. API построен под будущий экран создания/редактирования
- * записи: список каталога реактивный (`Flow`), точечные операции — `suspend`
+ * Вся валидация записей — в [EntryValidator]; сюда приходят уже собранные
+ * доменные модели. API построен под экран создания/редактирования записи:
+ * список каталога реактивный (`Flow`), точечные операции — `suspend`
  * с `Result` для обработки ошибок БД.
  *
  * @property exerciseDao DAO каталога упражнений
@@ -25,13 +25,13 @@ import kotlinx.coroutines.flow.map
 class RoomWorkoutDataRepository(
     private val exerciseDao: ExerciseDao,
     private val exerciseEntryDao: ExerciseEntryDao
-) {
+) : WorkoutDataRepository {
     /**
      * Возвращает реактивный список упражнений каталога, отфильтрованный
      * по подстроке названия (без учёта регистра) и отсортированный по имени.
      * Пустая подстрока возвращает весь каталог.
      */
-    fun exercises(query: String): Flow<List<Exercise>> =
+    override fun exercises(query: String): Flow<List<Exercise>> =
         exerciseDao
             .observeExercises(query)
             .map { entities -> entities.map { it.toDomain() } }
@@ -41,10 +41,10 @@ class RoomWorkoutDataRepository(
      * каталога в `Result.success`. Для редактирования существующего упражнения
      * используйте [updateExercise].
      */
-    suspend fun addExercise(exercise: Exercise): Result<Long> = runCatching { exerciseDao.insert(exercise.toEntity()) }
+    override suspend fun addExercise(exercise: Exercise): Result<Long> = runCatching { exerciseDao.insert(exercise.toEntity()) }
 
     /** Обновляет существующее упражнение. */
-    suspend fun updateExercise(exercise: Exercise): Result<Unit> {
+    override suspend fun updateExercise(exercise: Exercise): Result<Unit> {
         val entity = exercise.toEntity()
         return runCatching { exerciseDao.update(entity) }
     }
@@ -54,7 +54,7 @@ class RoomWorkoutDataRepository(
      * [EntryValidator]; ошибки валидации и FK (несуществующее
      * `exerciseId`) возвращаются в `Result.failure` без записи в БД.
      */
-    suspend fun addEntry(entry: ExerciseEntry): Result<Long> {
+    override suspend fun addEntry(entry: ExerciseEntry): Result<Long> {
         val validation = EntryValidator.validate(entry)
         if (validation.isFailure) {
             return Result.failure(
@@ -75,7 +75,7 @@ class RoomWorkoutDataRepository(
      * и повторов»). `createdAt` берётся из переданной записи, не
      * перезаписывается.
      */
-    suspend fun updateEntry(entry: ExerciseEntry): Result<Unit> {
+    override suspend fun updateEntry(entry: ExerciseEntry): Result<Unit> {
         val validation = EntryValidator.validate(entry)
         if (validation.isFailure) {
             return Result.failure(
@@ -91,14 +91,14 @@ class RoomWorkoutDataRepository(
     }
 
     /** Возвращает запись по идентификатору или `null`. */
-    suspend fun getEntry(id: Long): Result<ExerciseEntry?> = runCatching { exerciseEntryDao.getById(id)?.toDomain() }
+    override suspend fun getEntry(id: Long): Result<ExerciseEntry?> = runCatching { exerciseEntryDao.getById(id)?.toDomain() }
 
     /**
      * Удаляет запись о выполнении по идентификатору. Отсутствующий id —
      * успех без эффекта (идемпотентность, spec-сценарий «Удаление
      * несуществующей записи»); нештатные ошибки БД — `Result.failure`.
      */
-    suspend fun deleteEntry(id: Long): Result<Unit> = runCatching { exerciseEntryDao.deleteById(id) }
+    override suspend fun deleteEntry(id: Long): Result<Unit> = runCatching { exerciseEntryDao.deleteById(id) }
 
     /**
      * Удаляет упражнение из каталога по идентификатору (design.md
@@ -112,7 +112,7 @@ class RoomWorkoutDataRepository(
      *   прочие исключения — generic `Result.failure`.
      */
     @Suppress("ReturnCount")
-    suspend fun deleteExercise(id: Long): Result<Unit> {
+    override suspend fun deleteExercise(id: Long): Result<Unit> {
         // 2 ранних return — сами бизнес-правила (нет id / стандартное);
         // разворачивать их во вложенные условия хуже (ponytail).
         val exercise =

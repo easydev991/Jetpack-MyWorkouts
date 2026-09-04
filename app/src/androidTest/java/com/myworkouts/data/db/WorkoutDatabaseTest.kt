@@ -42,9 +42,11 @@ class WorkoutDatabaseTest {
 
     @Before
     fun setUp() {
-        // Используем production-фабрику с реальным списком стандартных
-        // упражнений — это путь, по которому БД создаётся в приложении.
+        // Тесты сценария «Первый запуск» должны находить чистую базу:
+        // production-фабрика открывает файловую БД устройства, где могли
+        // остаться записи от ручной проверки — удаляем файл до открытия.
         val ctx = ruContext()
+        ctx.getDatabasePath(WorkoutDatabase.DATABASE_NAME).delete()
         database =
             WorkoutDatabase.create(
                 context = ctx,
@@ -135,8 +137,8 @@ class WorkoutDatabaseTest {
     @Test
     fun createDatabase_thenMeasuredByAssignedToExpectedExercises() =
         runBlocking {
-            // Given — планка и скакалка на время, остальные 11 на повторы
-            val timeNames = setOf("Планка", "Скакалка")
+            // Given — бег, планка и скакалка на время, остальные 10 на повторы
+            val timeNames = setOf("Бег", "Планка", "Скакалка")
 
             // When
             val all = database.exerciseDao().observeExercises("").first()
@@ -149,7 +151,7 @@ class WorkoutDatabaseTest {
                     .toSet()
             assertEquals(timeNames, timeExercises)
             assertEquals(
-                11,
+                10,
                 all.count { it.measuredBy == ExerciseMeasuredBy.REPS.name }
             )
         }

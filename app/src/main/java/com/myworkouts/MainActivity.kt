@@ -10,7 +10,10 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.myworkouts.data.db.WorkoutDatabase
+import com.myworkouts.data.db.standardExercises
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.domain.model.AppTheme
 import com.myworkouts.domain.model.isDark
 import com.myworkouts.ui.screens.root.RootScreen
@@ -41,6 +44,18 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val dataStore = AppSettingsDataStore(applicationContext)
+        // DI-цепочка данных (design.md Decision 3): БД → репозиторий создаются
+        // один раз, как и dataStore; prepopulate — standardExercises(context).
+        val database =
+            WorkoutDatabase.create(
+                applicationContext,
+                standardExercises(applicationContext)
+            )
+        val repository =
+            RoomWorkoutDataRepository(
+                exerciseDao = database.exerciseDao(),
+                exerciseEntryDao = database.exerciseEntryDao()
+            )
 
         setContent {
             val theme by dataStore.theme.collectAsState(initial = AppTheme.SYSTEM)
@@ -65,7 +80,7 @@ class MainActivity : ComponentActivity() {
                 appTheme = theme,
                 dynamicColor = useDynamicColors
             ) {
-                RootScreen(dataStore = dataStore)
+                RootScreen(dataStore = dataStore, repository = repository)
             }
         }
     }

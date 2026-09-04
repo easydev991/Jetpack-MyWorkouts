@@ -11,13 +11,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *
  * Версия `1`, экспорт схемы в `app/schemas/` включён через
  * `ksp { arg("room.schemaLocation", ...) }` — JSON-схема коммитится в репо
- * для будущих миграций (`workouts` появится отдельной миграцией v1→v2,
- * design.md Decision 7).
+ * (`workouts` появится отдельным изменением схемы, design.md Decision 7).
  *
- * В MVP у базы нет прямого потребителя в UI: `MainActivity` не меняется,
- * интеграция — следующий change (design.md Decision 8). Доступ к БД
- * предоставляется через `create(...)` — единая точка конфигурации, в т.ч.
- * prepopulate через callback.
+ * До первого релиза схема может меняться без миграций:
+ * `fallbackToDestructiveMigration` пересоздаёт базу при расхождении версий
+ * (в т.ч. откат с более новой версии). С первым релизом деструктивный
+ * фоллбек убирается и изменения схемы идут через `Migration`.
+ *
+ * Доступ к БД предоставляется через `create(...)` — единая точка
+ * конфигурации, в т.ч. prepopulate через callback.
  */
 @Database(
     entities = [ExerciseEntity::class, ExerciseEntryEntity::class],
@@ -58,7 +60,8 @@ abstract class WorkoutDatabase : RoomDatabase() {
                     context.applicationContext,
                     WorkoutDatabase::class.java,
                     DATABASE_NAME
-                ).addCallback(
+                ).fallbackToDestructiveMigration()
+                .addCallback(
                     object : Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)

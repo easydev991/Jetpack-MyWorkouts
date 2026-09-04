@@ -154,10 +154,11 @@ class StandardExercisesLocalizationTest {
     }
 
     @Test
-    fun standardExercises_measuredBy_timeOnlyForPlankAndJumpRope() {
-        // Given — планка и скакалка на время, остальные 11 на повторы
+    fun standardExercises_measuredBy_timeForRunningPlankAndJumpRope() {
+        // Given — бег, планка и скакалка на время, остальные 10 на повторы
         val timeNames =
             setOf(
+                ru.getString(R.string.exercise_running),
                 ru.getString(R.string.exercise_plank),
                 ru.getString(R.string.exercise_jump_rope)
             )
@@ -172,7 +173,7 @@ class StandardExercisesLocalizationTest {
                 .map { it.name }
                 .toSet()
         assertEquals(timeNames, actualTimeNames)
-        assertEquals(11, exercises.count { it.measuredBy == ExerciseMeasuredBy.REPS })
+        assertEquals(10, exercises.count { it.measuredBy == ExerciseMeasuredBy.REPS })
     }
 
     @Test

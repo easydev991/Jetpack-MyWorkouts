@@ -18,12 +18,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.navigation.BottomTabs
 import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.screens.appearance.AppearanceScreen
+import com.myworkouts.ui.screens.entry.EntryCreateScreen
 import com.myworkouts.ui.screens.main.MainScreen
 import com.myworkouts.ui.screens.more.MoreScreen
 import com.myworkouts.ui.viewmodel.AppearanceViewModel
+import com.myworkouts.ui.viewmodel.EntryCreateViewModel
 
 /**
  * Корневой экран с нижней навигацией и вложенными маршрутами.
@@ -33,11 +36,13 @@ import com.myworkouts.ui.viewmodel.AppearanceViewModel
  * приведёт к `There are multiple DataStores active for the same file`.
  *
  * @param dataStore единый экземпляр [AppSettingsDataStore] для всего приложения
+ * @param repository репозиторий данных тренировок (создан в `MainActivity`)
  * @param modifier внешний модификатор для [Scaffold]
  */
 @Composable
 fun RootScreen(
     dataStore: AppSettingsDataStore,
+    repository: WorkoutDataRepository,
     modifier: Modifier = Modifier
 ) {
     val navController = rememberNavController()
@@ -55,27 +60,18 @@ fun RootScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (shouldShowBottomBar) {
-                NavigationBar {
-                    BottomTabs.forEach { tab ->
-                        val title = stringResource(tab.titleResId)
-                        NavigationBarItem(
-                            selected = currentRoute == tab.route,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = {
-                                Icon(tab.icon, contentDescription = title)
-                            },
-                            label = { Text(title) }
-                        )
+                AppBottomBar(
+                    currentRoute = currentRoute,
+                    onTabClick = { route ->
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
-                }
+                )
             }
         }
     ) { paddingValues ->
@@ -84,7 +80,13 @@ fun RootScreen(
             startDestination = Screen.Main.route,
             modifier = Modifier.padding(paddingValues)
         ) {
-            composable(Screen.Main.route) { MainScreen() }
+            composable(Screen.Main.route) {
+                MainScreen(
+                    onAddEntryClick = {
+                        navController.navigate(Screen.EntryCreate.route)
+                    }
+                )
+            }
             composable(Screen.More.route) { MoreScreen(navController = navController) }
             composable(Screen.Appearance.route) {
                 AppearanceScreen(
@@ -95,6 +97,39 @@ fun RootScreen(
                     onBackClick = { navController.popBackStack() }
                 )
             }
+            composable(Screen.EntryCreate.route) {
+                EntryCreateScreen(
+                    viewModel =
+                        viewModel(
+                            factory = EntryCreateViewModel.factory(repository)
+                        ),
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Нижняя навигация табов. На не-tab экранах не вызывается вовсе —
+ * `Scaffold.bottomBar` вычисляется по `shouldShowBottomBar` в [RootScreen].
+ */
+@Composable
+private fun AppBottomBar(
+    currentRoute: String?,
+    onTabClick: (route: String) -> Unit
+) {
+    NavigationBar {
+        BottomTabs.forEach { tab ->
+            val title = stringResource(tab.titleResId)
+            NavigationBarItem(
+                selected = currentRoute == tab.route,
+                onClick = { onTabClick(tab.route) },
+                icon = {
+                    Icon(tab.icon, contentDescription = title)
+                },
+                label = { Text(title) }
+            )
         }
     }
 }

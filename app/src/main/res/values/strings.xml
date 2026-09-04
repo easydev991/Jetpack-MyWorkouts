@@ -36,4 +36,33 @@
     <string name="exercise_pistol_squats">Приседания пистолетиком</string>
     <string name="exercise_running">Бег</string>
     <string name="exercise_jump_rope">Скакалка</string>
+
+    <!-- Entry create screen (создание записи о выполнении) -->
+    <string name="entry_create_title">Новая запись</string>
+    <string name="entry_field_exercise">Упражнение</string>
+    <string name="entry_field_sets">Подходы</string>
+    <string name="entry_field_reps">Повторы (обязательно)</string>
+    <string name="entry_field_duration">Длительность (обязательно)</string>
+    <string name="entry_field_date">Дата</string>
+    <string name="entry_field_time">Время</string>
+    <string name="entry_select_date">Выбрать дату</string>
+    <string name="entry_select_time">Выбрать время</string>
+    <string name="entry_field_comment">Комментарий</string>
+    <string name="entry_hint_select_exercise">Выберите упражнение</string>
+    <string name="entry_hint_fill_sets">Заполните подходы</string>
+    <string name="entry_hint_fill_reps">Заполните повторы</string>
+    <string name="entry_hint_select_duration">Выберите длительность</string>
+    <string name="entry_duration_not_selected">Не выбрана</string>
+    <string name="entry_save">Сохранить</string>
+    <string name="entry_save_error">Не удалось сохранить запись</string>
+    <string name="ok">ОК</string>
+    <string name="cancel">Отмена</string>
+    <string name="entry_duration_minutes_short">мин</string>
+    <string name="entry_duration_seconds_short">сек</string>
+    <plurals name="entry_duration_hours">
+        <item quantity="one">%1$d час</item>
+        <item quantity="few">%1$d часа</item>
+        <item quantity="many">%1$d часов</item>
+        <item quantity="other">%1$d часа</item>
+    </plurals>
 </resources>

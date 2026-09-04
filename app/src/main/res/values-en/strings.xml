@@ -36,4 +36,31 @@
     <string name="exercise_pistol_squats">Pistol squats</string>
     <string name="exercise_running">Running</string>
     <string name="exercise_jump_rope">Jump rope</string>
+
+    <!-- Entry create screen (creating an exercise entry) -->
+    <string name="entry_create_title">New entry</string>
+    <string name="entry_field_exercise">Exercise</string>
+    <string name="entry_field_sets">Sets</string>
+    <string name="entry_field_reps">Reps (mandatory)</string>
+    <string name="entry_field_duration">Duration (mandatory)</string>
+    <string name="entry_field_date">Date</string>
+    <string name="entry_field_time">Time</string>
+    <string name="entry_select_date">Select date</string>
+    <string name="entry_select_time">Select time</string>
+    <string name="entry_field_comment">Comment</string>
+    <string name="entry_hint_select_exercise">Select an exercise</string>
+    <string name="entry_hint_fill_sets">Fill in sets</string>
+    <string name="entry_hint_fill_reps">Fill in reps</string>
+    <string name="entry_hint_select_duration">Select duration</string>
+    <string name="entry_duration_not_selected">Not selected</string>
+    <string name="entry_save">Save</string>
+    <string name="entry_save_error">Failed to save the entry</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="entry_duration_minutes_short">min</string>
+    <string name="entry_duration_seconds_short">sec</string>
+    <plurals name="entry_duration_hours">
+        <item quantity="one">%1$d hour</item>
+        <item quantity="other">%1$d hours</item>
+    </plurals>
 </resources>
