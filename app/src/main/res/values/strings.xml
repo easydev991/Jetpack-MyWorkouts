@@ -65,4 +65,11 @@
         <item quantity="many">%1$d часов</item>
         <item quantity="other">%1$d часа</item>
     </plurals>
+
+    <!-- Entry list screen (список записей на главном экране) -->
+    <string name="entry_value_separator">" х "</string>
+    <string name="entry_list_menu_delete">Удалить</string>
+    <string name="entry_list_delete_dialog_title">Удалить запись?</string>
+    <string name="entry_list_delete_dialog_message">Удалить «%1$s»?</string>
+    <string name="entry_list_empty">Добавьте первую запись</string>
 </resources>

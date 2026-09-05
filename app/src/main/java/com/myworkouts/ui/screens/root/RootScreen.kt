@@ -27,6 +27,7 @@ import com.myworkouts.ui.screens.main.MainScreen
 import com.myworkouts.ui.screens.more.MoreScreen
 import com.myworkouts.ui.viewmodel.AppearanceViewModel
 import com.myworkouts.ui.viewmodel.EntryCreateViewModel
+import com.myworkouts.ui.viewmodel.MainViewModel
 
 /**
  * Корневой экран с нижней навигацией и вложенными маршрутами.
@@ -82,9 +83,8 @@ fun RootScreen(
         ) {
             composable(Screen.Main.route) {
                 MainScreen(
-                    onAddEntryClick = {
-                        navController.navigate(Screen.EntryCreate.route)
-                    }
+                    viewModel = viewModel(factory = MainViewModel.factory(repository)),
+                    onAddEntryClick = { navController.navigate(Screen.EntryCreate.route) }
                 )
             }
             composable(Screen.More.route) { MoreScreen(navController = navController) }

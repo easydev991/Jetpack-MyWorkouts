@@ -1,5 +1,6 @@
 package com.myworkouts.data.repository
 
+import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import kotlinx.coroutines.flow.Flow
@@ -48,4 +49,12 @@ interface WorkoutDataRepository {
      * упражнение и FK-нарушение — `Result.failure`.
      */
     suspend fun deleteExercise(id: Long): Result<Unit>
+
+    /**
+     * Реактивный список всех записей о выполнении с названием упражнения
+     * (workout-entries-list, spec «Реактивный список записей»). Сортировка
+     * по дате убыванием — на стороне SQL. Актуализируется при изменениях
+     * таблицы записей.
+     */
+    fun entries(): Flow<List<EntryListItem>>
 }

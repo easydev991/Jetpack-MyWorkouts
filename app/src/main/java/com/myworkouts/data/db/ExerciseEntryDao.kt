@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
 
 /**
  * DAO записей о выполнении.
@@ -29,6 +30,25 @@ interface ExerciseEntryDao {
     /** Возвращает запись по идентификатору или `null`, если не найдена. */
     @Query("SELECT * FROM exercise_entries WHERE id = :id")
     suspend fun getById(id: Long): ExerciseEntryEntity?
+
+    /**
+     * Реактивный список записей с JOIN на каталог упражнений.
+     * Название упражнения (`exerciseName`) подтягивается из `exercises`,
+     * сортировка — по `date DESC` (новые первыми, design Decision 1).
+     * Проекция [EntryListItemEntity] — не `@Entity`, схема БД не меняется.
+     */
+    @Query(
+        "SELECT e.id AS id, " +
+            "x.name AS exerciseName, " +
+            "e.sets AS sets, " +
+            "e.reps AS reps, " +
+            "e.duration_sec AS durationSec, " +
+            "e.date AS date " +
+            "FROM exercise_entries e " +
+            "JOIN exercises x ON x.id = e.exercise_id " +
+            "ORDER BY e.date DESC"
+    )
+    fun observeEntries(): Flow<List<EntryListItemEntity>>
 
     /** Удаляет запись по идентификатору. Отсутствующий id — успех без эффекта. */
     @Query("DELETE FROM exercise_entries WHERE id = :id")

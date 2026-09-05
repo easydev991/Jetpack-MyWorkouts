@@ -1,5 +1,6 @@
 package com.myworkouts.data.db
 
+import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
@@ -66,4 +67,19 @@ internal fun ExerciseEntry.toEntity(): ExerciseEntryEntity =
         comment = comment,
         createdAt = createdAt,
         modifiedAt = modifiedAt
+    )
+
+/**
+ * Проекция строки списка записей → доменная модель [EntryListItem]
+ * (workout-entries-list, design Decision 2). JOIN-сторона даёт название
+ * упражнения напрямую — отдельной подписки на каталог не нужно.
+ */
+internal fun EntryListItemEntity.toListItem(): EntryListItem =
+    EntryListItem(
+        id = id,
+        exerciseName = exerciseName,
+        sets = sets,
+        reps = reps,
+        durationSec = durationSec,
+        date = date
     )

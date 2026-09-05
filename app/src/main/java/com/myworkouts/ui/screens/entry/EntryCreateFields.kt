@@ -183,8 +183,7 @@ internal fun DurationDropdownField(
 /**
  * Поле даты: пикер открывает иконка-календарь в `trailingIcon` — клик по
  * самому readOnly-полю не работает, внутренний `BasicTextField` поглощает
- * тапы (design.md Decision 5, образец — JetpackDays `DateSection`).
- * millis ↔ LocalDate — только через
+ * тапы (design.md Decision 5). millis ↔ LocalDate — только через
  * [localDateToPickerMillis]/[pickerMillisToLocalDate] (UTC).
  */
 @OptIn(ExperimentalMaterial3Api::class)

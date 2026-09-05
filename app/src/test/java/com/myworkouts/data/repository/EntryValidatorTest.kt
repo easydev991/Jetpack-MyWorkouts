@@ -2,6 +2,7 @@ package com.myworkouts.data.repository
 
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
+import com.myworkouts.domain.model.ExerciseMeasuredBy
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -13,10 +14,14 @@ import org.junit.jupiter.params.provider.ValueSource
 /**
  * Unit-тесты для [EntryValidator].
  *
- * Покрывают спецификацию «Валидация полей записи» (workout-data spec):
+ * Покрывают спецификацию «Валидация полей записи» (workout-data spec,
+ * workout-entries-list — design Decision 7):
  * rejected — подходы 0, повторы 0, вес −0.5, workoutId ≠ null;
+ * для REPS — без повторов (`MISSING_REPS`); для TIME — без длительности
+ * (`MISSING_DURATION`), длительность 0 (`INVALID_DURATION`);
+ * одновременно повторы и длительность (`INCOMPATIBLE_REPS_AND_DURATION`);
  * accepted — вес null vs 0.0 различимы, запись «на время» (reps=null,
- * duration=60) валидна.
+ * duration=60) валидна, две идентичные записи сохраняются раздельно.
  */
 class EntryValidatorTest {
     private fun baseEntry(
@@ -46,7 +51,7 @@ class EntryValidatorTest {
         val entry = baseEntry()
 
         // When
-        val result = EntryValidator.validate(entry)
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
 
         // Then
         assertTrue(result.isSuccess)
@@ -59,7 +64,7 @@ class EntryValidatorTest {
         val entry = baseEntry(sets = invalidSets)
 
         // When
-        val result = EntryValidator.validate(entry)
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
 
         // Then
         assertTrue(result.isFailure)
@@ -76,7 +81,7 @@ class EntryValidatorTest {
         val entry = baseEntry(reps = invalidReps)
 
         // When
-        val result = EntryValidator.validate(entry)
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
 
         // Then
         assertTrue(result.isFailure)
@@ -92,10 +97,107 @@ class EntryValidatorTest {
         val entry = baseEntry(reps = null, durationSec = 60)
 
         // When
-        val result = EntryValidator.validate(entry)
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.TIME)
 
         // Then
         assertTrue(result.isSuccess)
+    }
+
+    @Test
+    fun reps_null_for_reps_exercise_is_missing_reps_failure() {
+        // Given — упражнение на повторы, а повторы не заданы
+        // (workout-entries-list, design Decision 7: соответствие measuredBy)
+        val entry = baseEntry(reps = null, durationSec = null)
+
+        // When
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
+
+        // Then
+        assertTrue(result.isFailure)
+        assertEquals(
+            EntryValidationError.MISSING_REPS,
+            (result.exceptionOrNull() as? EntryValidationException)?.error
+        )
+    }
+
+    @Test
+    fun duration_null_for_time_exercise_is_missing_duration_failure() {
+        // Given — упражнение на время, длительность не задана
+        val entry = baseEntry(reps = null, durationSec = null)
+
+        // When
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.TIME)
+
+        // Then
+        assertTrue(result.isFailure)
+        assertEquals(
+            EntryValidationError.MISSING_DURATION,
+            (result.exceptionOrNull() as? EntryValidationException)?.error
+        )
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = [0, -1, -60])
+    fun duration_zero_or_negative_for_time_exercise_is_invalid_duration_failure(invalidDuration: Int) {
+        // Given
+        val entry = baseEntry(reps = null, durationSec = invalidDuration)
+
+        // When
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.TIME)
+
+        // Then
+        assertTrue(result.isFailure)
+        assertEquals(
+            EntryValidationError.INVALID_DURATION,
+            (result.exceptionOrNull() as? EntryValidationException)?.error
+        )
+    }
+
+    @Test
+    fun reps_and_duration_both_set_is_incompatible_failure() {
+        // Given — одновременно заданы повторы и длительность
+        val entry = baseEntry(reps = 10, durationSec = 60)
+
+        // When
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
+
+        // Then
+        assertTrue(result.isFailure)
+        assertEquals(
+            EntryValidationError.INCOMPATIBLE_REPS_AND_DURATION,
+            (result.exceptionOrNull() as? EntryValidationException)?.error
+        )
+    }
+
+    @Test
+    fun reps_and_duration_both_set_is_incompatible_failure_for_time_too() {
+        // Given — для TIME-упражнения правило то же
+        val entry = baseEntry(reps = 10, durationSec = 60)
+
+        // When
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.TIME)
+
+        // Then
+        assertTrue(result.isFailure)
+        assertEquals(
+            EntryValidationError.INCOMPATIBLE_REPS_AND_DURATION,
+            (result.exceptionOrNull() as? EntryValidationException)?.error
+        )
+    }
+
+    @Test
+    fun reps_with_duration_for_reps_exercise_reports_incompatible_not_missing_reps() {
+        // Given — REPS-упражнение, повторы заданы + длительность задана
+        val entry = baseEntry(reps = 10, durationSec = 60)
+
+        // When
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
+
+        // Then — порядок проверок: INCOMPATIBLE_REPS_AND_DURATION раньше MISSING_REPS
+        assertEquals(
+            EntryValidationError.INCOMPATIBLE_REPS_AND_DURATION,
+            (result.exceptionOrNull() as? EntryValidationException)?.error
+        )
     }
 
     @ParameterizedTest
@@ -105,7 +207,7 @@ class EntryValidatorTest {
         val entry = baseEntry(weightKg = invalidWeight)
 
         // When
-        val result = EntryValidator.validate(entry)
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
 
         // Then
         assertTrue(result.isFailure)
@@ -121,7 +223,7 @@ class EntryValidatorTest {
         val entry = baseEntry(weightKg = null)
 
         // When
-        val result = EntryValidator.validate(entry)
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
 
         // Then
         assertTrue(result.isSuccess)
@@ -133,7 +235,7 @@ class EntryValidatorTest {
         val entry = baseEntry(weightKg = 0.0)
 
         // When
-        val result = EntryValidator.validate(entry)
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
 
         // Then
         assertTrue(result.isSuccess)
@@ -148,7 +250,7 @@ class EntryValidatorTest {
         val entry = baseEntry(workoutId = 1L)
 
         // When
-        val result = EntryValidator.validate(entry)
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
 
         // Then
         assertTrue(result.isFailure)
@@ -164,7 +266,7 @@ class EntryValidatorTest {
         val entry = baseEntry()
 
         // When
-        EntryValidator.validate(entry)
+        EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
 
         // Then
         assertEquals(1L, entry.exerciseId)
@@ -183,7 +285,7 @@ class EntryValidatorTest {
         // она живёт в Exercise, а не в ExerciseEntry.
         ExerciseCategory.values().forEach { _ ->
             val entry = baseEntry()
-            assertTrue(EntryValidator.validate(entry).isSuccess)
+            assertTrue(EntryValidator.validate(entry, ExerciseMeasuredBy.REPS).isSuccess)
         }
     }
 }

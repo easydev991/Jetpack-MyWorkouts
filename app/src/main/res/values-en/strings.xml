@@ -63,4 +63,11 @@
         <item quantity="one">%1$d hour</item>
         <item quantity="other">%1$d hours</item>
     </plurals>
+
+    <!-- Entry list screen (workout entries list on the main screen) -->
+    <string name="entry_value_separator">" x "</string>
+    <string name="entry_list_menu_delete">Delete</string>
+    <string name="entry_list_delete_dialog_title">Delete entry?</string>
+    <string name="entry_list_delete_dialog_message">Delete \"%1$s\"?</string>
+    <string name="entry_list_empty">Add your first entry</string>
 </resources>

@@ -14,6 +14,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -61,7 +62,8 @@ class RoomWorkoutDataRepositoryTest {
                 exerciseDao = database.exerciseDao(),
                 exerciseEntryDao = database.exerciseEntryDao()
             )
-        // Подложим одно упражнение, чтобы были валидные `exerciseId`.
+        // Подложим два упражнения — REPS (Подтягивания) и TIME (Планка) —
+        // чтобы были валидные `exerciseId` обоих типов измерения.
         runBlocking {
             database.exerciseDao().insert(
                 ExerciseEntity(
@@ -69,6 +71,15 @@ class RoomWorkoutDataRepositoryTest {
                     category = "PULL",
                     isCustom = false,
                     createdAt = 0L
+                )
+            )
+            database.exerciseDao().insert(
+                ExerciseEntity(
+                    name = "Планка",
+                    category = "CORE",
+                    isCustom = false,
+                    createdAt = 0L,
+                    measuredBy = "TIME"
                 )
             )
         }
@@ -167,11 +178,12 @@ class RoomWorkoutDataRepositoryTest {
         }
 
     @Test
-    fun addEntry_forRepsMeasuredExercise_withOnlyDuration_succeeds() =
+    fun addEntry_forRepsMeasuredExercise_withOnlyDuration_returnsFailure() =
         runBlocking {
-            // Given — упражнение из setUp имеет measuredBy = REPS (дефолт
-            // entity); запись без повторов, только длительность
-            // (spec-сценарий «Слой данных не навязывает соответствие»)
+            // Given — упражнение «Подтягивания» (id = 1, measuredBy = REPS),
+            // запись только с длительностью, без повторов — слой данных
+            // теперь требует повторы для REPS (workout-entries-list,
+            // design Decision 7, spec «Слой данных навязывает соответствие»)
             val entry =
                 ExerciseEntry(
                     id = 0L,
@@ -190,11 +202,250 @@ class RoomWorkoutDataRepositoryTest {
             // When
             val result = repository.addEntry(entry)
 
-            // Then — валидация не учитывает measuredBy, запись сохранена
-            assertTrue(result.isSuccess)
-            val fetched = repository.getEntry(result.getOrThrow()).getOrThrow()
-            assertEquals(null, fetched?.reps)
-            assertEquals(60, fetched?.durationSec)
+            // Then — отказ; в БД ничего не записано
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is EntryValidationException)
+            assertEquals(null, database.exerciseEntryDao().getById(1L))
+        }
+
+    @Test
+    fun addEntry_forRepsMeasuredExercise_withoutReps_returnsFailure() =
+        runBlocking {
+            // Given — REPS-упражнение (Подтягивания), повторы не заданы
+            val entry =
+                ExerciseEntry(
+                    id = 0L,
+                    exerciseId = 1L,
+                    workoutId = null,
+                    date = 1_700_000_000_000L,
+                    sets = 3,
+                    reps = null,
+                    weightKg = null,
+                    durationSec = null,
+                    comment = null,
+                    createdAt = 1L,
+                    modifiedAt = 1L
+                )
+
+            // When
+            val result = repository.addEntry(entry)
+
+            // Then — отказ с MISSING_REPS, в БД пусто
+            assertTrue(result.isFailure)
+            assertEquals(
+                EntryValidationError.MISSING_REPS,
+                (result.exceptionOrNull() as? EntryValidationException)?.error
+            )
+            assertEquals(null, database.exerciseEntryDao().getById(1L))
+        }
+
+    @Test
+    fun addEntry_forTimeMeasuredExercise_withoutDuration_returnsFailure() =
+        runBlocking {
+            // Given — упражнение «Планка» (id = 2, measuredBy = TIME),
+            // длительность не задана
+            val entry =
+                ExerciseEntry(
+                    id = 0L,
+                    exerciseId = 2L,
+                    workoutId = null,
+                    date = 1_700_000_000_000L,
+                    sets = 1,
+                    reps = null,
+                    weightKg = null,
+                    durationSec = null,
+                    comment = null,
+                    createdAt = 1L,
+                    modifiedAt = 1L
+                )
+
+            // When
+            val result = repository.addEntry(entry)
+
+            // Then — отказ с MISSING_DURATION, в БД пусто
+            assertTrue(result.isFailure)
+            assertEquals(
+                EntryValidationError.MISSING_DURATION,
+                (result.exceptionOrNull() as? EntryValidationException)?.error
+            )
+            assertEquals(null, database.exerciseEntryDao().getById(1L))
+        }
+
+    @Test
+    fun addEntry_forTimeMeasuredExercise_withZeroDuration_returnsFailure() =
+        runBlocking {
+            // Given
+            val entry =
+                ExerciseEntry(
+                    id = 0L,
+                    exerciseId = 2L,
+                    workoutId = null,
+                    date = 1_700_000_000_000L,
+                    sets = 1,
+                    reps = null,
+                    weightKg = null,
+                    durationSec = 0,
+                    comment = null,
+                    createdAt = 1L,
+                    modifiedAt = 1L
+                )
+
+            // When
+            val result = repository.addEntry(entry)
+
+            // Then
+            assertTrue(result.isFailure)
+            assertEquals(
+                EntryValidationError.INVALID_DURATION,
+                (result.exceptionOrNull() as? EntryValidationException)?.error
+            )
+        }
+
+    @Test
+    fun addEntry_forTimeMeasuredExercise_withRepsAndDuration_returnsFailure() =
+        runBlocking {
+            // Given — одновременно повторы и длительность
+            val entry =
+                ExerciseEntry(
+                    id = 0L,
+                    exerciseId = 2L,
+                    workoutId = null,
+                    date = 1_700_000_000_000L,
+                    sets = 1,
+                    reps = 10,
+                    weightKg = null,
+                    durationSec = 60,
+                    comment = null,
+                    createdAt = 1L,
+                    modifiedAt = 1L
+                )
+
+            // When
+            val result = repository.addEntry(entry)
+
+            // Then — отказ с INCOMPATIBLE_REPS_AND_DURATION
+            assertTrue(result.isFailure)
+            assertEquals(
+                EntryValidationError.INCOMPATIBLE_REPS_AND_DURATION,
+                (result.exceptionOrNull() as? EntryValidationException)?.error
+            )
+        }
+
+    @Test
+    fun addEntry_identicalEntries_areSavedAsSeparateRows() =
+        runBlocking {
+            // Given — две записи с одинаковыми упражнениями и параметрами
+            val template =
+                ExerciseEntry(
+                    id = 0L,
+                    exerciseId = 1L,
+                    workoutId = null,
+                    date = 1_700_000_000_000L,
+                    sets = 3,
+                    reps = 8,
+                    weightKg = null,
+                    durationSec = null,
+                    comment = null,
+                    createdAt = 1L,
+                    modifiedAt = 1L
+                )
+
+            // When
+            val firstId = repository.addEntry(template).getOrThrow()
+            val secondId = repository.addEntry(template).getOrThrow()
+
+            // Then — обе сохранены отдельными строками со своими id
+            assertTrue("id должны различаться", secondId > firstId)
+            assertNotNull(database.exerciseEntryDao().getById(firstId))
+            assertNotNull(database.exerciseEntryDao().getById(secondId))
+            // И обе видны в реактивном списке
+            assertEquals(2, repository.entries().first().size)
+        }
+
+    @Test
+    fun updateEntry_forTimeMeasuredExercise_changingToMissingDuration_returnsFailure() =
+        runBlocking {
+            // Given — вставим TIME-запись, потом обновим, убрав длительность
+            val insertedId =
+                repository
+                    .addEntry(
+                        ExerciseEntry(
+                            id = 0L,
+                            exerciseId = 2L,
+                            workoutId = null,
+                            date = 1_700_000_000_000L,
+                            sets = 1,
+                            reps = null,
+                            weightKg = null,
+                            durationSec = 60,
+                            comment = null,
+                            createdAt = 1L,
+                            modifiedAt = 1L
+                        )
+                    ).getOrThrow()
+
+            // And — TIME-запись читается через репозиторий: reps = null,
+            // длительность = 60 (spec «Сохранение планки»)
+            val saved = repository.getEntry(insertedId).getOrThrow()
+            assertEquals(null, saved?.reps)
+            assertEquals(60, saved?.durationSec)
+
+            // When — обновляем с durationSec = null
+            val result =
+                repository.updateEntry(
+                    ExerciseEntry(
+                        id = insertedId,
+                        exerciseId = 2L,
+                        workoutId = null,
+                        date = 1_700_000_000_000L,
+                        sets = 1,
+                        reps = null,
+                        weightKg = null,
+                        durationSec = null,
+                        comment = null,
+                        createdAt = 1L,
+                        modifiedAt = 1L
+                    )
+                )
+
+            // Then — отказ, длительность не обнулена
+            assertTrue(result.isFailure)
+            assertEquals(
+                EntryValidationError.MISSING_DURATION,
+                (result.exceptionOrNull() as? EntryValidationException)?.error
+            )
+            val stillThere = database.exerciseEntryDao().getById(insertedId)
+            assertNotNull(stillThere)
+            assertEquals(60, stillThere?.durationSec)
+        }
+
+    @Test
+    fun addEntry_withNonExistingExerciseId_returnsFailure_withExerciseNotFoundMessage() =
+        runBlocking {
+            // Given
+            val entry =
+                ExerciseEntry(
+                    id = 0L,
+                    exerciseId = 9_999L,
+                    workoutId = null,
+                    date = 1_700_000_000_000L,
+                    sets = 1,
+                    reps = 10,
+                    weightKg = null,
+                    durationSec = null,
+                    comment = null,
+                    createdAt = 1L,
+                    modifiedAt = 1L
+                )
+
+            // When
+            val result = repository.addEntry(entry)
+
+            // Then — отказ с IllegalStateException (workout-entries-list,
+            // design Decision 7: «Упражнение не найдено»)
+            assertTrue(result.isFailure)
+            assertTrue(result.exceptionOrNull() is IllegalStateException)
+            assertEquals(null, database.exerciseEntryDao().getById(1L))
         }
 
     @Test
@@ -580,5 +831,92 @@ class RoomWorkoutDataRepositoryTest {
             )
             assertEquals(customId, database.exerciseDao().getById(customId)?.id)
             assertEquals(entryId, database.exerciseEntryDao().getById(entryId)?.id)
+        }
+
+    @Test
+    fun entries_whenEmpty_emitsEmptyList() =
+        runBlocking {
+            // Given — в БД только упражнение из setUp, ни одной записи
+
+            // When
+            val items = repository.entries().first()
+
+            // Then
+            assertTrue(
+                "Пустой репозиторий должен эммитить пустой список",
+                items.isEmpty()
+            )
+        }
+
+    @Test
+    fun entries_returnsDomainEntryListItems_withExerciseNameAndDateDesc() =
+        runBlocking {
+            // Given — две записи: одна для REPS-упражнения из setUp,
+            // вторая — для TIME-упражнения, добавленного здесь.
+            // Разные даты — проверяем сортировку по убыванию.
+            val timeExerciseId =
+                repository
+                    .addExercise(
+                        Exercise(
+                            id = 0L,
+                            name = "Планка",
+                            category = ExerciseCategory.CORE,
+                            isCustom = true,
+                            comment = null,
+                            createdAt = 1_700_000_000_000L,
+                            measuredBy = ExerciseMeasuredBy.TIME
+                        )
+                    ).getOrThrow()
+            val olderEntryId =
+                repository
+                    .addEntry(
+                        ExerciseEntry(
+                            id = 0L,
+                            exerciseId = 1L,
+                            workoutId = null,
+                            date = 1_700_000_000_000L,
+                            sets = 4,
+                            reps = 10,
+                            weightKg = null,
+                            durationSec = null,
+                            comment = null,
+                            createdAt = 1L,
+                            modifiedAt = 1L
+                        )
+                    ).getOrThrow()
+            val newerEntryId =
+                repository
+                    .addEntry(
+                        ExerciseEntry(
+                            id = 0L,
+                            exerciseId = timeExerciseId,
+                            workoutId = null,
+                            date = 1_700_000_100_000L,
+                            sets = 1,
+                            reps = null,
+                            weightKg = null,
+                            durationSec = 60,
+                            comment = null,
+                            createdAt = 2L,
+                            modifiedAt = 2L
+                        )
+                    ).getOrThrow()
+
+            // When
+            val items = repository.entries().first()
+
+            // Then — обе записи, проекция доменная, новые первыми, названия из JOIN
+            assertEquals(2, items.size)
+            assertEquals(newerEntryId, items[0].id)
+            assertEquals(olderEntryId, items[1].id)
+            assertEquals("Планка", items[0].exerciseName)
+            assertEquals("Подтягивания", items[1].exerciseName)
+            assertEquals(1, items[0].sets)
+            assertNotNull(items[0].durationSec)
+            assertEquals(60, items[0].durationSec)
+            assertEquals(null, items[0].reps)
+            assertEquals(4, items[1].sets)
+            assertEquals(10, items[1].reps)
+            assertEquals(null, items[1].durationSec)
         }
 }

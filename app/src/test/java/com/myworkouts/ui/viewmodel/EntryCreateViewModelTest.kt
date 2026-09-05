@@ -1,6 +1,7 @@
 package com.myworkouts.ui.viewmodel
 
 import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
@@ -45,6 +46,8 @@ private class FakeWorkoutDataRepository(
     var addEntryResult: Result<Long> = Result.success(1L)
 
     override fun exercises(query: String): Flow<List<Exercise>> = catalog
+
+    override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow<List<EntryListItem>>(emptyList())
 
     override suspend fun addEntry(entry: ExerciseEntry): Result<Long> {
         addedEntry = entry

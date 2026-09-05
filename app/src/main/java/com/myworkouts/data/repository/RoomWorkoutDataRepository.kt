@@ -5,6 +5,8 @@ import com.myworkouts.data.db.ExerciseDao
 import com.myworkouts.data.db.ExerciseEntryDao
 import com.myworkouts.data.db.toDomain
 import com.myworkouts.data.db.toEntity
+import com.myworkouts.data.db.toListItem
+import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import kotlinx.coroutines.flow.Flow
@@ -41,7 +43,10 @@ class RoomWorkoutDataRepository(
      * каталога в `Result.success`. Для редактирования существующего упражнения
      * используйте [updateExercise].
      */
-    override suspend fun addExercise(exercise: Exercise): Result<Long> = runCatching { exerciseDao.insert(exercise.toEntity()) }
+    override suspend fun addExercise(exercise: Exercise): Result<Long> =
+        runCatching {
+            exerciseDao.insert(exercise.toEntity())
+        }
 
     /** Обновляет существующее упражнение. */
     override suspend fun updateExercise(exercise: Exercise): Result<Unit> {
@@ -51,47 +56,71 @@ class RoomWorkoutDataRepository(
 
     /**
      * Вставляет новую запись о выполнении. Перед записью прогоняет
-     * [EntryValidator]; ошибки валидации и FK (несуществующее
-     * `exerciseId`) возвращаются в `Result.failure` без записи в БД.
+     * [EntryValidator]; ошибки валидации и несуществующее `exerciseId`
+     * возвращаются в `Result.failure` без записи в БД.
+     *
+     * Упражнение грузится по `exerciseId` до валидации: `measuredBy`
+     * упражнения нужен валидатору (workout-entries-list, design Decision 7).
+     * Несуществующий id → `Result.failure(IllegalStateException("Упражнение
+     * не найдено"))` по образцу `deleteExercise`.
      */
     override suspend fun addEntry(entry: ExerciseEntry): Result<Long> {
-        val validation = EntryValidator.validate(entry)
-        if (validation.isFailure) {
-            return Result.failure(
-                checkNotNull(validation.exceptionOrNull()) {
-                    "Result.isFailure=true, but exceptionOrNull is null"
-                }
-            )
-        }
-        return runCatching {
-            exerciseEntryDao.insert(entry.toEntity())
-        }
+        validateWithExercise(entry)?.let { return Result.failure(it) }
+        return runCatching { exerciseEntryDao.insert(entry.toEntity()) }
     }
 
     /**
      * Обновляет существующую запись. Перед записью прогоняет
-     * [EntryValidator] и проставляет `modifiedAt = now` (`createdAt`
-     * не трогается — это гарантирует spec-сценарий «Изменение подходов
-     * и повторов»). `createdAt` берётся из переданной записи, не
-     * перезаписывается.
+     * [EntryValidator] (с `measuredBy` упражнения) и проставляет
+     * `modifiedAt = now` (`createdAt` не трогается — это гарантирует
+     * spec-сценарий «Изменение подходов и повторов»). `createdAt`
+     * берётся из переданной записи, не перезаписывается.
      */
     override suspend fun updateEntry(entry: ExerciseEntry): Result<Unit> {
-        val validation = EntryValidator.validate(entry)
-        if (validation.isFailure) {
-            return Result.failure(
-                checkNotNull(validation.exceptionOrNull()) {
-                    "Result.isFailure=true, but exceptionOrNull is null"
-                }
-            )
-        }
+        validateWithExercise(entry)?.let { return Result.failure(it) }
         return runCatching {
             val withModifiedAt = entry.copy(modifiedAt = System.currentTimeMillis())
             exerciseEntryDao.update(withModifiedAt.toEntity())
         }
     }
 
+    /**
+     * Пролог для `addEntry`/`updateEntry`: грузит упражнение по
+     * `entry.exerciseId` и прогоняет [EntryValidator]. Возвращает
+     * упражнение при успехе или `Throwable` (несуществующий id /
+     * ошибка валидации) для пробрасывания в `Result.failure` вызывающим
+     * кодом. Выделено, чтобы убрать дубликат между двумя write-операциями.
+     */
+    @Suppress("ReturnCount")
+    private suspend fun validateWithExercise(entry: ExerciseEntry): Throwable? {
+        val exercise =
+            exerciseDao.getById(entry.exerciseId)?.toDomain()
+                ?: return IllegalStateException("Упражнение не найдено")
+        val validation = EntryValidator.validate(entry, exercise.measuredBy)
+        if (validation.isFailure) {
+            return checkNotNull(validation.exceptionOrNull()) {
+                "Result.isFailure=true, but exceptionOrNull is null"
+            }
+        }
+        return null
+    }
+
     /** Возвращает запись по идентификатору или `null`. */
-    override suspend fun getEntry(id: Long): Result<ExerciseEntry?> = runCatching { exerciseEntryDao.getById(id)?.toDomain() }
+    override suspend fun getEntry(id: Long): Result<ExerciseEntry?> =
+        runCatching {
+            exerciseEntryDao.getById(id)?.toDomain()
+        }
+
+    /**
+     * Реактивный список записей с JOIN-проекцией на название упражнения.
+     * Сортировка — в SQL (`ORDER BY date DESC`), маппинг — extension
+     * `EntryListItemEntity.toListItem()` (workout-entries-list, design
+     * Decision 2).
+     */
+    override fun entries(): Flow<List<EntryListItem>> =
+        exerciseEntryDao
+            .observeEntries()
+            .map { projections -> projections.map { it.toListItem() } }
 
     /**
      * Удаляет запись о выполнении по идентификатору. Отсутствующий id —

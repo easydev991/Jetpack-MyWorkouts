@@ -3,11 +3,15 @@ package com.myworkouts.data.db
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
@@ -19,6 +23,14 @@ import org.junit.runner.RunWith
  * Спецификация «Запись о выполнении ссылается на упражнение каталога»:
  * - вставка записи с существующим `exerciseId` сохраняется;
  * - с несуществующим — FK-ошибка, запись не создаётся.
+ *
+ * Спецификация «Реактивный список записей» (workout-entries-list):
+ * - пустая БД → пустой список;
+ * - вставка двух записей с разными датами → обе в проекции с названием
+ *   упражнения (JOIN) и порядком по дате убыванием;
+ * - подписка до insert/delete получает обновлённые списки (ре-эмиссия
+ *   через InvalidationTracker, сценарий «Список актуализируется при
+ *   изменениях»).
  */
 @RunWith(AndroidJUnit4::class)
 class ExerciseEntryDaoTest {
@@ -108,5 +120,83 @@ class ExerciseEntryDaoTest {
 
             // Then — таблица записей пуста
             assertNull(entryDao.getById(1L))
+        }
+
+    @Test
+    fun observeEntries_whenNoEntries_emitsEmptyList() =
+        runBlocking {
+            // Given — пустая БД (только одно упражнение из setUp, без записей)
+
+            // When
+            val items = entryDao.observeEntries().first()
+
+            // Then
+            assertTrue(
+                "Пустая БД должна эммитить пустой список",
+                items.isEmpty()
+            )
+        }
+
+    @Test
+    fun observeEntries_returnsProjectionWithExerciseName_andOrderedByDateDesc() =
+        runBlocking {
+            // Given — две записи с разными датами (старая и новая)
+            val olderDate = 1_700_000_000_000L
+            val newerDate = 1_700_000_100_000L
+            entryDao.insert(
+                sampleEntry(exerciseId = existingExerciseId).copy(date = olderDate)
+            )
+            entryDao.insert(
+                sampleEntry(exerciseId = existingExerciseId).copy(date = newerDate)
+            )
+
+            // When
+            val items = entryDao.observeEntries().first()
+
+            // Then — обе записи в проекции с названием упражнения, новые первыми
+            assertEquals(2, items.size)
+            assertEquals(newerDate, items[0].date)
+            assertEquals(olderDate, items[1].date)
+            items.forEach {
+                assertEquals(
+                    "Проекция должна содержать название упражнения из JOIN",
+                    "Подтягивания",
+                    it.exerciseName
+                )
+            }
+        }
+
+    @Test
+    fun observeEntries_whenInsertAndDelete_emitsUpdatedListsToSubscriber() =
+        runBlocking {
+            // Given — подписка ДО мутаций; первая эмиссия — пустой список
+            val emissions = Channel<List<EntryListItemEntity>>(Channel.UNLIMITED)
+            val collectJob =
+                launch {
+                    entryDao.observeEntries().collect { emissions.send(it) }
+                }
+            assertTrue(
+                "Первая эмиссия подписчика — пустой список",
+                emissions.receive().isEmpty()
+            )
+
+            // When — вставляем запись
+            val id = entryDao.insert(sampleEntry(existingExerciseId))
+
+            // Then — подписчик получил список с этой записью
+            val afterInsert = emissions.receive()
+            assertEquals("Ре-эмиссия после insert содержит запись", 1, afterInsert.size)
+            assertEquals(id, afterInsert[0].id)
+
+            // When — удаляем запись
+            entryDao.deleteById(id)
+
+            // Then — подписчик получил пустой список
+            assertTrue(
+                "Ре-эмиссия после delete — пустой список",
+                emissions.receive().isEmpty()
+            )
+
+            collectJob.cancel()
         }
 }

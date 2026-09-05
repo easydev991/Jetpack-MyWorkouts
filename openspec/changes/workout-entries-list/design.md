@@ -58,8 +58,8 @@ Flow<List<EntryListItem>>` — по аналогии с `exercises(query)`.
 `ui/screens/main/`: логика одна для повторов и длительности —
 `sets > 1 → "${sets}${sep}${value}"`, иначе `"$value"`. Значение
 `value = reps ?: durationSec` вычисляет вызывающий код (composable
-строки); при обоих `null` — пустая строка на уровне caller'а
-(состояние недостижимо: обязательное значение гарантирует валидатор,
+строки); при обоих `null` — фоллбек `0` (`reps ?: durationSec ?: 0`;
+состояние недостижимо: обязательное значение гарантирует валидатор,
 Decision 7 — отдельной ветки в форматтере нет). Разделитель — параметр:
 ru « х », en « x »
 (строковый ресурс), сама функция тестируется JVM-тестами без ресурсов.
@@ -67,8 +67,8 @@ ru « х », en « x »
 
 ### Decision 4: ViewModel главного экрана — `MainViewModel`
 
-`StateFlow<MainUiState>` (sealed: Loading/Success; пустота — флагом
-внутри Success, см. Decision 6) из
+`StateFlow<MainUiState>` (sealed: Loading/Success; пустота вычисляется
+из `entries.isEmpty()` на use site — см. Decision 6) из
 `repository.entries()` через `stateIn(WhileSubscribed(5000))` — по
 конвенции проекта. Удаление: `requestDelete(item)` выставляет
 `pendingDeleteId` (для алерта), `confirmDelete()`/`cancelDelete()`;
@@ -78,27 +78,71 @@ ru « х », en « x »
 ### Decision 5: long-press меню и алерт подтверждения удаления
 
 Строка: `Modifier.pointerInput { detectTapGestures(onLongPress =
-{ offset -> … }) }` (НЕ `combinedClickable` — `onTap` не нужен,
+{ offset → … }) }` (НЕ `combinedClickable` — `onTap` не нужен,
 только long-press; кликов по строке нет, экрана деталей нет) +
 `Modifier.onGloballyPositioned` (позиция строки в root через
 `coordinates.positionInRoot()`); меню — один `DropdownMenu` на уровне
-списка (НЕ внутри строки), `expanded = true` пока `contextMenuItem != null`,
-`offset = DpOffset(itemPosition.x + localOffset.x,
-itemPosition.y + localOffset.y)` (px→dp через `LocalDensity`). Внутри
-строки нет собственного `DropdownMenu` — жест локальный, рендер
+списка (НЕ внутри строки), `expanded = true` пока `contextMenuItem != null`.
+Внутри строки нет собственного `DropdownMenu` — жест локальный, рендер
 общий. Пункт один: «Удалить» (на главном экране MyWorkouts деталей
 и редактирования пока нет — единственное доступное действие над
 записью; при добавлении деталей/редактирования меню расширяется
 по той же схеме). Алерт — `AlertDialog` с confirm-кнопкой в
 `colorScheme.error` и текстом «Удалить запись?»/«Отмена».
 
-Тест-покрытие: задача 5.3 проверяет `performTouchInput.longClick()`
+**Позиция меню в точке касания.** Material3 1.4 `DropdownMenu`
+использует стратегию `topToAnchorBottom` (`menu.top = anchor.bottom +
+offset.y`); anchor — это Box, в котором лежат и `LazyColumn`, и
+`DropdownMenu` (`EntryList`). Без компенсации `anchor.bottom ≈
+screenHeight`, и меню уезжает за нижнюю границу, после чего M3
+клампит его к середине экрана — баг «меню ниже точки касания».
+Решение:
+- `anchor-Box` сообщает свою позицию и высоту в root-координатах через
+  `Modifier.onGloballyPositioned { coords → anchorOrigin =
+  IntOffset(positionInRoot.x, positionInRoot.y); anchorHeight =
+  coords.size.height }`. Хранится в двух `remember {
+  mutableStateOf(...) }` (`IntOffset.Zero` и `0` соответственно) —
+  `right`/`bottom` из исходного `IntRect` не нужны (menu использует
+  только origin и высоту).
+- touchPoint в root = `positionInRoot` строки + `localOffset` из
+  `detectTapGestures` (row-local → root); это уже было.
+- offset в dp:
+  - `offset.x = (touchPoint.x − anchorOrigin.x).toDp()`
+  - `offset.y = (touchPoint.y − anchorOrigin.y −
+    anchorHeight).toDp()` (эквивалентно
+    `touchPoint.y − (anchorOrigin.y + anchorHeight)`)
+- `DropdownMenu` сам клампит offset в границах окна — ручной
+  клампинг не пишется.
+
+`offset.x` дополнительно вычитает `anchorOrigin.x` (для корректности
+при горизонтальных insets от display cutouts в landscape — типично
+`anchorOrigin.x == 0` в portrait). Жест приходит из строки внутри
+`LazyColumn`, anchor — Box уровня списка, поэтому перевод
+row-local → root → anchor-local обязателен.
+
+**Выделение строки при показе меню.** Пока `contextMenuItem != null`,
+соответствующая строка получает фон `colorScheme.surfaceVariant`
+(вместо `colorScheme.surface`) — плавный переход через
+`animateColorAsState`. Источник истины — уже существующее
+`ContextMenuState.item`; параметр `isSelected` в строке =
+`contextMenu?.item?.id == item.id`. Выделение снимается при любом
+закрытии меню (выбор пункта, тап вне, системная отмена) —
+`onDismissRequest` сбрасывает `contextMenu` в `null`. Покрытие —
+задача 5.6 через семантическое свойство `SemanticsProperties.Selected`
+(`Modifier.semantics(mergeDescendants = true) { selected = ... }` —
+стандартный канал accessibility в Compose; `mergeDescendants = true`
+нужен, чтобы `onNodeWithText` находил merged Row, а не отдельный
+Text внутри).
+
+**Тест-покрытие.** Задача 5.3 проверяет `performTouchInput.longClick()`
 → `onNodeWithText("Удалить").assertIsDisplayed()` (наличие меню
-и пункта). Позиция меню относительно точки касания покрывается
-только ручной проверкой на эмуляторе (5.5): `DropdownMenu`-offset
-не имеет семантики точной привязки в Compose UI Test — проверка
-позиции требует либо `capture_ui_dump`/uiautomator API, либо
-визуальной верификации.
+и пункта). Подсветка строки — задача 5.6: `SemanticsMatcher.expectValue(
+SemanticsProperties.Selected, true|false)`. Позиция меню относительно
+точки касания покрывается только ручной проверкой на эмуляторе (5.5,
+5.8): `DropdownMenu`-offset не имеет семантики точной привязки в
+Compose UI Test — проверка позиции требует `capture_ui_dump`/
+uiautomator API (XML `<node ... bounds="[x,y][x,y]">` для popup-
+контейнера) либо визуальной верификации по скриншоту.
 
 ### Decision 6: пустое состояние — заглушка вместо списка
 
