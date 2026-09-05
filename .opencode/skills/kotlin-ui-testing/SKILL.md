@@ -136,6 +136,8 @@ description: >
   `references/alarm-reminder.md`
 - Запуск `make android-test`, отчёт, screenshot-tests →
   `references/running-tests.md`
+- Ручная проверка на эмуляторе, `android-debug-bridge`, что UI-тесты
+  не покрывают → `references/manual-verification.md`
 - Полные канонические примеры → `references/EXAMPLE.md`
 
 ## Common pitfalls → next best move
@@ -188,4 +190,5 @@ description: >
 - `references/viewmodel-integration.md`
 - `references/alarm-reminder.md`
 - `references/running-tests.md`
+- `references/manual-verification.md`
 - `references/EXAMPLE.md`

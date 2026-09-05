@@ -61,6 +61,173 @@ composeTestRule.setContent {
 }
 ```
 
+## Long-press и контекстное меню (DropdownMenu)
+
+Паттерн «длинное нажатие на строке списка → меню в точке тача»:
+`pointerInput { detectTapGestures.onLongPress }` на строке +
+`onGloballyPositioned` для глобальной позиции, **один**
+`DropdownMenu` на уровне списка (не внутри строки — позиция
+привязки плывёт при скролле).
+
+### Состояние меню
+
+```kotlin
+data class ContextMenuState(
+    val item: ListItem,           // ваш доменный тип
+    val offsetInRoot: Offset
+)
+```
+
+### Жест на строке
+
+Сохраняем глобальную позицию в `remember`, локальный `localOffset`
+приходит из `detectTapGestures.onLongPress`:
+
+```kotlin
+@Composable
+private fun RowWithLongPress(
+    item: ListItem,
+    separator: String,
+    onLongPress: (localOffset: Offset, positionInRoot: Offset) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var positionInRoot by remember { mutableStateOf(Offset.Zero) }
+    Row(
+        item = item,
+        separator = separator,
+        modifier = modifier
+            .onGloballyPositioned { coords ->
+                positionInRoot = coords.positionInRoot()
+            }
+            .pointerInput(item.id) {
+                detectTapGestures(
+                    onLongPress = { localOffset ->
+                        onLongPress(localOffset, positionInRoot)
+                    }
+                )
+            }
+    )
+}
+```
+
+### Меню на уровне списка
+
+Один `DropdownMenu` (не на строку); px→dp через `LocalDensity`;
+M3 сам клампит `offset` в границы экрана:
+
+```kotlin
+@Composable
+private fun ListWithContextMenu(
+    items: List<ListItem>,
+    separator: String,
+    contextMenu: ContextMenuState?,
+    onItemLongPress: (ListItem, Offset) -> Unit,
+    onMenuDismiss: () -> Unit,
+    onItemAction: (ListItem) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val density = LocalDensity.current
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyColumn {
+            items(items = items, key = { it.id }) { item ->
+                RowWithLongPress(
+                    item = item,
+                    separator = separator,
+                    onLongPress = { localOffset, positionInRoot ->
+                        onItemLongPress(item, positionInRoot + localOffset)
+                    }
+                )
+            }
+        }
+
+        if (contextMenu != null) {
+            DropdownMenu(
+                expanded = true,
+                onDismissRequest = onMenuDismiss,
+                offset =
+                    DpOffset(
+                        x = with(density) { contextMenu.offsetInRoot.x.toDp() },
+                        y = with(density) { contextMenu.offsetInRoot.y.toDp() }
+                    )
+            ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.delete)) },
+                    onClick = { onItemAction(contextMenu.item) }
+                )
+            }
+        }
+    }
+}
+```
+
+Подставьте свои имена (`ListItem`, `Row`, `R.string.*`, колбэки) на
+свои — структура и логика те же.
+
+### Тест-покрытие в `androidTest`
+
+- `performTouchInput { longClick() }` →
+  `onNodeWithText("...").assertExists()` — наличие меню и пункта.
+- **Позиция** меню относительно тача UI-тестами не проверяется
+  (`offset` `DropdownMenu` не имеет семантики точной привязки в
+  Compose UI Test) — закрывается ручной проверкой на эмуляторе
+  (см. `references/manual-verification.md`).
+
+## Эмуляция локального состояния в тесте через `var X by remember`
+
+Когда Composable принимает `state = ScreenState(...,
+onTransientChange = ...)` (test/preview-state с колбэками) и внутри
+логики использует **транзитное локальное состояние** (открыто ли
+меню, какой id «pending», что выбрано) — частый антипаттерн:
+callback инкрементируется, но в `state.transient` не проставляется,
+Composable не перерисуется.
+
+**Антипаттерн** (callback срабатывает, но UI не рисуется —
+`assertExists()` для нужной ноды падает):
+
+```kotlin
+var callbackCount = 0
+composeTestRule.setContent {
+    MyScreen(
+        state = ScreenState(
+            uiState = ...,
+            // transient по умолчанию = null
+            onTransientChange = {
+                callbackCount++           // счётчик растёт
+                // но state.transient остаётся null — UI не обновляется
+            }
+        )
+    )
+}
+// ...
+assertEquals(1, callbackCount)            // проходит
+onNodeWithText("Действие").assertExists() // падает: ноды нет
+```
+
+**Корректно** — завести локальный `var transient by remember`,
+callback обновляет **и** локальный `transient`, передаваемый в
+`state.transient`:
+
+```kotlin
+var callbackCount = 0
+composeTestRule.setContent {
+    var transient by remember { mutableStateOf<MyTransient?>(null) }
+    MyScreen(
+        state = ScreenState(
+            uiState = ...,
+            transient = transient,           // обратная подписка
+            onTransientChange = {
+                callbackCount++
+                transient = it
+            }
+        )
+    )
+}
+```
+
+`MutableState` гарантирует рекомпозицию с новым значением. Шаблон
+распространяется на любые транзитные поля стейта: `pendingX`,
+`openMenu`, `selectedItem` и т.п.
+
 ## Изоляция зависимостей — TestViewModel
 
 Для тестов экрана CreateEdit используется factory-функция из

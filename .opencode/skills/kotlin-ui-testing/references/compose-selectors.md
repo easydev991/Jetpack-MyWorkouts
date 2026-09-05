@@ -54,6 +54,14 @@ composeTestRule.onAllNodesWithText(text)                      // все ноды
 .assertTextEquals(text)        // текст ноды = text
 ```
 
+> **Важно:** `.assert*()` — это **методы** `SemanticsNodeInteraction`,
+> а не top-level функции. В Compose 1.12+ импорты вида
+> `import androidx.compose.ui.test.assertExists` **не резолвятся**
+> (`Unresolved reference 'assertExists'`). Просто вызывайте на receiver
+> (`composeTestRule.onNodeWithText(...).assertExists()`) — Kotlin
+> резолвит метод через тип receiver'а без импорта. То же для
+> `assertIsDisplayed`, `assertCountEquals`, `assertTextEquals` и т.п.
+
 ## Ожидание idle-состояния
 
 ```kotlin
