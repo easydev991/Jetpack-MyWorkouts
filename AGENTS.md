@@ -53,7 +53,8 @@ DataStore, Room. Manual DI — без Hilt.
 - `LazyColumn` с `key = { it.id }`.
 - **Preview обязательны** для всех composable-компонентов: светлая + тёмная
   (`UI_MODE_NIGHT_YES`), `showBackground = true, locale = "ru"`, обёртка в
-  `MyWorkoutsTheme`, ключевые состояния компонента рядом в Column.
+  `JetpackMyWorkoutsTheme`, ключевые состояния компонента рядом в Column.
+  Превью могут жить в соседнем `*Preview.kt`-файле рядом с экраном.
 - **Offline-only**: никаких сетевых зависимостей (Retrofit/OkHttp/Ktor).
 
 ---
@@ -83,13 +84,16 @@ DataStore, Room. Manual DI — без Hilt.
 - `MainActivity.kt`
 - `data/db/` — Room: entities, DAOs, `WorkoutDatabase`, стандартные упражнения
 - `data/preferences/AppSettingsDataStore.kt`
-- `data/repository/` — `RoomWorkoutDataRepository`, `EntryValidator`
-- `domain/model/` — `AppTheme`, `Exercise`, `ExerciseCategory`, `ExerciseEntry`
+- `data/repository/` — `WorkoutDataRepository`, `RoomWorkoutDataRepository`,
+  `EntryValidator`
+- `domain/model/` — `AppTheme`, `Exercise`, `ExerciseCategory`, `ExerciseEntry`,
+  `EntryListItem`, `ExerciseMeasuredBy`
 - `navigation/Screen.kt` (только `route`) + `BottomTab` + `BottomTabs`
-- `ui/screens/{main,more,root,appearance}/`
-- `ui/state/AppearanceUiState.kt`
+- `ui/screens/{main,entry,more,root,appearance}/`
+- `ui/state/` — `MainUiState.kt`, `EntryCreateUiState.kt`, `AppearanceUiState.kt`
 - `ui/theme/{Color,Theme,Type}.kt` ← `Type`, не `Typography`
-- `ui/viewmodel/AppearanceViewModel.kt`
+- `ui/viewmodel/` — `MainViewModel.kt`, `EntryCreateViewModel.kt`,
+  `AppearanceViewModel.kt`
 
 `di/`, `util/`, `MyWorkoutsApplication.kt` ещё не созданы — manual DI в
 пределах фичи (`AppSettingsDataStore` создаётся один раз в `MainActivity`),
