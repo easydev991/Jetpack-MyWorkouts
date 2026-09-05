@@ -317,7 +317,7 @@ class WorkoutDetailsScreenViewModelIntegrationTest {
             val savedStateHandle = SavedStateHandle(mapOf("workoutId" to insertedId))
 
             // When
-            viewModel = WorkoutDetailsScreenViewModel(repository, NoOpLogger(), savedStateHandle)
+            viewModel = WorkoutDetailsScreenViewModel(repository, savedStateHandle)
 
             // Then
             viewModel.uiState.test {

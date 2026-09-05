@@ -21,7 +21,6 @@ class MyViewModelTest {
         repository = FakeWorkoutRepository()
         viewModel = MyViewModel(
             repository = repository,
-            logger = NoOpLogger(),                    // предпочтительно (или mockk(relaxed = true))
             savedStateHandle = SavedStateHandle()     // если нужен workoutId
         )
     }
@@ -56,9 +55,9 @@ class MyViewModelTest {
 4. `Dispatchers.resetMain()` в `@AfterEach` — обязательно,
    иначе следующий тест в том же процессе JVM получит грязный
    диспетчер.
-5. `NoOpLogger()` (или `mockk(relaxed = true)` для `Logger`) —
-   если ViewModel принимает `Logger`. Без замены
-   `android.util.Log` падает в unit-тесте.
+5. Простые интерфейсные зависимости (если появятся у ViewModel) —
+   `mockk(relaxed = true)`; текущие ViewModel проекта без `Logger`,
+   `NoOpLogger` в проекте нет.
 6. `testDispatcher.scheduler.advanceUntilIdle()` после каждого
    действия ViewModel — корутины не запустятся сами.
 
@@ -71,7 +70,6 @@ class MyViewModelTest {
 val savedStateHandle = SavedStateHandle(mapOf("workoutId" to testItemId))
 viewModel = WorkoutDetailsScreenViewModel(
     repository = repository,
-    logger = NoOpLogger(),
     savedStateHandle = savedStateHandle,
     reminderManager = reminderManager
 )
@@ -90,7 +88,6 @@ viewModel = WorkoutDetailsScreenViewModel(
 val nowMillis = 1_800_000_000_000L
 viewModel = WorkoutDetailsScreenViewModel(
     repository = repository,
-    logger = NoOpLogger(),
     savedStateHandle = SavedStateHandle(mapOf("workoutId" to testItemId)),
     reminderManager = reminderManager,
     currentTimeMillisProvider = { nowMillis }   // фиксируем время
@@ -112,7 +109,6 @@ fun when_workout_not_found_thenremainsinloadingstate() = runTest {
     val savedStateHandle = SavedStateHandle(mapOf("workoutId" to 999L))
     viewModel = WorkoutDetailsScreenViewModel(
         repository = repository,
-        logger = NoOpLogger(),
         savedStateHandle = savedStateHandle,
         reminderManager = reminderManager
     )

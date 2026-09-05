@@ -120,8 +120,9 @@ app/build/reports/tests/testDebugUnitTest/classes/    # детали по кла
 
 ### `android.util.Log` runtime exception в unit-тесте
 
-ViewModel использует `Logger` напрямую. Замени на `NoOpLogger()` в
-тесте.
+Прямой вызов `android.util.Log` в unit-тесте. Текущие ViewModel не
+логируют; при появлении зависимости `Logger` передавай в тесте
+`mockk(relaxed = true)`.
 
 ### Случайные провалы (flaky)
 

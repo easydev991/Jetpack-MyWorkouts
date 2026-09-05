@@ -41,7 +41,7 @@ Use Case создаётся один раз как `val` — он immutable.
 ```kotlin
 class FormatWorkoutDurationUseCaseTest {
     private val daysFormatter: WorkoutDurationFormatter = mockk()
-    private val resourceProvider: ResourceProvider = StubResourceProvider()
+    private val resourceProvider: ResourceProvider = mockk(relaxed = true)
     private val useCase = FormatWorkoutDurationUseCase(daysFormatter = daysFormatter)
 
     @Test
@@ -75,8 +75,8 @@ class FormatWorkoutDurationUseCaseTest {
 }
 ```
 
-`StubResourceProvider` — production-стаб из `data/provider/`, не
-наша подделка. Он возвращает русские строки для детального экрана.
+`ResourceProvider` в примере — интерфейс-зависимость из шаблона; в
+текущем проекте его нет, подставь мок или свой стаб под свою задачу.
 
 ### 3. С `Result<T>` и валидацией
 

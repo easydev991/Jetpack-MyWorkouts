@@ -156,6 +156,10 @@ description: >
 | Alarm-тест не видит PendingIntent | Ищи через `PendingIntent.getBroadcast(...)` с `FLAG_NO_CREATE or FLAG_IMMUTABLE` (см. `references/alarm-reminder.md`) |
 | Тест уведомлений падает на API 33+ | Оберни в `runWithNotificationPermission { ... }` — `adoptShellPermissionIdentity(POST_NOTIFICATIONS)` (см. `references/alarm-reminder.md`) |
 | Ротация не работает в тесте | `composeTestRule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE` + `waitForIdle()` (см. `references/activity-integration.md`) |
+| `onNodeWithText("20")` не находит день в M3 `DatePicker` | В material3 1.4+ номер дня вычищен из семантики ячейки (доступен только локализованный description даты). Ищи по признаку `Disabled` (`SemanticsMatcher.keyIsDefined(SemanticsProperties.Disabled)`) или тапай по координатам через `performTouchInput { click(center) }` (см. `references/compose-selectors.md`, раздел про DatePicker) |
+| `performClick` на недоступной (disabled) ноде падает | У disabled-ноды нет click-action — паттерн «тап по недоступному → ничего не произошло» не работает. Проверяй `assertIsNotEnabled`, подсчёт disabled-нод или физический тап по координатам через `performTouchInput` |
+| `Unresolved reference 'click'` в `performTouchInput` | `click`/`longClick`/`doubleClick` — extension-функции `TouchInjectionScope`, каждой нужен свой импорт: `import androidx.compose.ui.test.click` |
+| Нод в диалоге больше, чем ожидал `assertCountEquals` | `onAllNodes(...)` видит всё дерево, включая форму под диалогом (например, disabled-кнопку «Сохранить»). Сделай состояние валидным, чтобы лишних disabled-нод не было, или учитывай их в подсчёте |
 
 ## Verification checklist
 

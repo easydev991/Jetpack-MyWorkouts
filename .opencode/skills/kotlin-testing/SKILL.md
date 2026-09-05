@@ -4,8 +4,8 @@ description: >
   Экспертное руководство по unit-тестированию в Android-проекте Jetpack-MyWorkouts:
   JUnit 5, MockK, Fake-репозитории на MutableStateFlow, kotlinx-coroutines-test
   для ViewModel и Use Case, AAA / Given-When-Then, проектные соглашения
-  (snake_case, без !!, русские сообщения, NoOpLogger, StubResourceProvider),
-  а также ограничения (запрет новых интеграционных тестов ViewModel).
+  (snake_case, без !!, русские сообщения), а также ограничения (запрет
+  новых интеграционных тестов ViewModel).
   Использовать при написании новых unit-тестов, рефакторинге существующих,
   отладке flaky-тестов и улучшении качества покрытия в проекте.
 ---
@@ -65,11 +65,10 @@ description: >
     `assertTrue(result.isSuccess)` / `assertTrue(result.isFailure)`,
     `result.getOrThrow()` для happy path,
     `result.exceptionOrNull()` для проверки типа ошибки.
-11. **Logger в тестах ViewModel — `NoOpLogger` или `mockk(relaxed = true)`.**
-    `com.myworkouts.util.NoOpLogger` — предпочтительный вариант.
-    `mockk(relaxed = true)` — тоже допустим (relaxed-мок перехватывает
-    любые вызовы; правило 5 и `EXAMPLE.md` отражают оба подхода).
-    Смешивать в одном тест-классе не нужно — выбери один.
+11. **Простые интерфейсные зависимости — `mockk(relaxed = true)`.**
+    Класса `NoOpLogger` в проекте нет, текущие ViewModel (`EntryCreate`,
+    `Main`, `Appearance`) не принимают Logger. Если такая зависимость
+    появится — relaxed-мок перехватывает любые вызовы без заглушек.
 
 ## Запуск тестов
 

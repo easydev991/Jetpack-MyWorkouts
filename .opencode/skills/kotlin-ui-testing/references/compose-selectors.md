@@ -144,3 +144,57 @@ composeTestRule.runOnIdle {
     )
 }
 ```
+
+## M3 DatePicker: семантика дней (material3 1.4+)
+
+Номер дня **вычищен из семантики**: внутренний `Text("20")` обёрнут в
+`clearAndSetSemantics {}`, ячейка несёт только локализованный description
+даты (пример: «вт, 16 июля 2024 г.»). Поэтому:
+
+- `onNodeWithText("20")` — **не найдёт** день, тест упадёт с
+  «could not find any node»;
+- `performClick()` на недоступной дате — **упадёт** (у disabled-ноды нет
+  click-action), паттерн «тап по недоступному → ничего не произошло»
+  не работает.
+
+Факты о сетке, на которых строятся надёжные проверки:
+
+- сетка месяца всегда 6×7 = 42 ячейки, но дни соседних месяцев — пустые
+  `Spacer`-ы **без семантики**: day-ячейки есть только у дней текущего
+  месяца → число disabled-нод детерминировано и **не зависит от локали**;
+- `onAllNodes(...)` ищет во всём дереве, включая форму под диалогом:
+  сделай состояние валидным (нет disabled-кнопок за спиной диалога) или
+  учитывай лишние ноды в подсчёте.
+
+Рабочий паттерн: дата 15.07.2024, момент открытия — тот же день →
+недоступны 16–31 июля, ровно 16 disabled-ячеек:
+
+```kotlin
+// Импорты:
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.click          // extension — нужен импорт!
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performTouchInput
+
+// Недоступные дни считаются по признаку Disabled:
+composeTestRule
+    .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Disabled))
+    .assertCountEquals(16)
+
+// Тап по недоступной дате — только по координатам (физический жест
+// по bounds ноды, click-action не требуется):
+composeTestRule
+    .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Disabled))
+    .onFirst()
+    .performTouchInput { click(center) }
+
+// Доступная прошлым дням механика проверяется end-to-end: «ОК» без
+// выбора дня не меняет поле (текст поля — через DateTimeFormatter,
+// не хардкод локали).
+```
+
+Если нужна точная логика границы дат (какие millis доступны) — вынеси её
+в pure-функцию без Compose-рантайма (internal top-level рядом с
+форматтерами пикера) и покрывай JVM-тестами; UI-тест оставь для факта
+«недоступные дни в пикере есть».

@@ -292,11 +292,9 @@ class BackupImportRealFilesTest {
 
 ## Где искать ещё
 
-- `app/src/test/java/com/myworkouts/domain/usecase/CalculateWorkoutDurationUseCaseTest.kt` — pure use case, временные кейсы, явный `currentDate`.
-- `app/src/test/java/com/myworkouts/domain/usecase/FormatWorkoutDurationUseCaseTest.kt` — MockK для одного интерфейса + `StubResourceProvider`.
-- `app/src/test/java/com/myworkouts/domain/model/WorkoutDurationTest.kt` — sealed-class проверки.
-- `app/src/test/java/com/myworkouts/ui/viewmodel/WorkoutDetailsScreenViewModelTest.kt` — `SavedStateHandle`, `currentTimeMillisProvider`, `FakeWorkoutReminderManager`.
-- `app/src/test/java/com/myworkouts/data/repository/WorkoutReminderRepositoryImplTest.kt` — `FakeWorkoutReminderDao` для repository.
-- `app/src/test/java/com/myworkouts/reminder/DefaultWorkoutReminderManagerTest.kt` — несколько Fake'ов одновременно.
-- `app/src/test/java/com/myworkouts/data/database/DisplayOptionConverterTest.kt` — converter + round-trip.
+- `app/src/test/java/com/myworkouts/ui/viewmodel/EntryCreateViewModelTest.kt` — Fake-репозиторий на MutableStateFlow, таблица кейсов санитайзинга, фиксированный nowProvider.
+- `app/src/test/java/com/myworkouts/ui/viewmodel/AppearanceViewModelTest.kt` — ViewModel с зависимостью настроек (DataStore).
+- `app/src/test/java/com/myworkouts/data/db/MappersTest.kt` — мапперы entity↔domain.
+- `app/src/test/java/com/myworkouts/data/repository/EntryValidatorTest.kt` — валидация записи.
+- `app/src/test/java/com/myworkouts/domain/model/ExerciseCategoryTest.kt` — `@ParameterizedTest` + `@EnumSource`.
 - `app/src/test/java/com/myworkouts/ui/state/WorkoutDetailsStateTest.kt` — sealed-state equality.

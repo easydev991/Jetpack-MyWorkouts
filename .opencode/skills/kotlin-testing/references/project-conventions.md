@@ -66,44 +66,24 @@ assertEquals(2, items.size, "Должно быть 2 элемента")
 
 ### `Logger` в тестах ViewModel
 
-`com.myworkouts.util.NoOpLogger` — предпочтительный вариант:
-реализация `Logger`, которая ничего не делает. Альтернативно —
-`mockk(relaxed = true)` (relaxed-мок перехватывает любые вызовы
-без падения; см. правило 5 SKILL.md и `EXAMPLE.md`). Оба подхода
-живут в проекте: `WorkoutsScreenViewModelTest` использует
-`mockk(relaxed = true)`, `WorkoutDetailsScreenViewModelTest` и
-`WorkoutEditScreenViewModelTest` — `NoOpLogger()`. Смешивать
-в одном тест-классе не нужно — выбери один.
+В проекте нет ни интерфейса `Logger`, ни `com.myworkouts.util.NoOpLogger`
+— текущие ViewModel (`EntryCreate`, `Main`, `Appearance`) не логируют.
+Если `Logger` появится, передавай в тестах `mockk(relaxed = true)`
+(relaxed-мок перехватывает любые вызовы без падения).
 
 ```kotlin
-// Предпочтительный вариант
-viewModel = WorkoutsScreenViewModel(
-    repository = repository,
-    dataStore = dataStore,
-    logger = NoOpLogger()
-)
-
-// Допустимая альтернатива
 val logger: Logger = mockk(relaxed = true)
-viewModel = WorkoutsScreenViewModel(
+viewModel = MyViewModel(
     repository = repository,
-    dataStore = dataStore,
     logger = logger
 )
 ```
 
-### `StubResourceProvider` в тестах Use Case
+### `ResourceProvider` в тестах Use Case
 
-`com.myworkouts.data.provider.StubResourceProvider` —
-production-класс из `data/provider/`, специально сделанный
-заглушкой для тестов. Не пиши свою:
-
-```kotlin
-private val resourceProvider: ResourceProvider = StubResourceProvider()
-```
-
-Он возвращает русские строки (`"Сегодня"`, `"осталось"`, `"прошло"`)
-и сокращения (`"дн."`, `"мес."`, `"г."`).
+Интерфейса `ResourceProvider` и production-стаба `StubResourceProvider`
+в проекте нет. Если Use Case получит такую зависимость —
+`mockk<ResourceProvider>(relaxed = true)` или свой стаб в тесте.
 
 ### Fake предпочтительнее Mock для репозиториев с Flow
 
@@ -223,8 +203,8 @@ class WorkoutsScreenViewModelTest
 - Никаких реальных Room database (это integration).
 - Никакого реального DataStore (это integration).
 - Никаких реальных сетевых вызовов (проект офлайн, но всё равно).
-- Никакого `Context.getString` — это integration; используй
-  `StubResourceProvider` или `mockk<ResourceProvider>()`.
+- Никакого `Context.getString` — это integration; если появится
+  зависимость `ResourceProvider`, используй `mockk<ResourceProvider>()`.
 
 ## Что гибко
 

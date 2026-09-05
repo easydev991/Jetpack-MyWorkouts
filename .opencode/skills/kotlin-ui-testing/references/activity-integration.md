@@ -80,7 +80,6 @@ fun checkHasChanges_afterLoadItem_doesNotFalselyDetectTimeOfDayChange() {
     val viewModel = WorkoutEditScreenViewModel(
         repository = repository,
         resourceProvider = createTestResourceProvider(),
-        logger = NoOpLogger(),
         savedStateHandle = SavedStateHandle(mapOf("workoutId" to insertedId)),
         analyticsService = AnalyticsService(listOf(NoopAnalyticsProvider()))
     )

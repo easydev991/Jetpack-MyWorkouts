@@ -136,7 +136,7 @@ ViewModel слушает через `combine` / `flatMapLatest` на TestDispatc
 ```kotlin
 class FormatWorkoutDurationUseCaseTest {
     private val daysFormatter: WorkoutDurationFormatter = mockk()
-    private val resourceProvider: ResourceProvider = StubResourceProvider()
+    private val resourceProvider: ResourceProvider = mockk(relaxed = true)
 
     private val useCase = FormatWorkoutDurationUseCase(daysFormatter = daysFormatter)
 
