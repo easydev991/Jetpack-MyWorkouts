@@ -71,4 +71,6 @@
     <string name="entry_list_delete_dialog_title">Delete entry?</string>
     <string name="entry_list_delete_dialog_message">Delete \"%1$s\"?</string>
     <string name="entry_list_empty">Add your first entry</string>
+    <string name="entry_list_weight_label">Extra weight</string>
+    <string name="entry_list_weight_value">%1$s kg</string>
 </resources>

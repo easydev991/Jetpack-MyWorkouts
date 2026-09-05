@@ -309,6 +309,62 @@ class MainScreenTest {
     }
 
     /**
+     * Spec «Дополнительный вес в строке записи»: запись с весом 5.0
+     * показывает вторую строку — метку «Дополнительный вес» слева и
+     * значение «5 кг» справа (целое — без дробной части).
+     */
+    @Test
+    fun row_when_weight_then_shows_weight_line() {
+        // Given — запись с доп. весом 5.0 кг
+        setContent(
+            MainUiState.Success(
+                entries = listOf(repsItem.copy(weightKg = 5.0))
+            )
+        )
+
+        // Then — метка строки веса отображается
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_list_weight_label))
+            .assertIsDisplayed()
+
+        // Then — значение «5 кг» (целое, без дробной части)
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_list_weight_value, "5"))
+            .assertIsDisplayed()
+    }
+
+    /**
+     * Spec «Нулевой или отсутствующий вес скрывает строку веса»:
+     * записи с `weightKg = null` и `weightKg = 0.0` не показывают
+     * строку веса — вид строки как до изменения.
+     */
+    @Test
+    fun row_when_no_weight_then_hides_weight_line() {
+        // Given — записи без веса (null) и с нулевым весом (0.0)
+        setContent(
+            MainUiState.Success(
+                entries =
+                    listOf(
+                        repsItem.copy(weightKg = null),
+                        timeItem.copy(id = 3L, weightKg = 0.0)
+                    )
+            )
+        )
+
+        // Then — строки списка отображаются
+        composeTestRule.onNodeWithText(repsItem.exerciseName).assertIsDisplayed()
+        composeTestRule.onNodeWithText(timeItem.exerciseName).assertIsDisplayed()
+
+        // Then — метки и значения строки веса нет
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_list_weight_label))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_list_weight_value, "0"))
+            .assertCountEquals(0)
+    }
+
+    /**
      * Строка записи визуально выделяется, пока открыто контекстное меню
      * (design Decision 5, обновлённая часть про `surfaceVariant`), и
      * выделение снимается при закрытии меню. Источник истины —

@@ -49,9 +49,10 @@ production-путь записи — `addEntry`. `updateEntry` прогоняе�
 ### Decision 3: Формат — чистая JVM-функция рядом с `formatEntryValue`
 
 `formatWeightKg(weightKg: Double): String` в `EntryValueFormatter.kt`:
-целое → `toLong().toString()` («5»), дробное → `Double.toString()` («2.5»
-— Kotlin даёт кратчайшее представление, «2.50» после парса ввода
-невозможно). Единица и метка — в ресурсах: `entry_list_weight_label`
+`toString().removeSuffix(".0")` — у целых `Double.toString()` даёт
+«5.0», суффикс срезается («5», не «5.0»); дробные не затрагиваются
+(«2.5» — Kotlin даёт кратчайшее представление, «2.50» после парса
+ввода невозможно, значит суффикс «.0» встречается только у целых). Единица и метка — в ресурсах: `entry_list_weight_label`
 («Дополнительный вес»/«Extra weight») и `entry_list_weight_value`
 («%1$s кг»/«%1$s kg»). Разделитель — точка, как на экране ввода
 (санитайзер приводит запятую к точке); `NumberFormat` по локали
@@ -68,6 +69,8 @@ production-путь записи — `addEntry`. `updateEntry` прогоняе�
 `SpaceBetween`: метка и значение, стиль `bodyMedium` обычного
 начертания, метка цветом `onSurfaceVariant` (суб-строка слабее
 основной). Второй `Row` рендерится только при `weightKg > 0.0`.
+Между строками — `Arrangement.spacedBy(4.dp)`; при одной строке
+отступ не действует.
 `modifier` (long-press, позиция) остаётся на внешнем контейнере —
 жесты не меняются.
 

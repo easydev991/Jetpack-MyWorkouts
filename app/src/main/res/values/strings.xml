@@ -73,4 +73,6 @@
     <string name="entry_list_delete_dialog_title">Удалить запись?</string>
     <string name="entry_list_delete_dialog_message">Удалить «%1$s»?</string>
     <string name="entry_list_empty">Добавьте первую запись</string>
+    <string name="entry_list_weight_label">Дополнительный вес</string>
+    <string name="entry_list_weight_value">%1$s кг</string>
 </resources>

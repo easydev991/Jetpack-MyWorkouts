@@ -81,5 +81,6 @@ internal fun EntryListItemEntity.toListItem(): EntryListItem =
         sets = sets,
         reps = reps,
         durationSec = durationSec,
+        weightKg = weightKg,
         date = date
     )

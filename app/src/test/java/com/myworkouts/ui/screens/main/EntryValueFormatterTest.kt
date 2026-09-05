@@ -69,4 +69,37 @@ class EntryValueFormatterTest {
         // Then
         assertEquals("4 х 10", result)
     }
+
+    @Test
+    fun format_weight_kg_when_whole_number_then_no_fractional_part() {
+        // Given — целый вес 5.0 кг
+
+        // When
+        val result = formatWeightKg(weightKg = 5.0)
+
+        // Then — «5», не «5.0» (spec «Дополнительный вес в строке записи»)
+        assertEquals("5", result)
+    }
+
+    @Test
+    fun format_weight_kg_when_fractional_number_then_keeps_fractional_part() {
+        // Given — дробный вес 2.5 кг
+
+        // When
+        val result = formatWeightKg(weightKg = 2.5)
+
+        // Then — «2.5»
+        assertEquals("2.5", result)
+    }
+
+    @Test
+    fun format_weight_kg_when_two_fractional_digits_then_keeps_both() {
+        // Given — вес 12.25 кг (двойная точность, как введено)
+
+        // When
+        val result = formatWeightKg(weightKg = 12.25)
+
+        // Then — «12.25» без округления
+        assertEquals("12.25", result)
+    }
 }

@@ -43,6 +43,7 @@ interface ExerciseEntryDao {
             "e.sets AS sets, " +
             "e.reps AS reps, " +
             "e.duration_sec AS durationSec, " +
+            "e.weight_kg AS weightKg, " +
             "e.date AS date " +
             "FROM exercise_entries e " +
             "JOIN exercises x ON x.id = e.exercise_id " +

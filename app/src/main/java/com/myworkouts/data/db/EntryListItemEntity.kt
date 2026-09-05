@@ -14,6 +14,7 @@ package com.myworkouts.data.db
  * @property sets Количество подходов
  * @property reps Повторы в подходе (`null` для упражнений «на время»)
  * @property durationSec Длительность в секундах (`null` для упражнений «на повторы»)
+ * @property weightKg Дополнительный вес (`null` — без веса; 0 — данные, не «нет веса»)
  * @property date Дата/время записи (epoch millis)
  */
 data class EntryListItemEntity(
@@ -22,5 +23,6 @@ data class EntryListItemEntity(
     val sets: Int,
     val reps: Int?,
     val durationSec: Int?,
+    val weightKg: Double?,
     val date: Long
 )

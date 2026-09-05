@@ -3,6 +3,7 @@ package com.myworkouts.ui.screens.main
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,20 +12,26 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.myworkouts.R
 import com.myworkouts.domain.model.EntryListItem
 
 /**
  * Переиспользуемая строка списка записей главного экрана
  * (workout-entries-list, design Decision 5).
  *
- * Слева — название упражнения, справа с выравниванием по правому краю —
- * значение подходов и повторов/длительности (формат
- * «4 х 10»/«10» через [formatEntryValue]). Без разделителя-запятой
- * между ними — `Row` с `SpaceBetween` распределяет визуально.
+ * `Column` из двух строк: первая — «название — значение» (формат
+ * «4 х 10»/«10» через [formatEntryValue], оба текста `FontWeight.Medium`
+ * — design Decision 4), вторая — доп. вес: слева метка «Дополнительный
+ * вес» цветом `onSurfaceVariant`, справа значение («5 кг» через
+ * [formatWeightKg] и ресурс `entry_list_weight_value`). Строка веса
+ * рендерится только при `weightKg > 0.0`; без веса вид строки
+ * идентичен предыдущему.
  *
  * Фон анимируется между `colorScheme.surface` и `surfaceVariant` в
  * зависимости от [isSelected] — пока открыто контекстное меню
@@ -61,8 +68,9 @@ internal fun EntryListItemRow(
                 },
             label = "rowBackground"
         ).value
+    val weightKg = item.weightKg
 
-    Row(
+    Column(
         modifier =
             modifier
                 .fillMaxWidth()
@@ -72,22 +80,49 @@ internal fun EntryListItemRow(
                     // Стандартный канал accessibility Compose; читается
                     // в androidTest через `SemanticsProperties.Selected`.
                     // `mergeDescendants = true` нужен, чтобы `onNodeWithText`
-                    // находил Row (а не отдельный Text), иначе свойство
+                    // находил строку (а не отдельный Text), иначе свойство
                     // Selected останется только у родителя.
                     selected = isSelected
                 },
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(
-            text = item.exerciseName,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.End
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = item.exerciseName,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.End
+            )
+        }
+        if (weightKg != null && weightKg > 0.0) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = stringResource(R.string.entry_list_weight_label),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text =
+                        stringResource(
+                            R.string.entry_list_weight_value,
+                            formatWeightKg(weightKg)
+                        ),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
     }
 }

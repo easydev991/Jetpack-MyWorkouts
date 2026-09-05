@@ -21,3 +21,18 @@ internal fun formatEntryValue(
     value: Int,
     separator: String
 ): String = if (sets > 1) "$sets$separator$value" else "$value"
+
+/**
+ * Форматирует дополнительный вес записи для строки списка
+ * (spec «Дополнительный вес в строке записи»; design Decision 3).
+ *
+ * Целые килограммы — без дробной части («5», не «5.0»), дробные —
+ * с дробной частью как введена («2.5»). `Double.toString()` даёт
+ * кратчайшее представление, хвостовых нулей после парса ввода не бывает.
+ * Единица измерения («кг»/«kg») — в ресурсе `entry_list_weight_value`,
+ * сюда не входит.
+ *
+ * @param weightKg Дополнительный вес в килограммах (> 0)
+ * @return Числовая часть значения веса для отображения
+ */
+internal fun formatWeightKg(weightKg: Double): String = weightKg.toString().removeSuffix(".0")

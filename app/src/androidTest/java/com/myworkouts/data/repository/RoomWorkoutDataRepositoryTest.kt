@@ -849,6 +849,57 @@ class RoomWorkoutDataRepositoryTest {
         }
 
     @Test
+    fun entries_preserveWeightKg_nullAndValue() =
+        runBlocking {
+            // Given — запись с весом 5.0 и запись без веса
+            // (spec «Дополнительный вес в строке записи»: вес доезжает
+            // от БД до списка главного экрана без потерь)
+            val withWeightId =
+                repository
+                    .addEntry(
+                        ExerciseEntry(
+                            id = 0L,
+                            exerciseId = 1L,
+                            workoutId = null,
+                            date = 1_700_000_000_000L,
+                            sets = 4,
+                            reps = 10,
+                            weightKg = 5.0,
+                            durationSec = null,
+                            comment = null,
+                            createdAt = 1L,
+                            modifiedAt = 1L
+                        )
+                    ).getOrThrow()
+            val withoutWeightId =
+                repository
+                    .addEntry(
+                        ExerciseEntry(
+                            id = 0L,
+                            exerciseId = 1L,
+                            workoutId = null,
+                            date = 1_700_000_100_000L,
+                            sets = 3,
+                            reps = 8,
+                            weightKg = null,
+                            durationSec = null,
+                            comment = null,
+                            createdAt = 2L,
+                            modifiedAt = 2L
+                        )
+                    ).getOrThrow()
+
+            // When
+            val items = repository.entries().first()
+
+            // Then — вес сохранён в проекции списка: 5.0 и null
+            val withWeight = items.single { it.id == withWeightId }
+            val withoutWeight = items.single { it.id == withoutWeightId }
+            assertEquals(5.0, withWeight.weightKg)
+            assertEquals(null, withoutWeight.weightKg)
+        }
+
+    @Test
     fun entries_returnsDomainEntryListItems_withExerciseNameAndDateDesc() =
         runBlocking {
             // Given — две записи: одна для REPS-упражнения из setUp,
