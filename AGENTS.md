@@ -82,7 +82,8 @@ DataStore, Room. Manual DI — без Hilt.
 
 `app/src/main/java/com/myworkouts/`:
 - `MainActivity.kt`
-- `data/db/` — Room: entities, DAOs, `WorkoutDatabase`, стандартные упражнения
+- `data/db/` — Room: entities, DAOs, `Mappers`, `WorkoutDatabase`,
+  стандартные упражнения
 - `data/preferences/AppSettingsDataStore.kt`
 - `data/repository/` — `WorkoutDataRepository`, `RoomWorkoutDataRepository`,
   `EntryValidator`
@@ -95,8 +96,8 @@ DataStore, Room. Manual DI — без Hilt.
 - `ui/viewmodel/` — `MainViewModel.kt`, `EntryCreateViewModel.kt`,
   `AppearanceViewModel.kt`
 
-`di/`, `util/`, `MyWorkoutsApplication.kt` ещё не созданы — manual DI в
-пределах фичи (`AppSettingsDataStore` создаётся один раз в `MainActivity`),
-без центрального модуля.
+`di/`, `util/`, `MyWorkoutsApplication.kt` ещё не созданы — manual DI без
+Hilt; композиционный корень — `MainActivity` (создаёт один раз
+`AppSettingsDataStore`, `WorkoutDatabase`, `RoomWorkoutDataRepository`).
 
 Тесты зеркалят source в `app/src/test/` и `app/src/androidTest/`.
