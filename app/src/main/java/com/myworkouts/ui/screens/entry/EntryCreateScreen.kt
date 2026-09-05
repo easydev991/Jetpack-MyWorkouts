@@ -25,6 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
 import com.myworkouts.domain.model.Exercise
@@ -55,6 +56,7 @@ fun EntryCreateScreen(
                 onSetsChange = viewModel::onSetsChange,
                 onRepsChange = viewModel::onRepsChange,
                 onDurationChange = viewModel::onDurationChange,
+                onWeightChange = viewModel::onWeightChange,
                 onDateChange = viewModel::onDateChange,
                 onTimeChange = viewModel::onTimeChange,
                 onCommentChange = viewModel::onCommentChange,
@@ -74,6 +76,7 @@ internal data class EntryCreateScreenState(
     val onSetsChange: (String) -> Unit,
     val onRepsChange: (String) -> Unit,
     val onDurationChange: (Int?) -> Unit,
+    val onWeightChange: (String) -> Unit,
     val onDateChange: (LocalDate) -> Unit,
     val onTimeChange: (hour: Int, minute: Int) -> Unit,
     val onCommentChange: (String) -> Unit,
@@ -141,13 +144,24 @@ private fun EntryCreateForm(
             onExerciseChange = state.onExerciseChange
         )
 
-        NumberEntryField(
-            label = stringResource(R.string.entry_field_sets),
-            value = uiState.setsText,
-            onValueChange = state.onSetsChange
-        )
+        // Поля выполнения — только после выбора упражнения (design
+        // Decision 4): подходы, типозависимое поле, доп. вес
+        if (uiState.selectedExercise != null) {
+            NumberEntryField(
+                label = stringResource(R.string.entry_field_sets),
+                value = uiState.setsText,
+                onValueChange = state.onSetsChange
+            )
 
-        MeasuredByField(state = state)
+            MeasuredByField(state = state)
+
+            NumberEntryField(
+                label = stringResource(R.string.entry_field_weight),
+                value = uiState.weightText,
+                onValueChange = state.onWeightChange,
+                keyboardType = KeyboardType.Decimal
+            )
+        }
 
         DateField(
             date = uiState.date,

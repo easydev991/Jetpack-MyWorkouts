@@ -300,6 +300,45 @@ class EntryCreateViewModelTest {
         }
 
     @Test
+    fun on_weight_change_should_sanitize_decimal_input() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Таблица случаев санитайзинга (design Decision 2)
+            val cases =
+                listOf(
+                    "0" to "0",
+                    "00" to "0",
+                    "012" to "12",
+                    "000,5" to "0.5",
+                    "0,5" to "0.5",
+                    "0." to "0.",
+                    "0.0" to "0.0",
+                    "12.5" to "12.5",
+                    "5,5" to "5.5",
+                    "-5" to "5",
+                    "12.3.4" to "12.34",
+                    "a1b2" to "12"
+                )
+
+            cases.forEach { (input, expected) ->
+                // When
+                viewModel.onWeightChange(input)
+                advanceUntilIdle()
+
+                // Then
+                assertEquals(
+                    expected,
+                    viewModel.uiState.value.weightText,
+                    "Санитайзинг веса: «$input» → «$expected»"
+                )
+            }
+        }
+
+    @Test
     fun can_save_when_sets_sanitized_to_empty_then_false() =
         runTest(testDispatcher) {
             // Given — REPS с заполненными повторами
@@ -379,7 +418,7 @@ class EntryCreateViewModelTest {
             assertEquals(3, entry?.sets, "sets из поля ввода")
             assertEquals(10, entry?.reps, "reps для REPS-упражнения")
             assertNull(entry?.durationSec, "durationSec = null для REPS-упражнения")
-            assertNull(entry?.weightKg, "weightKg = null (Non-Goal change'а)")
+            assertNull(entry?.weightKg, "weightKg = null при дефолте «0» (design Decision 1)")
             assertEquals(expectedDateMillis, entry?.date, "date собрана из LocalDate + час/минута")
             assertEquals("разминочный подход легче", entry?.comment, "Комментарий сохранён")
             assertEquals(fixedNowMillis, entry?.createdAt, "createdAt = nowProvider")
@@ -410,6 +449,57 @@ class EntryCreateViewModelTest {
             assertEquals(1, entry?.sets, "sets = 1 из префилла")
             assertEquals(300, entry?.durationSec, "durationSec для TIME-упражнения")
             assertNull(entry?.reps, "reps = null для TIME-упражнения")
+        }
+
+    @Test
+    fun save_when_positive_weight_entered_then_saves_it() =
+        runTest(testDispatcher) {
+            // Given — REPS-запись с введённым весом (запятая → точка)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onExerciseChange(repsExercise)
+            viewModel.onRepsChange("10")
+            viewModel.onWeightChange("12,5")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.canSave, "Вес не влияет на canSave")
+
+            // When
+            viewModel.save { }
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                12.5,
+                repository.addedEntry?.weightKg,
+                "Введённый вес сохраняется (design Decision 1)"
+            )
+        }
+
+    @Test
+    fun save_when_weight_zero_or_unparseable_then_saves_null() =
+        runTest(testDispatcher) {
+            // Таблица «нулевых» значений веса → weightKg = null (design Decision 1)
+            listOf("0", "00", "0.", "0.0", "a").forEach { weightInput ->
+                // Given — валидная запись, поле веса содержит «нулевой» ввод
+                val viewModel = createViewModel()
+                backgroundScope.launch { viewModel.uiState.collect { } }
+                advanceUntilIdle()
+                viewModel.onExerciseChange(repsExercise)
+                viewModel.onRepsChange("10")
+                viewModel.onWeightChange(weightInput)
+                advanceUntilIdle()
+
+                // When
+                viewModel.save { }
+                advanceUntilIdle()
+
+                // Then
+                assertNull(
+                    repository.addedEntry?.weightKg,
+                    "Вес «$weightInput» → weightKg = null («без доп. веса»)"
+                )
+            }
         }
 
     @Test

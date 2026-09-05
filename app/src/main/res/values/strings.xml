@@ -43,6 +43,7 @@
     <string name="entry_field_sets">Подходы</string>
     <string name="entry_field_reps">Повторы (обязательно)</string>
     <string name="entry_field_duration">Длительность (обязательно)</string>
+    <string name="entry_field_weight">Доп. вес (кг)</string>
     <string name="entry_field_date">Дата</string>
     <string name="entry_field_time">Время</string>
     <string name="entry_select_date">Выбрать дату</string>

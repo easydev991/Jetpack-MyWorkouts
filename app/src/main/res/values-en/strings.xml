@@ -43,6 +43,7 @@
     <string name="entry_field_sets">Sets</string>
     <string name="entry_field_reps">Reps (mandatory)</string>
     <string name="entry_field_duration">Duration (mandatory)</string>
+    <string name="entry_field_weight">Extra weight (kg)</string>
     <string name="entry_field_date">Date</string>
     <string name="entry_field_time">Time</string>
     <string name="entry_select_date">Select date</string>

@@ -82,6 +82,12 @@ class EntryCreateViewModel(
             it.copy(repsText = sanitizeNumber(text), isSaveError = false)
         }
 
+    /** Ввод доп. веса: десятичный санитайзинг (design Decision 2). */
+    fun onWeightChange(text: String) =
+        mutableUiState.update {
+            it.copy(weightText = sanitizeWeight(text), isSaveError = false)
+        }
+
     /** Выбор длительности (`null` — сброс). */
     fun onDurationChange(durationSec: Int?) =
         mutableUiState.update {
@@ -133,7 +139,7 @@ class EntryCreateViewModel(
                         } else {
                             null
                         },
-                    weightKg = null,
+                    weightKg = state.weightText.toDoubleOrNull()?.takeIf { it > 0.0 },
                     durationSec =
                         if (exercise.measuredBy == ExerciseMeasuredBy.TIME) {
                             state.durationSec
@@ -178,3 +184,25 @@ class EntryCreateViewModel(
 
 /** Оставляет только цифры и отбрасывает ведущие нули («0a1#2» → «12»). */
 private fun sanitizeNumber(input: String): String = input.filter { it.isDigit() }.dropWhile { it == '0' }
+
+/**
+ * Санитайзинг десятичного ввода веса (design Decision 2): только цифры
+ * и один десятичный разделитель; запятая нормализуется в точку; ведущие
+ * нули отбрасываются, но одиночный ноль перед точкой сохраняется
+ * («000.5» → «0.5»); пустой результат — одиночный «0» («00» → «0»).
+ */
+private fun sanitizeWeight(input: String): String {
+    val normalized =
+        input
+            .filter { it.isDigit() || it == '.' || it == ',' }
+            .replace(',', '.')
+    // Не более одной точки — первой: «12.3.4» → «12.34»
+    val parts = normalized.split('.', limit = 2)
+    val singleDot = if (parts.size == 2) parts[0] + "." + parts[1].filter { it.isDigit() } else normalized
+    val withoutLeadingZeros = singleDot.dropWhile { it == '0' }
+    return when {
+        withoutLeadingZeros.isEmpty() -> "0"
+        withoutLeadingZeros.first() == '.' -> "0$withoutLeadingZeros"
+        else -> withoutLeadingZeros
+    }
+}

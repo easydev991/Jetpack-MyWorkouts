@@ -13,6 +13,8 @@ import java.time.LocalDate
  * @property repsText Текст поля «Повторы» (только для REPS-упражнений)
  * @property durationSec Выбранная длительность в секундах (только для
  *   TIME-упражнений, `null` — не выбрана)
+ * @property weightText Текст поля «Доп. вес» (опционально, дефолт «0» —
+ *   «без доп. веса»; десятичный ввод, разделитель — точка)
  * @property date Дата выполнения
  * @property hour Час времени выполнения (0–23)
  * @property minute Минута времени выполнения (0–59)
@@ -25,6 +27,7 @@ data class EntryCreateUiState(
     val setsText: String = "1",
     val repsText: String = "",
     val durationSec: Int? = null,
+    val weightText: String = "0",
     val date: LocalDate = LocalDate.now(),
     val hour: Int = 0,
     val minute: Int = 0,

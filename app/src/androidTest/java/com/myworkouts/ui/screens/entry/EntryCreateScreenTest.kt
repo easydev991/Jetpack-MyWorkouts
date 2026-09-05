@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
@@ -71,6 +72,7 @@ class EntryCreateScreenTest {
             onSetsChange = {},
             onRepsChange = {},
             onDurationChange = {},
+            onWeightChange = {},
             onDateChange = {},
             onTimeChange = { _, _ -> },
             onCommentChange = {},
@@ -82,6 +84,24 @@ class EntryCreateScreenTest {
         composeTestRule.setContent {
             EntryCreateScreenContent(state = stateFor(uiState))
         }
+    }
+
+    /** Метка [higher] визуально выше [lower] (порядок полей в Column). */
+    private fun assertDisplayedAbove(
+        higher: String,
+        lower: String
+    ) {
+        val higherTop =
+            composeTestRule
+                .onNodeWithText(higher)
+                .fetchSemanticsNode()
+                .boundsInRoot.top
+        val lowerTop =
+            composeTestRule
+                .onNodeWithText(lower)
+                .fetchSemanticsNode()
+                .boundsInRoot.top
+        assertTrue("«$higher» должен быть выше «$lower»", higherTop < lowerTop)
     }
 
     @Test
@@ -124,6 +144,98 @@ class EntryCreateScreenTest {
         composeTestRule
             .onAllNodesWithText(context.getString(R.string.entry_field_reps))
             .assertCountEquals(0)
+    }
+
+    @Test
+    fun content_when_no_exercise_selected_then_execution_fields_absent() {
+        // Given — упражнение не выбрано
+        setContent()
+
+        // Then — поля выполнения скрыты (spec «Поля выполнения скрыты
+        // до выбора упражнения»), общие поля остаются
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_field_sets))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_field_reps))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_field_duration))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_field_weight))
+            .assertCountEquals(0)
+        composeTestRule.onNodeWithText(context.getString(R.string.entry_field_exercise)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(context.getString(R.string.entry_field_date)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(context.getString(R.string.entry_save)).assertIsDisplayed()
+    }
+
+    @Test
+    fun content_when_reps_selected_then_weight_below_reps_and_above_date() {
+        // Given — выбрано REPS-упражнение
+        setContent(EntryCreateUiState(selectedExercise = repsExercise, repsText = "10"))
+
+        // Then — «Доп. вес» виден; порядок: подходы → повторы → вес → дата
+        val weightLabel = context.getString(R.string.entry_field_weight)
+        composeTestRule.onNodeWithText(weightLabel).assertIsDisplayed()
+        assertDisplayedAbove(context.getString(R.string.entry_field_sets), context.getString(R.string.entry_field_reps))
+        assertDisplayedAbove(context.getString(R.string.entry_field_reps), weightLabel)
+        assertDisplayedAbove(weightLabel, context.getString(R.string.entry_field_date))
+    }
+
+    @Test
+    fun content_when_time_selected_then_weight_below_duration() {
+        // Given — выбрано TIME-упражнение
+        setContent(EntryCreateUiState(selectedExercise = timeExercise, durationSec = 60))
+
+        // Then — порядок: подходы → длительность → вес → дата
+        val weightLabel = context.getString(R.string.entry_field_weight)
+        assertDisplayedAbove(context.getString(R.string.entry_field_sets), context.getString(R.string.entry_field_duration))
+        assertDisplayedAbove(context.getString(R.string.entry_field_duration), weightLabel)
+        assertDisplayedAbove(weightLabel, context.getString(R.string.entry_field_date))
+    }
+
+    @Test
+    fun content_when_decimal_weight_typed_then_state_updates() {
+        // Given — REPS-упражнение; вес — редактируемый state
+        // (санитайзинг ввода покрыт JVM-тестами ViewModel)
+        composeTestRule.setContent {
+            var uiState by
+                remember {
+                    mutableStateOf(EntryCreateUiState(selectedExercise = repsExercise, repsText = "10"))
+                }
+            EntryCreateScreenContent(
+                state =
+                    stateFor(uiState).copy(
+                        onWeightChange = { text -> uiState = uiState.copy(weightText = text) }
+                    )
+            )
+        }
+
+        // When — ввод десятичного значения (запятая — с Decimal-клавиатуры)
+        composeTestRule
+            .onNode(hasText(context.getString(R.string.entry_field_weight)))
+            .performTextReplacement("12,5")
+
+        // Then — state обновился, поле показывает введённое
+        composeTestRule.onNodeWithText("12,5").assertIsDisplayed()
+    }
+
+    @Test
+    fun content_when_weight_default_zero_then_save_button_enabled() {
+        // Given — всё заполнено, «Доп. вес» остался с дефолтом «0»
+        setContent(
+            EntryCreateUiState(
+                selectedExercise = repsExercise,
+                setsText = "3",
+                repsText = "10"
+            )
+        )
+
+        // Then — дефолтный ноль не блокирует сохранение
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_save))
+            .assertIsEnabled()
     }
 
     @Test

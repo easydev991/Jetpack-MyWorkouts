@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.myworkouts.domain.model.Exercise
@@ -48,6 +49,7 @@ private fun previewScreenState(uiState: EntryCreateUiState): EntryCreateScreenSt
         onSetsChange = {},
         onRepsChange = {},
         onDurationChange = {},
+        onWeightChange = {},
         onDateChange = {},
         onTimeChange = { _, _ -> },
         onCommentChange = {},
@@ -62,6 +64,13 @@ internal fun EntryCreateScreenContentPreview() {
     JetpackMyWorkoutsTheme {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             EntryCreateScreenContent(
+                // Упражнение не выбрано — поля выполнения скрыты
+                state =
+                    previewScreenState(
+                        EntryCreateUiState(exercises = previewCatalog)
+                    )
+            )
+            EntryCreateScreenContent(
                 // REPS без повторов: canSave = false, видна подсказка
                 state =
                     previewScreenState(
@@ -72,25 +81,27 @@ internal fun EntryCreateScreenContentPreview() {
                     )
             )
             EntryCreateScreenContent(
-                // REPS заполненное: canSave = true
+                // REPS заполненное с введённым весом: canSave = true
                 state =
                     previewScreenState(
                         EntryCreateUiState(
                             exercises = previewCatalog,
                             selectedExercise = previewRepsExercise,
                             repsText = "10",
-                            setsText = "3"
+                            setsText = "3",
+                            weightText = "12.5"
                         )
                     )
             )
             EntryCreateScreenContent(
-                // TIME с длительностью
+                // TIME с длительностью и введённым весом
                 state =
                     previewScreenState(
                         EntryCreateUiState(
                             exercises = previewCatalog,
                             selectedExercise = previewTimeExercise,
-                            durationSec = 60
+                            durationSec = 60,
+                            weightText = "7.5"
                         )
                     )
             )
@@ -128,6 +139,12 @@ internal fun NumberEntryFieldPreview() {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             NumberEntryField(label = "Подходы", value = "1", onValueChange = {}) // префилл
             NumberEntryField(label = "Повторы (обязательно)", value = "10", onValueChange = {}) // заполнено
+            NumberEntryField( // вес — Decimal-клавиатура, дефолт «0»
+                label = "Доп. вес (кг)",
+                value = "0",
+                onValueChange = {},
+                keyboardType = KeyboardType.Decimal
+            )
         }
     }
 }

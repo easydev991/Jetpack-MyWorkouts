@@ -114,21 +114,23 @@ internal fun ExerciseDropdownField(
 }
 
 /**
- * Поле целочисленного ввода (подходы/повторы): цифровая клавиатура,
- * санитайзинг — на стороне ViewModel.
+ * Поле числового ввода (подходы/повторы/вес): клавиатура настраивается
+ * параметром [keyboardType] (вес — `KeyboardType.Decimal`), санитайзинг —
+ * на стороне ViewModel.
  */
 @Composable
 internal fun NumberEntryField(
     label: String,
     value: String,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    keyboardType: KeyboardType = KeyboardType.Number
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         modifier = Modifier.fillMaxWidth()
     )
 }
