@@ -18,7 +18,9 @@ import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
  * Preview-компонентов главного экрана (конвенция проекта: светлая + тёмная
  * темы, `showBackground`, `locale = "ru"`, обёртка в `JetpackMyWorkoutsTheme`).
  *
- * Состояния, которые видно рядом в Column: пустой список, список с записями.
+ * Полноэкранный `MainScreenContent` показывается отдельными превью на
+ * состояние (пустой список / список с записями): два `Scaffold` друг над
+ * другом в одном Column выглядели бы как один сломанный экран.
  * Long-press меню и алерт удаления живут в интерактивных сценариях — на
  * превью не показываются, чтобы статичный preview не «зависал» в раскрытом
  * состоянии. Покрываются ручной проверкой на эмуляторе (задача 5.5).
@@ -70,35 +72,41 @@ private fun previewScreenState(
 @Preview(showBackground = true, locale = "ru")
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
 @Composable
-internal fun MainScreenContentPreview() {
+internal fun MainScreenContentEmptyPreview() {
     JetpackMyWorkoutsTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Пустое состояние
-                MainScreenContent(
-                    state =
-                        previewScreenState(
-                            uiState = MainUiState.Success(entries = emptyList())
-                        ),
-                    modifier = Modifier.weight(1f)
-                )
-                // Список с записями: 4×10, «20», 3×12
-                MainScreenContent(
-                    state =
-                        previewScreenState(
-                            uiState =
-                                MainUiState.Success(
-                                    entries =
-                                        listOf(
-                                            previewRepsItem,
-                                            previewTimeItem,
-                                            previewSingleRepsItem
-                                        )
-                                )
-                        ),
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            // Пустое состояние
+            MainScreenContent(
+                state =
+                    previewScreenState(
+                        uiState = MainUiState.Success(entries = emptyList())
+                    )
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun MainScreenContentListPreview() {
+    JetpackMyWorkoutsTheme {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            // Список с записями: 4×10, «20», 3×12
+            MainScreenContent(
+                state =
+                    previewScreenState(
+                        uiState =
+                            MainUiState.Success(
+                                entries =
+                                    listOf(
+                                        previewRepsItem,
+                                        previewTimeItem,
+                                        previewSingleRepsItem
+                                    )
+                            )
+                    )
+            )
         }
     }
 }
