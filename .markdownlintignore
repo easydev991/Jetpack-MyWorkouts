@@ -11,3 +11,8 @@ fastlane/README.md
 **/.externalNativeBuild/**/*.md
 **/.cxx/**/*.md
 **/captures/**/*.md
+
+# OpenSpec delta-спеки: заголовок "#Delta:<capability>" — обязательный
+# синтаксис openspec-валидатора, правило MD018 к нему неприменимо
+# (** — покрывает и openspec/changes/archive/<change>/specs/**)
+openspec/changes/**/specs/**
