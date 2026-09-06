@@ -310,7 +310,7 @@ class EntryCreateScreenTest {
         // Given — REPS-упражнение без повторов
         setContent(EntryCreateUiState(selectedExercise = repsExercise))
 
-        // Then — подсказка заполнить повторы
+        // Then — подсказка заполнить повторы (в нижней панели под кнопкой)
         composeTestRule
             .onNodeWithText(context.getString(R.string.entry_hint_fill_reps))
             .assertIsDisplayed()
@@ -321,7 +321,7 @@ class EntryCreateScreenTest {
         // Given — TIME-упражнение без длительности
         setContent(EntryCreateUiState(selectedExercise = timeExercise))
 
-        // Then — подсказка выбрать длительность
+        // Then — подсказка выбрать длительность (в нижней панели под кнопкой)
         composeTestRule
             .onNodeWithText(context.getString(R.string.entry_hint_select_duration))
             .assertIsDisplayed()
@@ -378,7 +378,7 @@ class EntryCreateScreenTest {
             )
         )
 
-        // Then — сообщение об ошибке
+        // Then — сообщение об ошибке (в нижней панели под кнопкой)
         composeTestRule
             .onNodeWithText(context.getString(R.string.entry_save_error))
             .assertIsDisplayed()
@@ -500,5 +500,29 @@ class EntryCreateScreenTest {
 
         // Then — диалог пикера времени открыт (кнопка «ОК» диалога видна)
         composeTestRule.onNodeWithText(context.getString(R.string.ok)).assertIsDisplayed()
+    }
+
+    @Test
+    fun content_when_long_form_filled_then_save_button_visible_without_scroll() {
+        // Given — REPS-упражнение, всё заполнено, длинный многострочный
+        // комментарий: форма не помещается во viewport
+        val longComment =
+            List(30) { line -> "Строка $line: достаточно длинный текст комментария" }
+                .joinToString(separator = "\n")
+        setContent(
+            EntryCreateUiState(
+                selectedExercise = repsExercise,
+                setsText = "3",
+                repsText = "10",
+                weightText = "12.5",
+                comment = longComment
+            )
+        )
+
+        // Then — кнопка «Сохранить» видна без performScrollTo()
+        // (после переезда в Scaffold.bottomBar)
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_save))
+            .assertIsDisplayed()
     }
 }

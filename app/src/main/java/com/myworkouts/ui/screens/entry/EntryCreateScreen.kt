@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -87,7 +88,8 @@ internal data class EntryCreateScreenState(
 /**
  * Контент экрана создания записи: выбор упражнения, подходы,
  * типозависимое поле (повторы или длительность), дата и время,
- * комментарий, кнопка сохранения с подсказками.
+ * комментарий; кнопка сохранения закреплена в `Scaffold.bottomBar`,
+ * подсказки и ошибка сохранения — под кнопкой ([SaveBottomBar]).
  *
  * Используется для UI-тестов в изоляции без ViewModel (образец —
  * `AppearanceScreenContent`).
@@ -120,7 +122,8 @@ internal fun EntryCreateScreenContent(state: EntryCreateScreenState) {
                     }
                 }
             )
-        }
+        },
+        bottomBar = { SaveBottomBar(state = state) }
     ) { paddingValues ->
         EntryCreateForm(state = state, paddingValues = paddingValues)
     }
@@ -128,10 +131,7 @@ internal fun EntryCreateScreenContent(state: EntryCreateScreenState) {
 
 /**
  * Скроллящаяся форма ввода записи: выбор упражнения, подходы,
- * типозависимое поле, дата, время, комментарий, сохранение.
- * `imePadding` поднимает контент над клавиатурой, `verticalScroll`
- * прокручивает сфокусированное поле в видимую зону
- * (design.md Decision 7).
+ * типозависимое поле, дата, время и комментарий.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -144,9 +144,8 @@ private fun EntryCreateForm(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .imePadding()
-                .verticalScroll(rememberScrollState())
                 .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -192,16 +191,6 @@ private fun EntryCreateForm(
             label = { Text(stringResource(R.string.entry_field_comment)) },
             modifier = Modifier.fillMaxWidth()
         )
-
-        SaveSection(state = state)
-
-        if (uiState.isSaveError) {
-            Text(
-                text = stringResource(R.string.entry_save_error),
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
     }
 }
 
@@ -231,19 +220,52 @@ private fun MeasuredByField(state: EntryCreateScreenState) {
 }
 
 /**
- * Кнопка сохранения `enabled = canSave` и подсказка обязательности при
- * `canSave = false` — spec: «кнопка неактивна И подсказка».
+ * Нижняя панель экрана (design.md Decision 1/3): кнопка «Сохранить»
+ * в `Scaffold.bottomBar`, под ней подсказки `entry_hint_*` (живут
+ * в [SaveHintsSection]) и ошибка сохранения — подсказка объясняет
+ * неактивность кнопки, ошибка — неудачу сохранения. Контейнер с
+ * `navigationBarsPadding` + `imePadding` (максимум инсетов, не сумма).
  */
 @Composable
-internal fun SaveSection(state: EntryCreateScreenState) {
-    val uiState = state.uiState
-    Button(
-        onClick = state.onSaveClick,
-        modifier = Modifier.fillMaxWidth(),
-        enabled = uiState.canSave
+internal fun SaveBottomBar(state: EntryCreateScreenState) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(stringResource(R.string.entry_save))
+        Button(
+            onClick = state.onSaveClick,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = state.uiState.canSave
+        ) {
+            Text(stringResource(R.string.entry_save))
+        }
+
+        SaveHintsSection(state = state)
+
+        if (state.uiState.isSaveError) {
+            Text(
+                text = stringResource(R.string.entry_save_error),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
     }
+}
+
+/**
+ * Блок подсказок `entry_hint_*` без кнопки (design.md Decision 3):
+ * живёт в [SaveBottomBar] под неактивной кнопкой. Инвариант spec
+ * «кнопка неактивна И подсказка»: подсказка рендерится только при
+ * `canSave = false` (см. [EntryCreateUiState.canSave]).
+ */
+@Composable
+private fun SaveHintsSection(state: EntryCreateScreenState) {
+    val uiState = state.uiState
 
     // Decision 8 (entry-edit-mode): запись не найдена — кнопка недостижимо
     // неактивна, подсказка объясняет почему

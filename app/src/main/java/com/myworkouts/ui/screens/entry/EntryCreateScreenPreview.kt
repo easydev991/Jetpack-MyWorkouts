@@ -128,6 +128,36 @@ internal fun EntryCreateScreenContentPreview() {
 @Preview(showBackground = true, locale = "ru")
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
 @Composable
+internal fun EntryCreateScreenLongFormPreview() {
+    JetpackMyWorkoutsTheme {
+        EntryCreateScreenContent(
+            // Длинная форма: кнопка видна без скролла — закреплена в
+            // bottomBar (spec «Кнопка видна без прокрутки формы»;
+            // тот же сценарий автоматизирован в EntryCreateScreenTest)
+            state =
+                previewScreenState(
+                    EntryCreateUiState(
+                        exercises = previewCatalog,
+                        selectedExercise = previewRepsExercise,
+                        setsText = "3",
+                        repsText = "10",
+                        weightText = "12.5",
+                        date = LocalDate.of(2024, 7, 15),
+                        hour = 14,
+                        minute = 30,
+                        comment =
+                            List(30) { line ->
+                                "Строка $line: достаточно длинный текст комментария"
+                            }.joinToString(separator = "\n")
+                    )
+                )
+        )
+    }
+}
+
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
 internal fun ExerciseDropdownFieldPreview() {
     JetpackMyWorkoutsTheme {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -196,62 +226,56 @@ internal fun TimeFieldPreview() {
     }
 }
 
+@Composable
+private fun PreviewSaveBottomBar(uiState: EntryCreateUiState) {
+    SaveBottomBar(state = previewScreenState(uiState))
+}
+
 @Preview(showBackground = true, locale = "ru")
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
 @Composable
-internal fun SaveSectionPreview() {
+internal fun SaveBottomBarPreview() {
     JetpackMyWorkoutsTheme {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Упражнение не выбрано — подсказка выбрать
-            SaveSection(
-                state =
-                    previewScreenState(
-                        EntryCreateUiState(exercises = previewCatalog)
-                    )
+            // Всё заполнено — кнопка активна, подсказок нет
+            PreviewSaveBottomBar(
+                EntryCreateUiState(
+                    exercises = previewCatalog,
+                    selectedExercise = previewRepsExercise,
+                    setsText = "3",
+                    repsText = "10"
+                )
             )
+            // Упражнение не выбрано — кнопка неактивна, подсказка выбрать
+            PreviewSaveBottomBar(EntryCreateUiState(exercises = previewCatalog))
             // REPS без повторов — подсказка заполнить
-            SaveSection(
-                state =
-                    previewScreenState(
-                        EntryCreateUiState(
-                            exercises = previewCatalog,
-                            selectedExercise = previewRepsExercise
-                        )
-                    )
+            PreviewSaveBottomBar(
+                EntryCreateUiState(
+                    exercises = previewCatalog,
+                    selectedExercise = previewRepsExercise
+                )
             )
-            // Всё заполнено — без подсказки
-            SaveSection(
-                state =
-                    previewScreenState(
-                        EntryCreateUiState(
-                            exercises = previewCatalog,
-                            selectedExercise = previewRepsExercise,
-                            setsText = "3",
-                            repsText = "10"
-                        )
-                    )
-            )
-            // Режим редактирования без изменений — валидная форма,
-            // кнопка неактивна (hasChanges = false)
-            SaveSection(
-                state =
-                    previewScreenState(
-                        EntryCreateUiState(
-                            exercises = previewCatalog,
-                            selectedExercise = previewRepsExercise,
-                            setsText = "3",
-                            repsText = "10",
-                            isEditMode = true
-                        )
-                    )
+            // Подходы очищены — подсказка заполнить подходы
+            PreviewSaveBottomBar(
+                EntryCreateUiState(
+                    exercises = previewCatalog,
+                    selectedExercise = previewRepsExercise,
+                    repsText = "10",
+                    setsText = ""
+                )
             )
             // Запись не найдена в режиме редактирования — подсказка
             // «Запись была удалена» (design Decision 8)
-            SaveSection(
-                state =
-                    previewScreenState(
-                        EntryCreateUiState(isEditMode = true, isEntryMissing = true)
-                    )
+            PreviewSaveBottomBar(EntryCreateUiState(isEditMode = true, isEntryMissing = true))
+            // Ошибка сохранения — сообщение под кнопкой
+            PreviewSaveBottomBar(
+                EntryCreateUiState(
+                    exercises = previewCatalog,
+                    selectedExercise = previewRepsExercise,
+                    setsText = "3",
+                    repsText = "10",
+                    isSaveError = true
+                )
             )
         }
     }

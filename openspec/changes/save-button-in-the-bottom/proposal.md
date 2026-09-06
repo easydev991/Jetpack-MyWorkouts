@@ -16,19 +16,21 @@
 - Внутри `bottomBar` — контейнер с ime/navigationBars padding
   (детали — `design.md`, Decision 1).
 - Текущая композабла `SaveSection` разделяется на две:
-  - `SaveBottomBar` — только кнопка (живёт в `Scaffold.bottomBar`);
-  - `SaveHintsSection` — блок текстов-подсказок
-    (`entry_hint_*`), остаётся в скроллящемся `Column`
-    после поля комментария, перед `isSaveError`-блоком.
+  - `SaveBottomBar` — кнопка, под ней блок подсказок
+    (`entry_hint_*`) и `isSaveError`-блок; всё живёт в
+    `Scaffold.bottomBar`: подсказка объясняет неактивность кнопки,
+    ошибка — неудачу сохранения, поэтому читаются вместе с ней;
+  - `SaveHintsSection` — блок текстов-подсказок, вызывается
+    из `SaveBottomBar` под кнопкой.
 - Скроллящийся `Column.verticalScroll` теряет модификатор
   `imePadding()` — теперь его поглощает контейнер `bottomBar`;
   `padding(paddingValues)` от Scaffold по-прежнему применяется,
   поэтому скролл-контент не уходит под кнопку.
 - В `EntryCreateScreenPreview.kt` добавляются обязательные превью
-  новых composable (`SaveBottomBar`, `SaveHintsSection`),
-  удаляется устаревший `SaveSectionPreview` и добавляется
-  long-form-превью экрана (состав состояний и порядок работ —
-  `tasks.md`: 2.2, 3.1).
+  новых composable (`SaveBottomBar` с состояниями подсказок,
+  `EntryCreateScreenLongFormPreview`), удаляется устаревший
+  `SaveSectionPreview` (состав состояний и порядок работ —
+  `tasks.md`: 2.2, 3.1, 6.3).
 - Бизнес-логика `EntryCreateViewModel` и `EntryCreateUiState`,
   поведение подсказок и логика `canSave` НЕ меняются.
 
@@ -50,15 +52,16 @@
   - `## ADDED Requirements` — новое требование о поведении кнопки
     «Сохранить» относительно экранной клавиатуры и скролла формы
     — кнопка всегда видна, всегда над клавиатурой, не скроллится
-    вместе с формой; подсказки о невалидной форме остаются в
-    скроллящейся части рядом с полями.
+    вместе с формой; подсказки о невалидной форме и ошибка
+    сохранения отображаются в нижней области под кнопкой.
 
 ## Impact
 
 - `app/src/main/java/com/myworkouts/ui/screens/entry/EntryCreateScreen.kt`
   — рефакторинг структуры: добавить `bottomBar`, вынести кнопку
-  из `SaveSection`, разделить на кнопку + блок подсказок, убрать
-  `imePadding()` с `Column`.
+  из `SaveSection`, разделить на кнопку + блок подсказок (подсказки
+  и ошибка — под кнопкой в нижней панели), убрать `imePadding()`
+  с `Column`.
 - `openspec/specs/workout-entry-screen/spec.md` — новая
   `Requirement`-секция и модификация существующего Requirement
   «Состав экрана создания записи» (детали изменений — раздел
