@@ -12,6 +12,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -57,6 +59,9 @@ import com.myworkouts.ui.viewmodel.MainViewModel
  * @param viewModel ViewModel с реактивным списком записей и pending-удалением
  * @param onAddEntryClick Тап по FAB: открыть экран создания записи.
  *   MainScreen не знает о навигации — маршрутизацией занимается RootScreen.
+ * @param onEditEntryClick Выбор пункта «Изменить» в long-press меню:
+ *   открыть экран редактирования записи с этим id (entry-edit-mode).
+ *   Дефолт-заглушка — как у [onAddEntryClick], навигация не здесь.
  * @param modifier внешний модификатор
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,6 +69,7 @@ import com.myworkouts.ui.viewmodel.MainViewModel
 fun MainScreen(
     viewModel: MainViewModel,
     onAddEntryClick: () -> Unit,
+    onEditEntryClick: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -79,6 +85,12 @@ fun MainScreen(
                 contextMenu = contextMenu,
                 onAddEntryClick = onAddEntryClick,
                 onContextMenuItemChange = { newState -> contextMenu = newState },
+                onRequestEdit = { item ->
+                    // Паттерн onRequestDelete: обёртка закрывает меню,
+                    // делегирует без побочных эффектов (design Decision 6)
+                    contextMenu = null
+                    onEditEntryClick(item.id)
+                },
                 onRequestDelete = { item ->
                     contextMenu = null
                     viewModel.requestDelete(item)
@@ -108,6 +120,7 @@ internal data class MainScreenState(
     val contextMenu: ContextMenuState? = null,
     val onAddEntryClick: () -> Unit = {},
     val onContextMenuItemChange: (ContextMenuState?) -> Unit = {},
+    val onRequestEdit: (EntryListItem) -> Unit = {},
     val onRequestDelete: (EntryListItem) -> Unit = {},
     val onConfirmDelete: () -> Unit = {},
     val onCancelDelete: () -> Unit = {}
@@ -195,6 +208,7 @@ private fun SuccessBody(
                             )
                         },
                         onMenuDismiss = { state.onContextMenuItemChange(null) },
+                        onRequestEdit = state.onRequestEdit,
                         onRequestDelete = state.onRequestDelete
                     )
             )
@@ -219,6 +233,7 @@ private fun SuccessBody(
 internal data class EntryListCallbacks(
     val onItemLongPress: (EntryListItem, Offset) -> Unit,
     val onMenuDismiss: () -> Unit,
+    val onRequestEdit: (EntryListItem) -> Unit,
     val onRequestDelete: (EntryListItem) -> Unit
 )
 
@@ -279,6 +294,7 @@ private fun EntryList(
                 item = contextMenu.item,
                 offset = menuOffset,
                 onMenuDismiss = callbacks.onMenuDismiss,
+                onRequestEdit = callbacks.onRequestEdit,
                 onRequestDelete = callbacks.onRequestDelete
             )
         }
@@ -320,14 +336,18 @@ private fun EntryListItems(
 }
 
 /**
- * Меню `DropdownMenu` в точке long-press. Вынесено из [EntryList], чтобы
- * уложиться в лимит detekt `LongMethod: 60`.
+ * Меню `DropdownMenu` в точке long-press: «Изменить» (карандаш) выше
+ * «Удалить» (корзина), у обоих `leadingIcon` с `contentDescription = null`
+ * — текст пункта сам читается службами доступности (entry-edit-mode,
+ * design Decision 6; образец — JetpackDays `ContextMenu`). Вынесено из
+ * [EntryList], чтобы уложиться в лимит detekt `LongMethod: 60`.
  */
 @Composable
 private fun EntryContextMenu(
     item: EntryListItem,
     offset: DpOffset,
     onMenuDismiss: () -> Unit,
+    onRequestEdit: (EntryListItem) -> Unit,
     onRequestDelete: (EntryListItem) -> Unit
 ) {
     DropdownMenu(
@@ -336,8 +356,18 @@ private fun EntryContextMenu(
         offset = offset
     ) {
         DropdownMenuItem(
+            text = { Text(stringResource(R.string.entry_list_menu_edit)) },
+            onClick = { onRequestEdit(item) },
+            leadingIcon = {
+                Icon(imageVector = Icons.Filled.Edit, contentDescription = null)
+            }
+        )
+        DropdownMenuItem(
             text = { Text(stringResource(R.string.entry_list_menu_delete)) },
-            onClick = { onRequestDelete(item) }
+            onClick = { onRequestDelete(item) },
+            leadingIcon = {
+                Icon(imageVector = Icons.Filled.Delete, contentDescription = null)
+            }
         )
     }
 }

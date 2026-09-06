@@ -4,6 +4,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import com.myworkouts.R
 
 /**
@@ -28,11 +30,37 @@ sealed class Screen(
     object Appearance : Screen(route = "appearance")
 
     /**
-     * Экран создания записи о выполнении (не в нижней навигации).
-     * Для будущего редактирования — отдельный маршрут `entry_edit/{id}`
-     * на тот же composable (design.md Decision 3).
+     * Экран записи о выполнении (не в нижней навигации): создание и
+     * редактирование на одном composable. Опциональный query-аргумент
+     * `entryId` выбирает режим: отсутствует/[NO_ENTRY_ID] — создание (FAB),
+     * иначе — редактирование записи с этим id (entry-edit-mode, design
+     * Decision 1). [arguments] передаётся в каждое место регистрации
+     * `composable(route, arguments)` — без navArgument query-параметр
+     * считается обязательным и `navigate("entry_create")` не сматчится.
      */
-    object EntryCreate : Screen(route = "entry_create")
+    object EntryCreate : Screen(route = "entry_create?entryId={entryId}") {
+        /** Ключ query-аргумента маршрута. */
+        const val ARG_ENTRY_ID: String = "entryId"
+
+        /** Id «запись не передана» — режим создания. */
+        const val NO_ENTRY_ID: Long = -1L
+
+        /** Аргументы маршрута для регистрации в `composable(...)`. */
+        val arguments =
+            listOf(
+                navArgument(ARG_ENTRY_ID) {
+                    type = NavType.LongType
+                    defaultValue = NO_ENTRY_ID
+                }
+            )
+
+        /**
+         * Route для навигации: всегда `entry_create?entryId={id}` —
+         * `defaultValue` в `navArgument` подставит [NO_ENTRY_ID] для
+         * create-режима, явный id — режим редактирования.
+         */
+        fun createRoute(entryId: Long = NO_ENTRY_ID): String = "entry_create?$ARG_ENTRY_ID=$entryId"
+    }
 }
 
 /**

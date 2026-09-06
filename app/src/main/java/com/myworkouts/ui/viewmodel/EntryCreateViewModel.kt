@@ -9,6 +9,7 @@ import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.screens.entry.entryDateMillis
 import com.myworkouts.ui.state.EntryCreateUiState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,33 +27,70 @@ import java.time.ZoneId
 private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
 
 /**
- * ViewModel экрана создания записи о выполнении.
+ * ViewModel экрана записи о выполнении: создание (FAB, `entryId == -1`) и
+ * редактирование существующей записи (`entryId != -1`, entry-edit-mode).
  *
  * Логика ввода (санитайзинг, сброс типозависимого поля при смене
  * упражнения, сборка [ExerciseEntry]) — здесь; UI — «глупый» рендер
  * [EntryCreateUiState]. Дата/время при открытии — «сейчас» из
- * [nowProvider]; `createdAt`/`modifiedAt` — «сейчас» в момент сохранения.
+ * [nowProvider]; `createdAt`/`modifiedAt` — «сейчас» в момент сохранения
+ * (в режиме редактирования `createdAt` берётся из записи).
  *
  * @property repository Репозиторий данных тренировок
  * @property nowProvider Провайдер текущего момента (epoch millis) —
  *   внедряется для детерминированных JVM-тестов
+ * @property entryId Id редактируемой записи; [Screen.EntryCreate.NO_ENTRY_ID] — режим создания
  */
 class EntryCreateViewModel(
     private val repository: WorkoutDataRepository,
-    private val nowProvider: () -> Long
+    private val nowProvider: () -> Long,
+    private val entryId: Long = Screen.EntryCreate.NO_ENTRY_ID
 ) : ViewModel() {
-    private val mutableUiState = MutableStateFlow(initialState(nowProvider()))
+    /**
+     * Загруженная запись режима редактирования: `null` — режим создания
+     * или запись не найдена (Decision 4 — в UiState не попадает).
+     */
+    private var originalEntry: ExerciseEntry? = null
+
+    private val mutableUiState =
+        MutableStateFlow(
+            initialState(nowMillis = nowProvider(), isEditMode = entryId != Screen.EntryCreate.NO_ENTRY_ID)
+        )
+
+    init {
+        if (entryId != Screen.EntryCreate.NO_ENTRY_ID) {
+            viewModelScope.launch {
+                repository
+                    .getEntry(entryId)
+                    .onSuccess { entry ->
+                        originalEntry = entry
+                        if (entry == null) {
+                            // Decision 8: записи нет — пустая форма + подсказка
+                            mutableUiState.update { it.copy(isEntryMissing = true) }
+                        } else {
+                            mutableUiState.update { prefillState(it, entry) }
+                        }
+                    }.onFailure {
+                        // Ошибка загрузки приравнена к «запись недоступна»
+                        mutableUiState.update { it.copy(isEntryMissing = true) }
+                    }
+            }
+        }
+    }
 
     /**
      * UI State экрана: реактивный каталог из репозитория, объединённый
-     * с изменяемым состоянием ввода.
+     * с изменяемым состоянием ввода. Производные поля (подстановка
+     * упражнения по `originalEntry.exerciseId`, `hasChanges`) считает
+     * [derivedState]; [save] читает [uiState] — экран и сохранение
+     * видят одно состояние.
      */
     val uiState: StateFlow<EntryCreateUiState> =
         combine(
             repository.exercises(query = ""),
             mutableUiState
         ) { exercises, state ->
-            state.copy(exercises = exercises)
+            derivedState(state, exercises)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
@@ -115,54 +153,116 @@ class EntryCreateViewModel(
         }
 
     /**
-     * Сохраняет запись: собирает [ExerciseEntry] (date — из выбранных
-     * даты/времени, `createdAt`/`modifiedAt` — `nowProvider`), вызывает
-     * [WorkoutDataRepository.addEntry]. Успех → [onSaved] (навигация
-     * назад), провал → [EntryCreateUiState.isSaveError], экран открыт.
+     * Сохраняет запись сборщиком [draftOf]: в режиме редактирования —
+     * [WorkoutDataRepository.updateEntry] с `id`/`createdAt` оригинала
+     * (`modifiedAt` ставит репозиторий), в режиме создания —
+     * [WorkoutDataRepository.addEntry] с «сейчас» из [nowProvider].
+     * Успех → [onSaved] (навигация назад), провал →
+     * [EntryCreateUiState.isSaveError], экран открыт.
      */
     fun save(onSaved: () -> Unit) {
-        val state = mutableUiState.value
-        val exercise = state.selectedExercise ?: return
+        val state = uiState.value
         if (!state.canSave) return
+        val original = originalEntry
+        val entry =
+            draftOf(state, original)
+                ?: return // selectedExercise == null — canSave уже отсёк
         viewModelScope.launch {
-            val now = nowProvider()
-            val entry =
-                ExerciseEntry(
-                    id = 0L,
-                    exerciseId = exercise.id,
-                    workoutId = null,
-                    date = entryDateMillis(state.date, state.hour, state.minute),
-                    sets = state.setsText.toIntOrNull() ?: 1,
-                    reps =
-                        if (exercise.measuredBy == ExerciseMeasuredBy.REPS) {
-                            state.repsText.toIntOrNull()
-                        } else {
-                            null
-                        },
-                    weightKg = state.weightText.toDoubleOrNull()?.takeIf { it > 0.0 },
-                    durationSec =
-                        if (exercise.measuredBy == ExerciseMeasuredBy.TIME) {
-                            state.durationSec
-                        } else {
-                            null
-                        },
-                    comment = state.comment.ifBlank { null },
-                    createdAt = now,
-                    modifiedAt = now
-                )
-            repository
-                .addEntry(entry)
+            val result =
+                if (original != null) repository.updateEntry(entry) else repository.addEntry(entry)
+            result
                 .onSuccess { onSaved() }
                 .onFailure { mutableUiState.update { it.copy(isSaveError = true) } }
         }
     }
 
-    private fun initialState(nowMillis: Long): EntryCreateUiState {
+    /**
+     * Производные поля состояния (design Decision 3/4): подстановка
+     * упражнения из каталога по `originalEntry.exerciseId` — пока не
+     * выбрано вручную и есть оригинал (покрывает оба порядка эмита
+     * каталога и `getEntry`); `hasChanges` — черновик != оригинал.
+     */
+    private fun derivedState(
+        state: EntryCreateUiState,
+        exercises: List<Exercise>
+    ): EntryCreateUiState {
+        val original = originalEntry
+        val selected =
+            state.selectedExercise
+                ?: original?.let { orig -> exercises.firstOrNull { it.id == orig.exerciseId } }
+        val withSelected =
+            state.copy(exercises = exercises, selectedExercise = selected)
+        val draft = draftOf(withSelected, original)
+        return withSelected.copy(
+            hasChanges = original != null && draft != null && draft != original
+        )
+    }
+
+    /**
+     * Сборка черновика [ExerciseEntry] из полей формы — одна точка
+     * нормализации для diff-а `hasChanges` и [save] (design Decision 4/5).
+     * `null` — упражнение не выбрано. В режиме редактирования
+     * `id`/`createdAt`/`modifiedAt` берутся из оригинала: равенство
+     * черновика с оригиналом означает «изменений нет».
+     */
+    private fun draftOf(
+        state: EntryCreateUiState,
+        original: ExerciseEntry?
+    ): ExerciseEntry? {
+        val exercise = state.selectedExercise ?: return null
+        return ExerciseEntry(
+            id = original?.id ?: 0L,
+            exerciseId = exercise.id,
+            workoutId = null,
+            date = entryDateMillis(state.date, state.hour, state.minute),
+            sets = state.setsText.toIntOrNull() ?: 1,
+            reps =
+                if (exercise.measuredBy == ExerciseMeasuredBy.REPS) {
+                    state.repsText.toIntOrNull()
+                } else {
+                    null
+                },
+            weightKg = state.weightText.toDoubleOrNull()?.takeIf { it > 0.0 },
+            durationSec =
+                if (exercise.measuredBy == ExerciseMeasuredBy.TIME) {
+                    state.durationSec
+                } else {
+                    null
+                },
+            comment = state.comment.ifBlank { null },
+            createdAt = original?.createdAt ?: nowProvider(),
+            modifiedAt = original?.modifiedAt ?: nowProvider()
+        )
+    }
+
+    /** Предзаполнение полей формы загруженной записью (design Decision 2). */
+    private fun prefillState(
+        state: EntryCreateUiState,
+        entry: ExerciseEntry
+    ): EntryCreateUiState {
+        val dateTime = Instant.ofEpochMilli(entry.date).atZone(ZoneId.systemDefault())
+        return state.copy(
+            setsText = entry.sets.toString(),
+            repsText = entry.reps?.toString() ?: "",
+            durationSec = entry.durationSec,
+            weightText = entry.weightKg?.toString() ?: "0",
+            date = dateTime.toLocalDate(),
+            hour = dateTime.hour,
+            minute = dateTime.minute,
+            comment = entry.comment ?: ""
+        )
+    }
+
+    private fun initialState(
+        nowMillis: Long,
+        isEditMode: Boolean
+    ): EntryCreateUiState {
         val now = Instant.ofEpochMilli(nowMillis).atZone(ZoneId.systemDefault())
         return EntryCreateUiState(
             date = now.toLocalDate(),
             hour = now.hour,
-            minute = now.minute
+            minute = now.minute,
+            isEditMode = isEditMode
         )
     }
 
@@ -171,12 +271,16 @@ class EntryCreateViewModel(
          * Factory для создания [EntryCreateViewModel]. Ручной DI вместо Hilt.
          *
          * @param repository Репозиторий данных тренировок
+         * @param entryId Id редактируемой записи; дефолт — режим создания
          * @return Factory для создания ViewModel
          */
-        fun factory(repository: WorkoutDataRepository): ViewModelProvider.Factory =
+        fun factory(
+            repository: WorkoutDataRepository,
+            entryId: Long = Screen.EntryCreate.NO_ENTRY_ID
+        ): ViewModelProvider.Factory =
             viewModelFactory {
                 initializer {
-                    EntryCreateViewModel(repository) { System.currentTimeMillis() }
+                    EntryCreateViewModel(repository, { System.currentTimeMillis() }, entryId)
                 }
             }
     }

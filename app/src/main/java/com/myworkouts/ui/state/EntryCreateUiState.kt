@@ -20,6 +20,13 @@ import java.time.LocalDate
  * @property minute Минута времени выполнения (0–59)
  * @property comment Текст комментария (пустой — без комментария)
  * @property isSaveError Признак провала последнего сохранения
+ * @property isEditMode Истина, если экран открыт с `entryId != -1`
+ *   (режим редактирования), — в том числе пока запись ещё не загружена или
+ *   не найдена
+ * @property hasChanges Есть отличия формы от загруженной записи
+ *   (вычисляется ViewModel; всегда `false` в режиме создания)
+ * @property isEntryMissing Режим редактирования открыт, но запись не
+ *   найдена (удалена) — показать подсказку под кнопкой сохранения
  */
 data class EntryCreateUiState(
     val exercises: List<Exercise> = emptyList(),
@@ -32,14 +39,12 @@ data class EntryCreateUiState(
     val hour: Int = 0,
     val minute: Int = 0,
     val comment: String = "",
-    val isSaveError: Boolean = false
+    val isSaveError: Boolean = false,
+    val isEditMode: Boolean = false,
+    val hasChanges: Boolean = false,
+    val isEntryMissing: Boolean = false
 ) {
-    /**
-     * Вычисляемая доступность сохранения (spec: «запись не сохраняется,
-     * пока не выбрано упражнение / не заполнены подходы ≥ 1 и
-     * типозависимое поле»).
-     */
-    val canSave: Boolean
+    private val formValid: Boolean
         get() =
             selectedExercise != null &&
                 (setsText.toIntOrNull() ?: 0) >= 1 &&
@@ -47,4 +52,13 @@ data class EntryCreateUiState(
                     ExerciseMeasuredBy.REPS -> repsText.toIntOrNull() != null
                     ExerciseMeasuredBy.TIME -> durationSec != null
                 }
+
+    /**
+     * Вычисляемая доступность сохранения: в режиме создания — валидная
+     * форма (spec: «запись не сохраняется, пока не выбрано упражнение /
+     * не заполнены подходы ≥ 1 и типозависимое поле»); в режиме
+     * редактирования — валидная форма И есть отличия от записи.
+     */
+    val canSave: Boolean
+        get() = formValid && (!isEditMode || hasChanges)
 }

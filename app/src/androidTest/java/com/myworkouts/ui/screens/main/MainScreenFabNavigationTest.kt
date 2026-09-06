@@ -17,6 +17,7 @@ import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.navigation.Screen
+import com.myworkouts.navigation.Screen.EntryCreate
 import com.myworkouts.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -86,10 +87,10 @@ class MainScreenFabNavigationTest {
                         viewModel(
                             factory = MainViewModel.factory(repository)
                         ),
-                    onAddEntryClick = { navController.navigate(Screen.EntryCreate.route) }
+                    onAddEntryClick = { navController.navigate(EntryCreate.createRoute()) }
                 )
             }
-            composable(Screen.EntryCreate.route) {
+            composable(Screen.EntryCreate.route, arguments = Screen.EntryCreate.arguments) {
                 // Заглушка — реальный экран тестируется отдельно.
             }
         }

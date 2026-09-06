@@ -39,6 +39,7 @@
 
     <!-- Entry create screen (creating an exercise entry) -->
     <string name="entry_create_title">New entry</string>
+    <string name="entry_edit_title">Edit entry</string>
     <string name="entry_field_exercise">Exercise</string>
     <string name="entry_field_sets">Sets</string>
     <string name="entry_field_reps">Reps (mandatory)</string>
@@ -53,6 +54,7 @@
     <string name="entry_hint_fill_sets">Fill in sets</string>
     <string name="entry_hint_fill_reps">Fill in reps</string>
     <string name="entry_hint_select_duration">Select duration</string>
+    <string name="entry_hint_entry_missing">The entry has been deleted</string>
     <string name="entry_duration_not_selected">Not selected</string>
     <string name="entry_save">Save</string>
     <string name="entry_save_error">Failed to save the entry</string>
@@ -67,6 +69,7 @@
 
     <!-- Entry list screen (workout entries list on the main screen) -->
     <string name="entry_value_separator">" x "</string>
+    <string name="entry_list_menu_edit">Edit</string>
     <string name="entry_list_menu_delete">Delete</string>
     <string name="entry_list_delete_dialog_title">Delete entry?</string>
     <string name="entry_list_delete_dialog_message">Delete \"%1$s\"?</string>

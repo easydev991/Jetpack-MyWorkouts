@@ -84,7 +84,10 @@ fun RootScreen(
             composable(Screen.Main.route) {
                 MainScreen(
                     viewModel = viewModel(factory = MainViewModel.factory(repository)),
-                    onAddEntryClick = { navController.navigate(Screen.EntryCreate.route) }
+                    onAddEntryClick = { navController.navigate(Screen.EntryCreate.createRoute()) },
+                    onEditEntryClick = { entryId ->
+                        navController.navigate(Screen.EntryCreate.createRoute(entryId))
+                    }
                 )
             }
             composable(Screen.More.route) { MoreScreen(navController = navController) }
@@ -97,11 +100,14 @@ fun RootScreen(
                     onBackClick = { navController.popBackStack() }
                 )
             }
-            composable(Screen.EntryCreate.route) {
+            composable(Screen.EntryCreate.route, arguments = Screen.EntryCreate.arguments) { backStackEntry ->
+                val entryId =
+                    backStackEntry.arguments?.getLong(Screen.EntryCreate.ARG_ENTRY_ID)
+                        ?: Screen.EntryCreate.NO_ENTRY_ID
                 EntryCreateScreen(
                     viewModel =
                         viewModel(
-                            factory = EntryCreateViewModel.factory(repository)
+                            factory = EntryCreateViewModel.factory(repository, entryId)
                         ),
                     onBackClick = { navController.popBackStack() }
                 )

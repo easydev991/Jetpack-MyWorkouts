@@ -105,6 +105,22 @@ internal fun EntryCreateScreenContentPreview() {
                         )
                     )
             )
+            EntryCreateScreenContent(
+                // Режим редактирования: предзаполненная форма, заголовок
+                // «Изменить запись», кнопка неактивна без изменений
+                state =
+                    previewScreenState(
+                        EntryCreateUiState(
+                            exercises = previewCatalog,
+                            selectedExercise = previewRepsExercise,
+                            setsText = "3",
+                            repsText = "10",
+                            weightText = "12.5",
+                            comment = "разминочный подход легче",
+                            isEditMode = true
+                        )
+                    )
+            )
         }
     }
 }
@@ -213,6 +229,28 @@ internal fun SaveSectionPreview() {
                             setsText = "3",
                             repsText = "10"
                         )
+                    )
+            )
+            // Режим редактирования без изменений — валидная форма,
+            // кнопка неактивна (hasChanges = false)
+            SaveSection(
+                state =
+                    previewScreenState(
+                        EntryCreateUiState(
+                            exercises = previewCatalog,
+                            selectedExercise = previewRepsExercise,
+                            setsText = "3",
+                            repsText = "10",
+                            isEditMode = true
+                        )
+                    )
+            )
+            // Запись не найдена в режиме редактирования — подсказка
+            // «Запись была удалена» (design Decision 8)
+            SaveSection(
+                state =
+                    previewScreenState(
+                        EntryCreateUiState(isEditMode = true, isEntryMissing = true)
                     )
             )
         }

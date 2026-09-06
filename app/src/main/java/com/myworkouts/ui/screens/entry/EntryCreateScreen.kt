@@ -98,7 +98,19 @@ internal fun EntryCreateScreenContent(state: EntryCreateScreenState) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.entry_create_title)) },
+                // Режим редактирования — «Изменить запись», создание — «Новая
+                // запись» (entry-edit-mode, design Decision 7)
+                title = {
+                    Text(
+                        stringResource(
+                            if (state.uiState.isEditMode) {
+                                R.string.entry_edit_title
+                            } else {
+                                R.string.entry_create_title
+                            }
+                        )
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = state.onBackClick) {
                         Icon(
@@ -231,6 +243,15 @@ internal fun SaveSection(state: EntryCreateScreenState) {
         enabled = uiState.canSave
     ) {
         Text(stringResource(R.string.entry_save))
+    }
+
+    // Decision 8 (entry-edit-mode): запись не найдена — кнопка недостижимо
+    // неактивна, подсказка объясняет почему
+    if (uiState.isEntryMissing) {
+        Text(
+            text = stringResource(R.string.entry_hint_entry_missing),
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 
     val hintResId =

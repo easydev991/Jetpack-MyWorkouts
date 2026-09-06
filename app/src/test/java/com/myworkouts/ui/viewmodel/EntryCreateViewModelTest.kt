@@ -31,9 +31,10 @@ import java.time.ZoneId
 
 /**
  * Fake [WorkoutDataRepository] на `MutableStateFlow` для JVM-тестов
- * [EntryCreateViewModel]: каталог — реактивный, `addEntry` записывает
- * переданную запись и возвращает настраиваемый результат, остальные
- * операции — заглушки (экран создания их не вызывает).
+ * [EntryCreateViewModel]: каталог — реактивный, `addEntry`/`updateEntry`
+ * записывают переданную запись и возвращают настраиваемый результат,
+ * `getEntry` отвечает настраиваемой записью (`null` — «не найдена»),
+ * остальные операции — заглушки.
  */
 private class FakeWorkoutDataRepository(
     exercises: List<Exercise>
@@ -44,6 +45,12 @@ private class FakeWorkoutDataRepository(
         private set
 
     var addEntryResult: Result<Long> = Result.success(1L)
+
+    /** Ответ `getEntry`; `null` — запись не найдена (режим Decision 8). */
+    var entryById: ExerciseEntry? = null
+
+    var updatedEntry: ExerciseEntry? = null
+        private set
 
     override fun exercises(query: String): Flow<List<Exercise>> = catalog
 
@@ -58,9 +65,12 @@ private class FakeWorkoutDataRepository(
 
     override suspend fun updateExercise(exercise: Exercise): Result<Unit> = Result.success(Unit)
 
-    override suspend fun updateEntry(entry: ExerciseEntry): Result<Unit> = Result.success(Unit)
+    override suspend fun updateEntry(entry: ExerciseEntry): Result<Unit> {
+        updatedEntry = entry
+        return Result.success(Unit)
+    }
 
-    override suspend fun getEntry(id: Long): Result<ExerciseEntry?> = Result.success(null)
+    override suspend fun getEntry(id: Long): Result<ExerciseEntry?> = Result.success(entryById)
 
     override suspend fun deleteEntry(id: Long): Result<Unit> = Result.success(Unit)
 
@@ -107,6 +117,31 @@ class EntryCreateViewModelTest {
     /** 2024-07-15T12:30 UTC — фиксированный «сейчас» для тестов. */
     private val fixedNowMillis = 1_721_046_600_000L
 
+    /** Дата/время записи-оригинала для режима редактирования: 2024-07-10 14:30. */
+    private val originalEntryDateMillis: Long =
+        LocalDate
+            .of(2024, 7, 10)
+            .atTime(14, 30)
+            .atZone(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+
+    /** REPS-запись для редактирования (упражнение — repsExercise из каталога). */
+    private val originalEntry =
+        ExerciseEntry(
+            id = 42L,
+            exerciseId = 1L,
+            workoutId = null,
+            date = originalEntryDateMillis,
+            sets = 3,
+            reps = 10,
+            weightKg = 12.5,
+            durationSec = null,
+            comment = "разминочный подход легче",
+            createdAt = 1_700_000_000_000L,
+            modifiedAt = 1_700_000_000_000L
+        )
+
     @BeforeEach
     fun setUp() {
         testDispatcher = StandardTestDispatcher()
@@ -118,10 +153,11 @@ class EntryCreateViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(): EntryCreateViewModel =
+    private fun createViewModel(entryId: Long = -1L): EntryCreateViewModel =
         EntryCreateViewModel(
             repository = repository,
-            nowProvider = { fixedNowMillis }
+            nowProvider = { fixedNowMillis },
+            entryId = entryId
         )
 
     @Test
@@ -526,5 +562,129 @@ class EntryCreateViewModelTest {
                 viewModel.uiState.value.isSaveError,
                 "Состояние должно содержать ошибку сохранения"
             )
+        }
+
+    @Test
+    fun edit_mode_when_entry_loaded_then_prefills_form_and_disables_save() =
+        runTest(testDispatcher) {
+            // Given — getEntry возвращает REPS-запись
+            repository.entryById = originalEntry
+
+            // When — экран открыт в режиме редактирования
+            val viewModel = createViewModel(entryId = originalEntry.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then — форма предзаполнена, упражнение подставлено из каталога
+            val state = viewModel.uiState.value
+            assertEquals(repsExercise, state.selectedExercise, "Упражнение подставлено из каталога по exerciseId")
+            assertEquals("3", state.setsText, "Подходы предзаполнены")
+            assertEquals("10", state.repsText, "Повторы предзаполнены")
+            assertEquals("12.5", state.weightText, "Доп. вес предзаполнен")
+            assertEquals(LocalDate.of(2024, 7, 10), state.date, "Дата — из записи")
+            assertEquals(14, state.hour, "Час — из записи")
+            assertEquals(30, state.minute, "Минута — из записи")
+            assertEquals("разминочный подход легче", state.comment, "Комментарий предзаполнен")
+            assertTrue(state.isEditMode, "isEditMode — из entryId")
+            assertFalse(state.hasChanges, "Сразу после загрузки изменений нет")
+            assertFalse(state.canSave, "Кнопка заблокирована без изменений при валидной форме")
+            assertFalse(state.isEntryMissing, "Запись найдена")
+        }
+
+    @Test
+    fun edit_mode_when_field_changed_then_has_changes_then_revert_resets() =
+        runTest(testDispatcher) {
+            // Given — загруженная запись без изменений
+            repository.entryById = originalEntry
+            val viewModel = createViewModel(entryId = originalEntry.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — изменены повторы
+            viewModel.onRepsChange("12")
+            advanceUntilIdle()
+
+            // Then
+            assertTrue(viewModel.uiState.value.hasChanges, "Изменение поля — hasChanges = true")
+            assertTrue(viewModel.uiState.value.canSave, "Валидная форма с изменениями — canSave = true")
+
+            // When — значение возвращено к исходному
+            viewModel.onRepsChange("10")
+            advanceUntilIdle()
+
+            // Then — вычисляемый diff: форма снова совпадает с записью
+            assertFalse(viewModel.uiState.value.hasChanges, "Возврат к исходному — изменений нет")
+            assertFalse(viewModel.uiState.value.canSave, "Кнопка снова заблокирована")
+        }
+
+    @Test
+    fun edit_mode_when_invalid_change_then_can_save_false() =
+        runTest(testDispatcher) {
+            // Given — загруженная валидная запись
+            repository.entryById = originalEntry
+            val viewModel = createViewModel(entryId = originalEntry.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — повторы очищены: изменение есть, форма невалидна
+            viewModel.onRepsChange("")
+            advanceUntilIdle()
+
+            // Then — валидность сильнее наличия изменений
+            assertTrue(viewModel.uiState.value.hasChanges, "Изменение зафиксировано")
+            assertFalse(
+                viewModel.uiState.value.canSave,
+                "Невалидная форма блокирует кнопку независимо от изменений"
+            )
+        }
+
+    @Test
+    fun save_in_edit_mode_then_calls_update_entry_and_keeps_id_and_created_at() =
+        runTest(testDispatcher) {
+            // Given — загруженная запись с изменёнными повторами
+            repository.entryById = originalEntry
+            val viewModel = createViewModel(entryId = originalEntry.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onRepsChange("12")
+            advanceUntilIdle()
+            var onSavedCalled = false
+
+            // When
+            viewModel.save { onSavedCalled = true }
+            advanceUntilIdle()
+
+            // Then — обновление, а не создание
+            val updated = repository.updatedEntry
+            assertNotNull(updated, "updateEntry должен быть вызван")
+            assertNull(repository.addedEntry, "addEntry не вызывается в режиме редактирования")
+            assertEquals(originalEntry.id, updated?.id, "id записи сохранён")
+            assertEquals(originalEntry.createdAt, updated?.createdAt, "createdAt записи сохранён")
+            assertEquals(12, updated?.reps, "Изменённые повторы записаны")
+            assertEquals(3, updated?.sets, "Непроизводные поля — из записи")
+            assertEquals("разминочный подход легче", updated?.comment, "Комментарий — из записи")
+            assertTrue(onSavedCalled, "onSaved вызван после успешного обновления")
+            assertFalse(viewModel.uiState.value.isSaveError, "Ошибки нет")
+        }
+
+    @Test
+    fun edit_mode_when_entry_missing_then_defaults_edit_mode_and_hint() =
+        runTest(testDispatcher) {
+            // Given — getEntry отвечает null (запись удалена извне)
+            repository.entryById = null
+
+            // When
+            val viewModel = createViewModel(entryId = originalEntry.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then — пустая форма, режим редактирования, подсказка (Decision 8)
+            val state = viewModel.uiState.value
+            assertTrue(state.isEditMode, "isEditMode остаётся true (из entryId)")
+            assertTrue(state.isEntryMissing, "isEntryMissing = true — подсказка «Запись была удалена»")
+            assertFalse(state.hasChanges, "Изменений нет")
+            assertFalse(state.canSave, "Кнопка неактивна")
+            assertNull(state.selectedExercise, "Форма — дефолты, без предзаполнения")
+            assertEquals("1", state.setsText, "Дефолт режима создания")
         }
 }

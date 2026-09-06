@@ -44,10 +44,10 @@
    регистрации — `RootScreen.kt:100` и `MainScreenFabNavigationTest.kt:92` —
    меняются на `composable(Screen.EntryCreate.route, arguments =
    Screen.EntryCreate.arguments)`. `entryId == -1L` — режим создания.
-   Helper `EntryCreate.createRoute(entryId: Long = -1L)`: при дефолте
-   эмитит чистый `entry_create` (без query — `defaultValue` подставит
-   навигация), при явном id —    `entry_create?entryId=$entryId`. Альтернатива — отдельный маршрут
-   `entry_edit/{id}` — отклонена: два composable на один экран,
+   Helper `EntryCreate.createRoute(entryId: Long = -1L)` всегда эмитит
+   `entry_create?entryId=$entryId` — для `entryId == -1` `defaultValue`
+   в `navArgument` подставит то же значение. Альтернатива — отдельный
+   маршрут `entry_edit/{id}` — отклонена: два composable на один экран,
    дублирование регистрации. Устаревший KDoc `Screen.kt:32-34` («Для
    будущего редактирования — отдельный маршрут `entry_edit/{id}` …
    (design.md Decision 3)») противоречит этому решению и переписывается под

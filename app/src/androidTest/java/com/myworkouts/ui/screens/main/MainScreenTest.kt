@@ -450,4 +450,69 @@ class MainScreenTest {
                 SemanticsMatcher.expectValue(SemanticsProperties.Selected, false)
             )
     }
+
+    /**
+     * Spec «Длинное нажатие открывает меню с пунктом «Удалить»» (entry-edit-mode):
+     * меню содержит пункт «Изменить» выше пункта «Удалить».
+     */
+    @Test
+    fun content_long_press_then_menu_shows_edit_item_above_delete() {
+        // Given — экран с одной записью и локальным состоянием меню
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ContextMenuState?>(null) }
+            MainScreenContent(
+                state =
+                    MainScreenState(
+                        uiState = MainUiState.Success(entries = listOf(repsItem)),
+                        contextMenu = menu,
+                        onAddEntryClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestDelete = { menu = null },
+                        onConfirmDelete = {},
+                        onCancelDelete = {}
+                    )
+            )
+        }
+
+        // When — long-press по строке
+        composeTestRule
+            .onNodeWithText(repsItem.exerciseName)
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+
+        // Then — оба пункта в меню
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_list_menu_edit))
+            .assertExists()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_list_menu_delete))
+            .assertExists()
+
+        // Then — «Изменить» выше «Удалить»
+        assertDisplayedAbove(
+            higher = context.getString(R.string.entry_list_menu_edit),
+            lower = context.getString(R.string.entry_list_menu_delete)
+        )
+    }
+
+    /**
+     * Метка [higher] визуально выше [lower] — порядок пунктов меню
+     * (образец — `assertDisplayedAbove` в `EntryCreateScreenTest`).
+     */
+    private fun assertDisplayedAbove(
+        higher: String,
+        lower: String
+    ) {
+        val higherTop =
+            composeTestRule
+                .onNodeWithText(higher)
+                .fetchSemanticsNode()
+                .boundsInRoot.top
+        val lowerTop =
+            composeTestRule
+                .onNodeWithText(lower)
+                .fetchSemanticsNode()
+                .boundsInRoot.top
+        assertTrue("«$higher» должен быть выше «$lower»", higherTop < lowerTop)
+    }
 }

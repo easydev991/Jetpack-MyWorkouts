@@ -39,6 +39,7 @@
 
     <!-- Entry create screen (создание записи о выполнении) -->
     <string name="entry_create_title">Новая запись</string>
+    <string name="entry_edit_title">Изменить запись</string>
     <string name="entry_field_exercise">Упражнение</string>
     <string name="entry_field_sets">Подходы</string>
     <string name="entry_field_reps">Повторы (обязательно)</string>
@@ -53,6 +54,7 @@
     <string name="entry_hint_fill_sets">Заполните подходы</string>
     <string name="entry_hint_fill_reps">Заполните повторы</string>
     <string name="entry_hint_select_duration">Выберите длительность</string>
+    <string name="entry_hint_entry_missing">Запись была удалена</string>
     <string name="entry_duration_not_selected">Не выбрана</string>
     <string name="entry_save">Сохранить</string>
     <string name="entry_save_error">Не удалось сохранить запись</string>
@@ -69,6 +71,7 @@
 
     <!-- Entry list screen (список записей на главном экране) -->
     <string name="entry_value_separator">" х "</string>
+    <string name="entry_list_menu_edit">Изменить</string>
     <string name="entry_list_menu_delete">Удалить</string>
     <string name="entry_list_delete_dialog_title">Удалить запись?</string>
     <string name="entry_list_delete_dialog_message">Удалить «%1$s»?</string>

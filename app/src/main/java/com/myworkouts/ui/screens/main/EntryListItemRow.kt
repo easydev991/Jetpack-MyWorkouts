@@ -105,24 +105,35 @@ internal fun EntryListItemRow(
             )
         }
         if (weightKg != null && weightKg > 0.0) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = stringResource(R.string.entry_list_weight_label),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text =
-                        stringResource(
-                            R.string.entry_list_weight_value,
-                            formatWeightKg(weightKg)
-                        ),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
+            WeightRow(weightKg = weightKg)
         }
+    }
+}
+
+/**
+ * Вторая строка [EntryListItemRow]: слева метка «Дополнительный вес»
+ * цветом `onSurfaceVariant`, справа значение («5 кг» через
+ * [formatWeightKg]). Вынесено из [EntryListItemRow] ради лимита detekt
+ * `LongMethod: 60` — как уже сделано в `MainScreen`.
+ */
+@Composable
+private fun WeightRow(weightKg: Double) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = stringResource(R.string.entry_list_weight_label),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text =
+                stringResource(
+                    R.string.entry_list_weight_value,
+                    formatWeightKg(weightKg)
+                ),
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }
