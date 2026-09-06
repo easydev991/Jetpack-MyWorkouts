@@ -11,7 +11,7 @@ import com.myworkouts.domain.model.ExerciseMeasuredBy
  * Названия резолвятся из строковых ресурсов текущей локали приложения —
  * локализация фиксируется строкой, прочитанной из ресурсов в момент первого
  * запуска (design.md Decision 4, Risks). Полнота и корректность набора —
- * контракт, проверяемый [com.myworkouts.androidTest.data.db.WorkoutDatabaseTest]
+ * контракт, проверяемый [com.myworkouts.data.db.WorkoutDatabaseTest]
  * (spec-сценарий «Первый запуск приложения»). Тип измерения: бег, планка
  * и скакалка — `TIME`, остальные 10 — `REPS` (дефолт).
  *

@@ -25,7 +25,8 @@ sealed class MainUiState {
      * удаления.
      *
      * @property entries Список записей (по дате убыванием — сортировка
-     *   на стороне SQL, см. `ExerciseEntryDao.observeEntries`)
+     *   на стороне SQL, см. `ExerciseEntryDao.observeEntries`);
+     *   остаётся для empty-check и `pendingDeleteId`-lookup
      * @property pendingDeleteId Идентификатор записи, для которой
      *   пользователь выбрал «Удалить» в long-press меню и ожидается
      *   подтверждение/отмена в алерте (`null` — алерт закрыт)

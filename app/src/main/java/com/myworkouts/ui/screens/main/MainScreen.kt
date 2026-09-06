@@ -46,6 +46,8 @@ import com.myworkouts.R
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.ui.state.MainUiState
 import com.myworkouts.ui.viewmodel.MainViewModel
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 /**
  * Главный экран — вкладка «Тренировки»: список записей, удаление через
@@ -196,8 +198,11 @@ private fun SuccessBody(
                         .padding(16.dp)
             )
         } else {
+            // Группировка — производное от записей, считается на рендере:
+            // `remember` кэширует до смены `entries` (design Decision 2)
+            val sections = remember(success.entries) { groupEntriesByDate(success.entries) }
             EntryList(
-                items = success.entries,
+                sections = sections,
                 separator = stringResource(R.string.entry_value_separator),
                 contextMenu = state.contextMenu,
                 callbacks =
@@ -238,21 +243,16 @@ internal data class EntryListCallbacks(
 )
 
 /**
- * Тело списка: `LazyColumn` с [EntryListItemRow] + long-press меню
- * на уровне списка (не внутри строки — design Decision 5).
+ * Тело списка: `LazyColumn` с секциями [EntryListItems] + long-press
+ * меню `DropdownMenu` поверх (workout-entries-list, design Decision 5;
+ * workout-entries-by-date-sections, design Decision 5).
  *
- * Позиция меню в точке касания: M3 `DropdownMenu` ставит
- * `menu.top = anchor.bottom + offset.y` (`topToAnchorBottom`), anchor —
- * этот Box (внутри Scaffold-контента). Чтобы top-left меню совпал с
- * точкой long-press, offset = (touchPoint − anchorOrigin)
- * в px → dp. Y дополнительно вычитает высоту anchor (`anchorHeight`),
- * потому что `DropdownMenu` сам прибавляет её в `anchor.bottom`.
- * `DropdownMenu` сам ограничивает offset границами окна (M3) — ручной
- * клампинг не пишется.
+ * Длинный body — ради лимита detekt `LongMethod: 60` — `Scaffold` с
+ * обвязкой уже занимает ~40 строк, сюда выносится только основная развилка.
  */
 @Composable
 private fun EntryList(
-    items: List<EntryListItem>,
+    sections: List<DateSection>,
     separator: String,
     contextMenu: ContextMenuState?,
     callbacks: EntryListCallbacks,
@@ -271,7 +271,7 @@ private fun EntryList(
                 }
     ) {
         EntryListItems(
-            items = items,
+            sections = sections,
             separator = separator,
             isSelected = { contextMenu?.item?.id == it.id },
             onLongPress = callbacks.onItemLongPress
@@ -302,35 +302,55 @@ private fun EntryList(
 }
 
 /**
- * `LazyColumn` со строками записей и жестом long-press. Вынесено из
- * [EntryList], чтобы тело осталось в лимите detekt `LongMethod: 60`.
+ * `LazyColumn` секций: sticky-заголовки (кроме «Сегодня») + строки
+ * с long-press. Разные `contentType` у заголовков/строк — раздельные
+ * пулы переиспользования против «моргания» при скролле.
  */
 @Composable
 private fun EntryListItems(
-    items: List<EntryListItem>,
+    sections: List<DateSection>,
     separator: String,
     isSelected: (EntryListItem) -> Boolean,
     onLongPress: (EntryListItem, Offset) -> Unit
 ) {
+    val yesterdayLabel = stringResource(R.string.entry_section_yesterday)
+    val formatter = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy") }
+    val today = remember { LocalDate.now() }
+    val yesterday = today.minusDays(1)
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(items = items, key = { it.id }) { item ->
-            var positionInRoot by remember { mutableStateOf(Offset.Zero) }
-            EntryListItemRow(
-                item = item,
-                separator = separator,
-                isSelected = isSelected(item),
-                modifier =
-                    Modifier
-                        .onGloballyPositioned { coords ->
-                            positionInRoot = coords.positionInRoot()
-                        }.pointerInput(item.id) {
-                            detectTapGestures(
-                                onLongPress = { localOffset ->
-                                    onLongPress(item, positionInRoot + localOffset)
-                                }
-                            )
-                        }
-            )
+        sections.forEach { section ->
+            // Секция «Сегодня» — без заголовка (design Decision 5)
+            if (section.date != today) {
+                stickyHeader(key = section.date.toEpochDay(), contentType = "section") {
+                    SectionHeader(
+                        title =
+                            if (section.date == yesterday) {
+                                yesterdayLabel
+                            } else {
+                                section.date.format(formatter)
+                            }
+                    )
+                }
+            }
+            items(items = section.items, key = { it.id }, contentType = { "row" }) { item ->
+                var positionInRoot by remember { mutableStateOf(Offset.Zero) }
+                EntryListItemRow(
+                    item = item,
+                    separator = separator,
+                    isSelected = isSelected(item),
+                    modifier =
+                        Modifier
+                            .onGloballyPositioned { coords ->
+                                positionInRoot = coords.positionInRoot()
+                            }.pointerInput(item.id) {
+                                detectTapGestures(
+                                    onLongPress = { localOffset ->
+                                        onLongPress(item, positionInRoot + localOffset)
+                                    }
+                                )
+                            }
+                )
+            }
         }
     }
 }

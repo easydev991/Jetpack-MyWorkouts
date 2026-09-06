@@ -1,6 +1,6 @@
 ## 1. Группировка записей по дате (TDD)
 
-- [ ] 1.1 Написать JVM-тест `EntryDateGrouperTest` в
+- [x] 1.1 Написать JVM-тест `EntryDateGrouperTest` в
       `app/src/test/java/com/myworkouts/ui/screens/main/EntryDateGrouperTest.kt`
       (JUnit 5, без Android): группировка пустого списка, одной записи,
       двух записей одной даты, разных дат; граница полуночи в
@@ -16,116 +16,95 @@
       Запустить `make test` — убедиться, что тесты падают
       (компиляция/asserts), фиксируя контракт `groupEntriesByDate`
       и типа `DateSection`.
-- [ ] 1.2 Реализовать `data class DateSection(val date: LocalDate,
+- [x] 1.2 Реализовать `data class DateSection(val date: LocalDate,
       val items: List<EntryListItem>)` и чистую функцию
-      `groupEntriesByDate(entries: List<EntryListItem>, today: LocalDate,
-      zone: ZoneId): List<DateSection>` в новом файле
+      `groupEntriesByDate(entries: List<EntryListItem>,
+      zone: ZoneId = ZoneId.systemDefault()): List<DateSection>` в
+      новом файле
       `app/src/main/java/com/myworkouts/ui/screens/main/EntryDateGrouper.kt`.
       Реализация включает явную сортировку входа по `date` убыванием
       перед `groupBy` (см. design.md Decision 1 «Контракт группировки»).
       Запустить `make test` — убедиться, что `EntryDateGrouperTest`
       зелёный.
 
-## 2. Форматтер заголовка секции (TDD)
+## 2. Заголовок секции — инлайн на рендере
 
-- [ ] 2.1 Написать JVM-тест `SectionTitleFormatterTest` в
-      `app/src/test/java/com/myworkouts/ui/screens/main/SectionTitleFormatterTest.kt`:
-      «сегодня», «вчера», дата старше вчера (позавчера и более ранние)
-      — формат `dd.MM.yyyy` с ведущими нулями; отдельного лейбла для
-      позавчера нет, это ветка форматированной даты. Запустить
-      `make test` — убедиться, что тесты падают, фиксируя контракт
-      `sectionTitle`.
-- [ ] 2.2 Реализовать `sectionTitle(date: LocalDate, today: LocalDate,
-      todayLabel: String, yesterdayLabel: String,
-      formatter: DateTimeFormatter): String` в новом файле
-      `app/src/main/java/com/myworkouts/ui/screens/main/SectionTitleFormatter.kt`.
-      Запустить `make test` — убедиться, что
-      `SectionTitleFormatterTest` зелёный.
+- [x] 2.1 В `EntryListItems` (`MainScreen.kt`) резолвить заголовок
+      секции инлайном: `if (section.date == yesterday) yesterdayLabel
+      else section.date.format(formatter)`, где `yesterdayLabel` —
+      `stringResource(R.string.entry_section_yesterday)`, `formatter` —
+      `remember { DateTimeFormatter.ofPattern("dd.MM.yyyy") }`,
+      `today`/`yesterday` — `remember { LocalDate.now() }`.
+      Отдельную функцию/файл не заводить: выражение из одной строки,
+      единственный call-site, тестировать нечего — форматтер из stdlib
+      (design Decision 4). Секция «Сегодня» заголовка не имеет —
+      фильтруется до этого выражения (design Decision 5).
+      Проверка: `make lint` зелёный, локали покрываются androidTest §8.1.
 
 ## 3. Локализованные строки
 
-- [ ] 3.1 Добавить `entry_section_today` («Сегодня») в
-      `app/src/main/res/values/strings.xml` и «Today» в
-      `app/src/main/res/values-en/strings.xml`.
-      Проверка: `make lint` зелёный, обе строки видны в ресурсном
-      индексе.
-- [ ] 3.2 Добавить `entry_section_yesterday` («Вчера») в
+- [x] 3.1 Добавить `entry_section_yesterday` («Вчера») в
       `app/src/main/res/values/strings.xml` и «Yesterday» в
-      `app/src/main/res/values-en/strings.xml`.
-      Проверка: обе строки присутствуют в обоих файлах, `make lint`
-      зелёный.
+      `app/src/main/res/values-en/strings.xml`. Строку для «Сегодня»
+      не добавлять: секция «Сегодня» отображается без заголовка
+      (design Decision 5).
+      Проверка: обе локали присутствуют, `make lint` зелёный.
 
-## 4. Расширение `MainUiState.Success`
+## 4. `MainUiState.Success` без секций
 
-- [ ] 4.1 Добавить поле `sections: List<DateSection> = emptyList()` в
-      `MainUiState.Success` (сохранить `entries` для empty-check и
-      `pendingDeleteId`-логики), импортировать `DateSection` из
-      `com.myworkouts.ui.screens.main.EntryDateGrouper`. Дефолт
-      `= emptyList()` обязателен — иначе сломаются все call site, где
-      `MainUiState.Success(...)` создаётся без `sections`: ровно 10
-      конструкций в трёх файлах —
-      `MainScreenTest.kt:93,129,170,320,345,385,466`,
-      `MainScreenPreview.kt:82,100`, `MainViewModel.kt:56`. Запустить
-      `./gradlew compileDebugKotlin` и `./gradlew
-      compileDebugAndroidTestKotlin` — убедиться, что прод и оба типа
-      тестов компилируются.
+- [x] 4.1 `MainUiState.Success` остаётся парой
+      `(entries, pendingDeleteId)` — поле `sections` НЕ добавлять:
+      секции — производное от `entries`, рендерер считает их сам через
+      `remember` (design Decision 1/2), расхождение невозможно по
+      построению. Проверка: `make test` и
+      `./gradlew compileDebugAndroidTestKotlin` зелёные — существующие
+      конструкторы `Success(...)` в тестах и превью не меняются.
 
-## 5. Производное `sections` в `MainViewModel`
+## 5. Группировка на рендере
 
-- [ ] 5.1 Расширить конструктор `MainViewModel` параметрами
-      `clock: () -> LocalDate = LocalDate::now` и
-      `zone: ZoneId = ZoneId.systemDefault()` (значения по умолчанию
-      — без них не сломаются существующие call site и unit/androidTest).
-      Дефолты обязательны: существующий `MainViewModelTest.kt:118`
-      создаёт `MainViewModel(repository)` напрямую, и три существующих
-      вызова `MainViewModel.factory(repository)`
-      (`RootScreen.kt:86`, `MainScreenEditNavigationTest.kt:125`,
-      `MainScreenFabNavigationTest.kt:88`) тоже должны продолжать
-      компилироваться без правок — `factory` остаётся с сигнатурой
-      `factory(repository)` именно благодаря дефолтам в конструкторе
-      `MainViewModel` (factory их не принимает и не пробрасывает).
-      Проверка: `make test` и
-      `./gradlew compileDebugAndroidTestKotlin` зелёные.
-- [ ] 5.2 В блоке
-      `combine(pendingDeleteId, entries) { pendingId, entries -> ... }`
-      вычислить `val sections = groupEntriesByDate(entries, clock(), zone)`
-      и собрать `MainUiState.Success(entries, pendingId, sections)`.
-      `groupEntriesByDate(...)` — обычная pure-функция, а не `Flow`,
-      поэтому она вызывается внутри transform-блока `combine`, а не
-      как его аргумент. Запустить `./gradlew compileDebugKotlin` —
+- [x] 5.1 В `SuccessBody` (`MainScreen.kt`) вычислить секции перед
+      `EntryList`: `val sections = remember(success.entries)
+      { groupEntriesByDate(success.entries) }` — зона по дефолту
+      системная, `MainViewModel` не меняется (ни параметров, ни
+      `combine`-группировки; design Decision 1/3). `remember` кэширует
+      результат до смены `entries` — стоимость та же, что у расчёта
+      на эмиссию. Запустить `./gradlew compileDebugKotlin` —
       убедиться, что прод собирается.
 
 ## 6. Рендер секций в `MainScreen`
 
-- [ ] 6.0 Создать
+- [x] 6.0 Создать
       `@Composable internal fun SectionHeader(title: String, modifier: Modifier = Modifier)`
       в новом файле
       `app/src/main/java/com/myworkouts/ui/screens/main/SectionHeader.kt`
-      (по тому же паттерну, что и `EntryListItemRow.kt`): `Text` с
-      `MaterialTheme.typography.titleMedium` и фоном
+      (по тому же паттерну, что и `EntryListItemRow.kt`): `Text` со
+      стилем по умолчанию (16sp, обычный вес), цветом
+      `colorScheme.onSurfaceVariant`, по бокам линии того же цвета
+      (1dp, зазор 12dp, отступ 16dp), вертикальным отступом 8dp и
+      фоном
       `Modifier.background(colorScheme.surface)` — без фона залипающий
-      `stickyHeader` просвечивал бы строками списка при скролле;
-      отдельных отступов нет. Локализованные строки
-      `entry_section_today` / `entry_section_yesterday` и
+      `stickyHeader` просвечивал бы строками списка при скролле.
+      Локализованная строка
+      `entry_section_yesterday` и
       `DateTimeFormatter.ofPattern("dd.MM.yyyy")`
       резолвятся на уровне вызывающего composable (как `separator`,
       который резолвится в `SuccessBody` и пробрасывается через
       `EntryList` дальше), `SectionHeader` принимает уже готовую
       строку.
-- [ ] 6.1 Заменить в `EntryListItems` плоский `items(items, key = …)` на
+- [x] 6.1 Заменить в `EntryListItems` плоский `items(items, key = …)` на
       цикл
-      `sections.forEach { section -> stickyHeader(key = section.date.toEpochDay(),
+      `sections.forEach { section -> if (section.date != today)
+      stickyHeader(key = section.date.toEpochDay(),
       contentType = "section") { SectionHeader(…) }
       + items(section.items, key = { it.id }, contentType = { "row" }) }`
+      — секция «Сегодня» рендерится без заголовка (design Decision 5)
       (`stickyHeader` принимает `key`/`contentType` как значения, не
       лямбды — в отличие от `items`, где те же параметры — лямбды).
-      Локализованные строки
-      `entry_section_today` / `entry_section_yesterday` и
-      `DateTimeFormatter.ofPattern("dd.MM.yyyy")` прокидываются
-      параметрами в `SectionHeader`. Запустить
+      Заголовок секции собирается на call-site инлайном (§2.1).
+      Запустить
       `./gradlew compileDebugKotlin` и `make lint` — убедиться,
       что нет ошибок компиляции и предупреждений detekt.
-- [ ] 6.2 Поменять сигнатуру `EntryList(items, …)` →
+- [x] 6.2 Поменять сигнатуру `EntryList(items, …)` →
       `EntryList(sections: List<DateSection>, …)` (private fun в
       `MainScreen.kt:254`) и `EntryListItems(items, …)` →
       `EntryListItems(sections: List<DateSection>, …)` (private fun в
@@ -136,36 +115,34 @@
 
 ## 7. Превью
 
-- [ ] 7.1 Добавить в `MainScreenPreview.kt` рядом с существующим
+- [x] 7.1 Добавить в `MainScreenPreview.kt` рядом с существующим
       `MainScreenContentListPreview` (не вместо него) сценарий с тремя
       секциями (сегодня / вчера / дата `dd.MM.yyyy`) — два
       превью-метода с тем же двух-аннотационным паттерном
       (`@Preview(...)` + `@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, ...)`),
       `showBackground = true`, `locale = "ru"`, обёртка в
       `JetpackMyWorkoutsTheme`, ключевые состояния рядом в `Column`.
-      Чтобы превью получило корректные `sections` без `MainViewModel`:
-      `entries` берутся с датами `LocalDate.now()`,
+      Превью подаёт только `entries`: даты `LocalDate.now()`,
       `LocalDate.now().minusDays(1)` и `LocalDate.now().minusDays(5)`
-      (фиксированная `dd.MM.yyyy` дата), а
-      `sections = groupEntriesByDate(entries, LocalDate.now(),
-      ZoneId.systemDefault())` считается явно при сборке
-      `MainUiState.Success(...)` для превью. Запустить
+      (фиксированная `dd.MM.yyyy` дата) — секции рендерер считает сам
+      (design Decision 1). Запустить
       `make build` — убедиться, что превью компилируется.
 
 ## 8. Регрессионные androidTest
 
-- [ ] 8.1 Написать androidTest в
+- [x] 8.1 Написать androidTest в
       `app/src/androidTest/java/com/myworkouts/ui/screens/main/MainScreenSectionsTest.kt`:
       длинное нажатие работает в секции (long-press на строке открывает
       контекстное меню с «Изменить»/«Удалить»); удаление работает в
       секции (выбор «Удалить» + подтверждение в алерте убирает запись);
       sticky-header виден (заголовок секции остаётся у верхнего края
-      `LazyColumn` при скролле); заголовок «Сегодня» в ru-локали и
+      `LazyColumn` при скролле); секция «Сегодня» — без заголовка
+      (записи сразу вверху, текста «Сегодня»/«Today» нет), заголовок
+      «Вчера» в ru-локали и
       «Yesterday» в en-локали. Использовать `createAndroidComposeRule`,
-      `MainViewModel(repository, clock = ..., zone = ...)` напрямую
-      с фиксированными `clock`/`zone` (по образцу существующего
+      `MainViewModel(repository)` напрямую (по образцу существующего
       `MainViewModelTest.kt:118` — отдельный `TestMainViewModel` не
-      нужен, см. design.md Decision 3), фейковый репозиторий на
+      нужен), фейковый репозиторий на
       `MutableStateFlow`. Локаль в тесте переключается через
       `LocaleListCompat.forLanguageTags("en")` +
       `context.createConfigurationContext(Configuration(...).apply { setLocale(it) })` +
@@ -179,6 +156,6 @@
 
 ## 9. Финальная проверка
 
-- [ ] 9.1 Прогнать `make format && make lint && make test &&
+- [x] 9.1 Прогнать `make format && make lint && make test &&
       make android-test` — все четыре цели зелёные. Если падают —
       починить до прохождения. Изменение готово к архивации.

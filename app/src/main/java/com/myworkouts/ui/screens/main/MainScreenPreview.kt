@@ -13,6 +13,8 @@ import androidx.compose.ui.unit.dp
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.ui.state.MainUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Preview-компонентов главного экрана (конвенция проекта: светлая + тёмная
@@ -93,18 +95,84 @@ internal fun MainScreenContentListPreview() {
     JetpackMyWorkoutsTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
             // Список с записями: 4×10, «20», 3×12
+            val entries =
+                listOf(
+                    previewRepsItem,
+                    previewTimeItem,
+                    previewSingleRepsItem
+                )
             MainScreenContent(
                 state =
                     previewScreenState(
-                        uiState =
-                            MainUiState.Success(
-                                entries =
-                                    listOf(
-                                        previewRepsItem,
-                                        previewTimeItem,
-                                        previewSingleRepsItem
-                                    )
-                            )
+                        uiState = MainUiState.Success(entries = entries)
+                    )
+            )
+        }
+    }
+}
+
+/**
+ * Записи для превью секций: сегодня, вчера и пять дней назад
+ * (фиксированная дата `dd.MM.yyyy`).
+ */
+private fun sectionsPreviewEntries(): List<EntryListItem> {
+    val zone = ZoneId.systemDefault()
+    val today = LocalDate.now()
+
+    fun millisAt(
+        date: LocalDate,
+        hour: Int,
+        minute: Int
+    ): Long =
+        date
+            .atTime(hour, minute)
+            .atZone(zone)
+            .toInstant()
+            .toEpochMilli()
+
+    return listOf(
+        EntryListItem(
+            id = 11L,
+            exerciseName = "Подтягивания",
+            sets = 4,
+            reps = 10,
+            durationSec = null,
+            date = millisAt(today, 10, 0)
+        ),
+        EntryListItem(
+            id = 12L,
+            exerciseName = "Приседания",
+            sets = 3,
+            reps = 15,
+            durationSec = null,
+            date = millisAt(today.minusDays(1), 19, 30)
+        ),
+        EntryListItem(
+            id = 13L,
+            exerciseName = "Планка",
+            sets = 2,
+            reps = null,
+            durationSec = 60,
+            date = millisAt(today.minusDays(5), 8, 15)
+        )
+    )
+}
+
+/**
+ * Три секции: сегодня / вчера / дата `dd.MM.yyyy`. Превью задаёт только
+ * записи — секции рендерер считает сам через [groupEntriesByDate].
+ */
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun MainScreenContentSectionsPreview() {
+    JetpackMyWorkoutsTheme {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            val entries = sectionsPreviewEntries()
+            MainScreenContent(
+                state =
+                    previewScreenState(
+                        uiState = MainUiState.Success(entries = entries)
                     )
             )
         }

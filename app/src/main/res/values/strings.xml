@@ -78,4 +78,5 @@
     <string name="entry_list_empty">Добавьте первую запись</string>
     <string name="entry_list_weight_label">Дополнительный вес</string>
     <string name="entry_list_weight_value">%1$s кг</string>
+    <string name="entry_section_yesterday">Вчера</string>
 </resources>

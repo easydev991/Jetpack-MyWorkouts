@@ -66,6 +66,16 @@ class MainScreenTest {
             date = 1_721_100_000_000L
         )
 
+    /** Success для рендер-тестов: секции рендерер считает сам. */
+    private fun success(
+        entries: List<EntryListItem>,
+        pendingDeleteId: Long? = null
+    ): MainUiState.Success =
+        MainUiState.Success(
+            entries = entries,
+            pendingDeleteId = pendingDeleteId
+        )
+
     /**
      * Универсальный state для тестов: VM-слой здесь не нужен — тесты
      * подают готовые `MainUiState.Success` и проверяют рендер/колбэки.
@@ -89,11 +99,7 @@ class MainScreenTest {
     @Test
     fun content_when_entries_then_shows_each_row_with_name_and_value() {
         // Given — две записи: REPS (4×10) и TIME (1×20)
-        setContent(
-            MainUiState.Success(
-                entries = listOf(repsItem, timeItem)
-            )
-        )
+        setContent(success(listOf(repsItem, timeItem)))
 
         // Then — заголовок TopAppBar локализован (spec «MainScreen
         // renders with localized title»)
@@ -125,11 +131,7 @@ class MainScreenTest {
     @Test
     fun content_when_empty_then_shows_placeholder_and_no_rows() {
         // Given — пустой список
-        setContent(
-            MainUiState.Success(
-                entries = emptyList()
-            )
-        )
+        setContent(success(emptyList()))
 
         // Then — заглушка с текстом «Добавьте первую запись»
         composeTestRule
@@ -166,11 +168,7 @@ class MainScreenTest {
             var menu by remember { mutableStateOf<ContextMenuState?>(null) }
             var pendingId by remember { mutableStateOf<Long?>(null) }
             val stateValue = pendingId
-            val currentState =
-                MainUiState.Success(
-                    entries = listOf(repsItem),
-                    pendingDeleteId = stateValue
-                )
+            val currentState = success(listOf(repsItem), pendingDeleteId = stateValue)
             MainScreenContent(
                 state =
                     MainScreenState(
@@ -316,11 +314,7 @@ class MainScreenTest {
     @Test
     fun row_when_weight_then_shows_weight_line() {
         // Given — запись с доп. весом 5.0 кг
-        setContent(
-            MainUiState.Success(
-                entries = listOf(repsItem.copy(weightKg = 5.0))
-            )
-        )
+        setContent(success(listOf(repsItem.copy(weightKg = 5.0))))
 
         // Then — метка строки веса отображается
         composeTestRule
@@ -342,12 +336,11 @@ class MainScreenTest {
     fun row_when_no_weight_then_hides_weight_line() {
         // Given — записи без веса (null) и с нулевым весом (0.0)
         setContent(
-            MainUiState.Success(
-                entries =
-                    listOf(
-                        repsItem.copy(weightKg = null),
-                        timeItem.copy(id = 3L, weightKg = 0.0)
-                    )
+            success(
+                listOf(
+                    repsItem.copy(weightKg = null),
+                    timeItem.copy(id = 3L, weightKg = 0.0)
+                )
             )
         )
 
@@ -381,10 +374,7 @@ class MainScreenTest {
             MainScreenContent(
                 state =
                     MainScreenState(
-                        uiState =
-                            MainUiState.Success(
-                                entries = listOf(repsItem, timeItem)
-                            ),
+                        uiState = success(listOf(repsItem, timeItem)),
                         contextMenu = menu,
                         onAddEntryClick = {},
                         onContextMenuItemChange = { menu = it },
@@ -463,7 +453,7 @@ class MainScreenTest {
             MainScreenContent(
                 state =
                     MainScreenState(
-                        uiState = MainUiState.Success(entries = listOf(repsItem)),
+                        uiState = success(listOf(repsItem)),
                         contextMenu = menu,
                         onAddEntryClick = {},
                         onContextMenuItemChange = { menu = it },
