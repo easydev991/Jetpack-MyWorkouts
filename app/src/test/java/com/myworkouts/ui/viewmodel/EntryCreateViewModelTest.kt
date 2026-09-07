@@ -153,10 +153,13 @@ class EntryCreateViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(entryId: Long = -1L): EntryCreateViewModel =
+    private fun createViewModel(
+        entryId: Long = -1L,
+        nowProvider: () -> Long = { fixedNowMillis }
+    ): EntryCreateViewModel =
         EntryCreateViewModel(
             repository = repository,
-            nowProvider = { fixedNowMillis },
+            nowProvider = nowProvider,
             entryId = entryId
         )
 
@@ -686,5 +689,183 @@ class EntryCreateViewModelTest {
             assertFalse(state.canSave, "Кнопка неактивна")
             assertNull(state.selectedExercise, "Форма — дефолты, без предзаполнения")
             assertEquals("1", state.setsText, "Дефолт режима создания")
+        }
+
+    /* Ограничение даты/времени моментом открытия экрана
+     * (change date-time-limit-for-entry, задачи 1.1–1.6). */
+
+    @Test
+    fun on_time_change_when_date_is_open_day_then_clamps_later_time_to_open_moment() =
+        runTest(testDispatcher) {
+            // Given — экран открыт: момент открытия = fixedNow, дата = день открытия
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            val open = Instant.ofEpochMilli(fixedNowMillis).atZone(ZoneId.systemDefault())
+
+            // When — на дне открытия выбрано время позже момента открытия
+            viewModel.onTimeChange(23, 59)
+            advanceUntilIdle()
+
+            // Then — время клэмпится на момент открытия без сообщения об ошибке
+            val state = viewModel.uiState.value
+            assertEquals(open.hour, state.hour, "Час на дне открытия клэмпится на момент открытия")
+            assertEquals(open.minute, state.minute, "Минута на дне открытия клэмпится на момент открытия")
+        }
+
+    @Test
+    fun on_date_change_when_return_to_open_day_with_late_time_then_clamps_to_open_moment() =
+        runTest(testDispatcher) {
+            // Given — прошедшая дата с поздним временем (там оно допустимо)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            val open = Instant.ofEpochMilli(fixedNowMillis).atZone(ZoneId.systemDefault())
+            val openDate = open.toLocalDate()
+            viewModel.onDateChange(openDate.minusDays(1))
+            viewModel.onTimeChange(23, 59)
+            advanceUntilIdle()
+            assertEquals(23, viewModel.uiState.value.hour, "Пре-условие: на прошлой дате время любое")
+
+            // When — дата возвращена на день открытия экрана
+            viewModel.onDateChange(openDate)
+            advanceUntilIdle()
+
+            // Then — позднее время клэмпится на момент открытия (design Decision 4)
+            val state = viewModel.uiState.value
+            assertEquals(openDate, state.date, "Дата — день открытия")
+            assertEquals(open.hour, state.hour, "Час клэмпится при возврате на день открытия")
+            assertEquals(open.minute, state.minute, "Минута клэмпится при возврате на день открытия")
+        }
+
+    @Test
+    fun on_time_change_when_date_in_past_then_keeps_any_time() =
+        runTest(testDispatcher) {
+            // Given — выбрана дата раньше дня открытия экрана
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            val openDate = Instant.ofEpochMilli(fixedNowMillis).atZone(ZoneId.systemDefault()).toLocalDate()
+            viewModel.onDateChange(openDate.minusDays(1))
+            advanceUntilIdle()
+
+            // When — выбрано позднее время
+            viewModel.onTimeChange(23, 59)
+            advanceUntilIdle()
+
+            // Then — на прошлой дате время любое (spec «Прошлая дата допускает любое время»)
+            val state = viewModel.uiState.value
+            assertEquals(23, state.hour, "Час на прошлой дате сохраняется")
+            assertEquals(59, state.minute, "Минута на прошлой дате сохраняется")
+        }
+
+    @Test
+    fun open_moment_when_real_time_passed_then_limit_is_open_moment_not_now() =
+        runTest(testDispatcher) {
+            // Given — nowProvider при повторных вызовах возвращает «протекшее»
+            // время: момент открытия зафиксирован только первым вызовом
+            var calls = 0
+            val viewModel =
+                createViewModel(
+                    nowProvider = {
+                        val current = fixedNowMillis + calls * 3_600_000L
+                        calls++
+                        current
+                    }
+                )
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            val open = Instant.ofEpochMilli(fixedNowMillis).atZone(ZoneId.systemDefault())
+            assertEquals(1, calls, "Пре-условие: момент открытия взят одним вызовом nowProvider")
+
+            // When — на дне открытия выбрано время позже момента открытия
+            // (но раньше «протекшего» now)
+            viewModel.onTimeChange(23, 59)
+            advanceUntilIdle()
+
+            // Then — ограничение по моменту открытия, а не по текущему now
+            // (spec «Момент открытия не пересчитывается»)
+            val state = viewModel.uiState.value
+            assertEquals(open.hour, state.hour, "Час клэмпится на момент открытия, не на протекший now")
+            assertEquals(open.minute, state.minute, "Минута клэмпится на момент открытия, не на протекший now")
+        }
+
+    @Test
+    fun edit_mode_when_past_entry_loaded_then_kept_and_limits_still_apply() =
+        runTest(testDispatcher) {
+            // Given — запись из прошлого (2024-07-10 14:30)
+            repository.entryById = originalEntry
+            val viewModel = createViewModel(entryId = originalEntry.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            val open = Instant.ofEpochMilli(fixedNowMillis).atZone(ZoneId.systemDefault())
+            val openDate = open.toLocalDate()
+
+            // Then — предзаполненные дата и время записи не меняются (без клэмпа
+            // prefill, design Decision 5)
+            assertEquals(LocalDate.of(2024, 7, 10), viewModel.uiState.value.date, "Дата записи из прошлого сохранена без клэмпа")
+            assertEquals(14, viewModel.uiState.value.hour, "Час записи из прошлого сохранён без клэмпа")
+            assertEquals(30, viewModel.uiState.value.minute, "Минута записи из прошлого сохранена без клэмпа")
+
+            // Then — ограничения действуют и в режиме редактирования:
+            // на дне открытия позднее время клэмпится
+            viewModel.onDateChange(openDate)
+            viewModel.onTimeChange(23, 59)
+            advanceUntilIdle()
+            assertEquals(open.hour, viewModel.uiState.value.hour, "В режиме редактирования время на дне открытия клэмпится")
+            assertEquals(open.minute, viewModel.uiState.value.minute, "Минута клэмпится и в режиме редактирования")
+        }
+
+    @Test
+    fun clamp_when_fixed_non_utc_zone_then_day_boundary_respects_local_date() =
+        runTest(testDispatcher) {
+            // Given — фиксированная не-UTC зона: страхует UTC-ловушку пикера
+            // (design Risks): день открытия — локальная дата момента открытия
+            val zone = ZoneId.of("GMT+05:00")
+            val originalZone = java.util.TimeZone.getDefault()
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(zone))
+            try {
+                // Случай 1: открытие 2024-07-15 23:59 GMT+5 — 23:59 того же дня
+                // не клэмпится (граница суток)
+                val lateOpenMillis =
+                    LocalDate
+                        .of(2024, 7, 15)
+                        .atTime(23, 59)
+                        .atZone(zone)
+                        .toInstant()
+                        .toEpochMilli()
+                val lateViewModel = createViewModel(nowProvider = { lateOpenMillis })
+                backgroundScope.launch { lateViewModel.uiState.collect { } }
+                advanceUntilIdle()
+                lateViewModel.onTimeChange(23, 59)
+                advanceUntilIdle()
+                assertEquals(23, lateViewModel.uiState.value.hour, "23:59 в день открытия 23:59 не клэмпится (граница суток)")
+                assertEquals(59, lateViewModel.uiState.value.minute, "Минута 23:59 сохраняется на границе суток")
+
+                // Случай 2: открытие 2024-07-16 00:01 GMT+5 (в UTC это ещё
+                // 15 июля!) — локальный день открытия 16-е, 00:02 клэмпится
+                val earlyOpenMillis =
+                    LocalDate
+                        .of(2024, 7, 16)
+                        .atTime(0, 1)
+                        .atZone(zone)
+                        .toInstant()
+                        .toEpochMilli()
+                val earlyViewModel = createViewModel(nowProvider = { earlyOpenMillis })
+                backgroundScope.launch { earlyViewModel.uiState.collect { } }
+                advanceUntilIdle()
+                earlyViewModel.onTimeChange(0, 2)
+                advanceUntilIdle()
+                assertEquals(0, earlyViewModel.uiState.value.hour, "00:02 на дне открытия (00:01) клэмпится на час открытия")
+                assertEquals(1, earlyViewModel.uiState.value.minute, "00:02 клэмпится на минуту открытия")
+
+                // Случай 3: прошедшая дата (15-е) допускает любое время
+                earlyViewModel.onDateChange(LocalDate.of(2024, 7, 15))
+                earlyViewModel.onTimeChange(23, 59)
+                advanceUntilIdle()
+                assertEquals(23, earlyViewModel.uiState.value.hour, "На прошлой дате (15-е) 23:59 остаётся: день открытия — 16-е")
+            } finally {
+                java.util.TimeZone.setDefault(originalZone)
+            }
         }
 }

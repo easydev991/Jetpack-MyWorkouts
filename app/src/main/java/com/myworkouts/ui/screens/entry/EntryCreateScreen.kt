@@ -176,6 +176,7 @@ private fun EntryCreateForm(
 
         DateField(
             date = uiState.date,
+            openMomentMillis = uiState.openMomentMillis,
             onDateChange = state.onDateChange
         )
 

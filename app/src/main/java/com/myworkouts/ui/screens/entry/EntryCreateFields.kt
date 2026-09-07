@@ -15,6 +15,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -32,7 +33,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import com.myworkouts.R
 import com.myworkouts.domain.model.Exercise
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
@@ -183,15 +186,29 @@ internal fun DurationDropdownField(
 }
 
 /**
+ * Граница доступности дат в `DatePicker`: дни позже локального дня открытия
+ * экрана невыделяемы, сам день открытия — ещё доступен (design Decision 2,
+ * сравнение в UTC-millis пикера через [localDateToPickerMillis]).
+ * Pure-функция — чтобы граница была покрыта JVM-тестами без пикера.
+ */
+internal fun entrySelectableDates(openLocalDate: LocalDate): SelectableDates =
+    object : SelectableDates {
+        override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis <= localDateToPickerMillis(openLocalDate)
+    }
+
+/**
  * Поле даты: пикер открывает иконка-календарь в `trailingIcon` — клик по
  * самому readOnly-полю не работает, внутренний `BasicTextField` поглощает
  * тапы (design.md Decision 5). millis ↔ LocalDate — только через
- * [localDateToPickerMillis]/[pickerMillisToLocalDate] (UTC).
+ * [localDateToPickerMillis]/[pickerMillisToLocalDate] (UTC). Дни позже дня
+ * открытия экрана ([openMomentMillis]) невыделяемы (spec «Даты позже дня
+ * открытия недоступны в пикере»).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DateField(
     date: LocalDate,
+    openMomentMillis: Long,
     onDateChange: (LocalDate) -> Unit
 ) {
     var showDialog by rememberSaveable { mutableStateOf(false) }
@@ -214,9 +231,12 @@ internal fun DateField(
     )
 
     if (showDialog) {
+        val openLocalDate =
+            Instant.ofEpochMilli(openMomentMillis).atZone(ZoneId.systemDefault()).toLocalDate()
         val pickerState =
             rememberDatePickerState(
-                initialSelectedDateMillis = localDateToPickerMillis(date)
+                initialSelectedDateMillis = localDateToPickerMillis(date),
+                selectableDates = entrySelectableDates(openLocalDate)
             )
         DatePickerDialog(
             onDismissRequest = { showDialog = false },

@@ -13,6 +13,7 @@ import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.ui.state.EntryCreateUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Preview-компонентов экрана создания записи (конвенция проекта: светлая +
@@ -213,7 +214,20 @@ internal fun DurationDropdownFieldPreview() {
 @Composable
 internal fun DateFieldPreview() {
     JetpackMyWorkoutsTheme {
-        DateField(date = LocalDate.of(2024, 7, 15), onDateChange = {})
+        // Момент открытия — тот же день, что и дата в поле (день открытия
+        // экрана): более поздние дни в пикере превью будут недоступны
+        val openMomentMillis =
+            LocalDate
+                .of(2024, 7, 15)
+                .atTime(18, 0)
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli()
+        DateField(
+            date = LocalDate.of(2024, 7, 15),
+            openMomentMillis = openMomentMillis,
+            onDateChange = {}
+        )
     }
 }
 

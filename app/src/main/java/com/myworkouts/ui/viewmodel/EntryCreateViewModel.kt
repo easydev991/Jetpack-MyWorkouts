@@ -26,6 +26,9 @@ import java.time.ZoneId
 /** Таймаут подписки StateFlow — как в [AppearanceViewModel]. */
 private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
 
+/** Минут в часе — для сравнения времени суток при клэмпе на момент открытия. */
+private const val MINUTES_PER_HOUR: Int = 60
+
 /**
  * ViewModel экрана записи о выполнении: создание (FAB, `entryId == -1`) и
  * редактирование существующей записи (`entryId != -1`, entry-edit-mode).
@@ -52,9 +55,16 @@ class EntryCreateViewModel(
      */
     private var originalEntry: ExerciseEntry? = null
 
+    /**
+     * Момент открытия экрана (epoch millis): фиксируется один раз и далее
+     * не пересчитывается (spec-сценарий «Момент открытия не пересчитывается»).
+     * Граница для ограничения даты/времени записи.
+     */
+    private val openMomentMillis: Long = nowProvider()
+
     private val mutableUiState =
         MutableStateFlow(
-            initialState(nowMillis = nowProvider(), isEditMode = entryId != Screen.EntryCreate.NO_ENTRY_ID)
+            initialState(nowMillis = openMomentMillis, isEditMode = entryId != Screen.EntryCreate.NO_ENTRY_ID)
         )
 
     init {
@@ -132,18 +142,20 @@ class EntryCreateViewModel(
             it.copy(durationSec = durationSec, isSaveError = false)
         }
 
-    /** Смена даты выполнения. */
+    /** Смена даты выполнения; на дне открытия позднее время клэмпится (design Decision 4). */
     fun onDateChange(date: LocalDate) =
         mutableUiState.update {
-            it.copy(date = date, isSaveError = false)
+            val (clampedHour, clampedMinute) = clampToOpenMoment(date, it.hour, it.minute)
+            it.copy(date = date, hour = clampedHour, minute = clampedMinute, isSaveError = false)
         }
 
-    /** Смена времени выполнения. */
+    /** Смена времени выполнения; на дне открытия время позже момента открытия клэмпится. */
     fun onTimeChange(
         hour: Int,
         minute: Int
     ) = mutableUiState.update {
-        it.copy(hour = hour, minute = minute, isSaveError = false)
+        val (clampedHour, clampedMinute) = clampToOpenMoment(it.date, hour, minute)
+        it.copy(hour = clampedHour, minute = clampedMinute, isSaveError = false)
     }
 
     /** Ввод комментария (опциональное поле). */
@@ -253,6 +265,26 @@ class EntryCreateViewModel(
         )
     }
 
+    /**
+     * Клэмп времени на момент открытия экрана: на дне открытия время позже
+     * момента открытия заменяется на момент открытия, без сообщения об
+     * ошибке (spec-сценарии «Время на день открытия клэмпится…», «Возврат
+     * на день открытия…»; design Decision 4). Для дат в прошлом время любое.
+     *
+     * @return Час и минута после клэмпа
+     */
+    private fun clampToOpenMoment(
+        date: LocalDate,
+        hour: Int,
+        minute: Int
+    ): Pair<Int, Int> {
+        val openMoment = Instant.ofEpochMilli(openMomentMillis).atZone(ZoneId.systemDefault())
+        if (date != openMoment.toLocalDate()) return hour to minute
+        val selected = hour * MINUTES_PER_HOUR + minute
+        val limit = openMoment.hour * MINUTES_PER_HOUR + openMoment.minute
+        return if (selected > limit) openMoment.hour to openMoment.minute else hour to minute
+    }
+
     private fun initialState(
         nowMillis: Long,
         isEditMode: Boolean
@@ -262,6 +294,7 @@ class EntryCreateViewModel(
             date = now.toLocalDate(),
             hour = now.hour,
             minute = now.minute,
+            openMomentMillis = nowMillis,
             isEditMode = isEditMode
         )
     }

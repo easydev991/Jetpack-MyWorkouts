@@ -18,6 +18,9 @@ import java.time.LocalDate
  * @property date Дата выполнения
  * @property hour Час времени выполнения (0–23)
  * @property minute Минута времени выполнения (0–59)
+ * @property openMomentMillis Момент открытия экрана (epoch millis) —
+ *   граница доступных даты/времени: даты позже дня открытия недоступны,
+ *   время на дне открытия клэмпится на момент открытия
  * @property comment Текст комментария (пустой — без комментария)
  * @property isSaveError Признак провала последнего сохранения
  * @property isEditMode Истина, если экран открыт с `entryId != -1`
@@ -38,6 +41,7 @@ data class EntryCreateUiState(
     val date: LocalDate = LocalDate.now(),
     val hour: Int = 0,
     val minute: Int = 0,
+    val openMomentMillis: Long = System.currentTimeMillis(),
     val comment: String = "",
     val isSaveError: Boolean = false,
     val isEditMode: Boolean = false,

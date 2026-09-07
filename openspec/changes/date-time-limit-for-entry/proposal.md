@@ -54,7 +54,8 @@
   `DateFieldPreview`: новый аргумент `DateField`; остальные превью без
   изменений.
 - Тесты: `EntryCreateViewModelTest` (unit), `EntryCreateScreenTest`
-  (androidTest); `EntryCreateFormattersTest` не затронут — код форматтеров
-  не меняется.
+  (androidTest), `EntrySelectableDatesTest` (unit, добавлен в ходе
+  реализации — JVM-граница `selectableDates`, см. tasks 2.4);
+  `EntryCreateFormattersTest` не затронут — код форматтеров не меняется.
 - Новых зависимостей и строковых ресурсов не требуется (клэмп без
   пользовательских сообщений).

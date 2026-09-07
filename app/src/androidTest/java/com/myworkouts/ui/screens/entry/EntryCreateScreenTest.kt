@@ -4,17 +4,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
@@ -27,6 +32,9 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /**
  * Компонентные UI-тесты для [EntryCreateScreenContent] через plain state
@@ -486,6 +494,67 @@ class EntryCreateScreenTest {
 
         // Then — диалог пикера даты открыт (кнопка «ОК» диалога видна)
         composeTestRule.onNodeWithText(context.getString(R.string.ok)).assertIsDisplayed()
+    }
+
+    @Test
+    fun content_when_date_picker_open_then_future_day_not_selectable() {
+        // Given — дата 15 июля 2024, момент открытия — тот же день полдень;
+        // onDateChange подключён к state, как это делает ViewModel.
+        // repsText = «10» — canSave = true, кнопка сохранения не добавит
+        // лишнюю disabled-ноду в подсчёт.
+        // (spec «Даты позже дня открытия недоступны в пикере»)
+        val openMomentMillis =
+            LocalDate
+                .of(2024, 7, 15)
+                .atTime(12, 0)
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli()
+        composeTestRule.setContent {
+            var uiState by
+                remember {
+                    mutableStateOf(
+                        EntryCreateUiState(
+                            selectedExercise = repsExercise,
+                            repsText = "10",
+                            date = LocalDate.of(2024, 7, 15),
+                            openMomentMillis = openMomentMillis
+                        )
+                    )
+                }
+            EntryCreateScreenContent(
+                state =
+                    stateFor(uiState).copy(
+                        onDateChange = { date -> uiState = uiState.copy(date = date) }
+                    )
+            )
+        }
+
+        // When — пикер даты открыт
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.entry_select_date))
+            .performClick()
+
+        // Then — дни позже дня открытия (16–31 июля) недоступны: 16
+        // disabled-ячеек. Сетка месяца всегда 6×7, дни соседних месяцев —
+        // пустые ячейки без семантики (текст дня в M3 1.4 вычищен из
+        // семантики, ищем по признаку Disabled).
+        composeTestRule
+            .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Disabled))
+            .assertCountEquals(16)
+
+        // When — попытка выбрать будущую дату (первая disabled-ячейка —
+        // 16 июля) и подтверждение пикера
+        composeTestRule
+            .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Disabled))
+            .onFirst()
+            .performTouchInput { click(center) }
+        composeTestRule.onNodeWithText(context.getString(R.string.ok)).performClick()
+
+        // Then — поле даты не изменилось
+        val initialDateText =
+            LocalDate.of(2024, 7, 15).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+        composeTestRule.onNodeWithText(initialDateText).assertIsDisplayed()
     }
 
     @Test
