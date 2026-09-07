@@ -47,7 +47,11 @@ DataStore, Room. Manual DI — без Hilt.
 ## Conventions
 
 - **Никогда `!!`** — `checkNotNull` с сообщением, `?.let`, `?:`.
-- Sealed classes для UI-состояний: `Loading` / `Success(data)` / `Error(message)`.
+- UiState экрана — data class по умолчанию: поля-флаги +
+  одноразовые события типом enum/sealed-kind (например,
+  `AppDataResult`). Sealed-иерархия `Loading` / `Success(data)` /
+  `Error(message)` — только когда экран имеет взаимоисключающие
+  визуальные состояния (отдельные экраны Loading/Error).
 - `Result<T>` с `try/catch` в use-cases.
 - StateFlow + `SharingStarted.WhileSubscribed(5000)` в ViewModel.
 - `LazyColumn` с `key = { it.id }`.
@@ -93,6 +97,7 @@ DataStore, Room. Manual DI — без Hilt.
 - `ui/screens/{main,entry,more,root,appearance}/`
 - `ui/state/` — `MainUiState.kt`, `EntryCreateUiState.kt`, `AppearanceUiState.kt`
 - `ui/theme/{Color,Theme,Type}.kt` ← `Type`, не `Typography`
+- `ui/util/` — `DurationFormatter.kt` (общий для main и entry экранов)
 - `ui/viewmodel/` — `MainViewModel.kt`, `EntryCreateViewModel.kt`,
   `AppearanceViewModel.kt`
 
