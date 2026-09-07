@@ -19,8 +19,8 @@ import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
  * Ключевые состояния компонента (spec «Дополнительный вес в строке
  * записи»): целый вес (5.0 → «5 кг»), дробный (2.5 → «2.5 кг») и без
  * веса — строка выглядит как одна «название — значение». Отдельно от
- * `EntryListItemRowPreview` в `MainScreenPreview.kt`, который остался
- * без изменений.
+ * `EntryListItemRowPreview` в `MainScreenPreview.kt`, который покрывает
+ * форматы значения.
  */
 
 private val previewWholeWeightItem =

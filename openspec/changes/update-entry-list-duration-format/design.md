@@ -35,13 +35,13 @@
 
 ### Decision 1: тип значения различается в `EntryListItemRow`; склейка — одна точка, `formatEntryValue` принимает готовую строку
 
-В `EntryListItemRow` значение формируется ветвлением по `item.reps != null`:
+В `EntryListItemRow` значение — одно выражение: тип значения определяется
+наличием повторов у записи:
 
-- повторы → `formatEntryValue(item.sets, item.reps.toString(), separator)`;
-- иначе (`durationSec != null`) →
-  `formatEntryValue(item.sets, formatDurationResource(item.durationSec ?: 0), separator)`:
-  текст длительности собирает `formatDurationResource` (design Decision 2),
-  склейку «подходы × значение» делает единственная функция `formatEntryValue`.
+- `item.reps?.toString() ?: formatDurationResource(item.durationSec ?: 0)` —
+  готовый текст значения (повторы или человекочитаемая длительность,
+  design Decision 2), подставляемый в единственную функцию склейки
+  `formatEntryValue(item.sets, value, separator)`.
 
 Для этого `formatEntryValue` меняет тип `value` с `Int` на `String` — одна
 логика склейки на оба типа значения, без параллельного форматтера и без
@@ -116,3 +116,12 @@ JVM-разделитель в тестах — ASCII « x », locale-neutral, к
 ## Open Questions
 
 Нет.
+
+## Post-Review Simplifications (после ревью, код финальный)
+
+- `formatDuration`: параметр `hoursWord: (Int) -> String` заменён на
+  готовый `hoursText: String` — production-обёртка передавала лямбду,
+  игнорирующую аргумент, а JVM-тесты через неё проверяли собственный
+  хелпер склонения, не код приложения. Алгоритм не менялся.
+- Значение в `EntryListItemRow` — одно выражение через `?:` вместо
+  дублирования `formatEntryValue` в двух ветках.

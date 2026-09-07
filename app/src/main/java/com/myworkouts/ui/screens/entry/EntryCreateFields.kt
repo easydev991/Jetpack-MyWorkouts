@@ -28,11 +28,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import com.myworkouts.R
 import com.myworkouts.domain.model.Exercise
+import com.myworkouts.ui.util.formatDurationResource
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -47,29 +47,6 @@ private const val DURATION_MAX_SEC: Int = 3600
 
 /** Шаг длительности в пикере (spec: кратные 5 секундам). */
 private const val DURATION_STEP_SEC: Int = 5
-
-/**
- * UI-обёртка над [formatDuration]: подтягивает локализованные части
- * из ресурсов (слово «час» — plurals, минуты/секунды — сокращения).
- */
-@Composable
-internal fun formatDurationResource(seconds: Int): String {
-    val minutesShort = stringResource(R.string.entry_duration_minutes_short)
-    val secondsShort = stringResource(R.string.entry_duration_seconds_short)
-    val hours = seconds / SECONDS_PER_HOUR
-    val hoursText =
-        if (hours > 0) {
-            pluralStringResource(R.plurals.entry_duration_hours, hours, hours)
-        } else {
-            ""
-        }
-    return formatDuration(
-        seconds = seconds,
-        hoursWord = { hoursText },
-        minutesShort = minutesShort,
-        secondsShort = secondsShort
-    )
-}
 
 /**
  * Выпадающий список упражнений каталога (`ExposedDropdownMenuBox`).

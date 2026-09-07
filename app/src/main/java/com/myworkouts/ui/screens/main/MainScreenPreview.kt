@@ -58,6 +58,17 @@ private val previewSingleRepsItem =
         date = 1_721_200_000_000L
     )
 
+// Составной пример длительности: 4 подхода по 150 сек → «4 х 2 мин 30 сек»
+private val previewLongDurationItem =
+    EntryListItem(
+        id = 4L,
+        exerciseName = "Бег на месте",
+        sets = 4,
+        reps = null,
+        durationSec = 150,
+        date = 1_721_300_000_000L
+    )
+
 private fun previewScreenState(
     uiState: MainUiState,
     onAddEntryClick: () -> Unit = {}
@@ -94,11 +105,12 @@ internal fun MainScreenContentEmptyPreview() {
 internal fun MainScreenContentListPreview() {
     JetpackMyWorkoutsTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
-            // Список с записями: 4×10, «20», 3×12
+            // Список с записями: 4×10, «20 сек», «4 х 2 мин 30 сек», 3×12
             val entries =
                 listOf(
                     previewRepsItem,
                     previewTimeItem,
+                    previewLongDurationItem,
                     previewSingleRepsItem
                 )
             MainScreenContent(
@@ -147,6 +159,8 @@ private fun sectionsPreviewEntries(): List<EntryListItem> {
             durationSec = null,
             date = millisAt(today.minusDays(1), 19, 30)
         ),
+        // Планка: 2 подхода по 60 сек → «2 х 1 мин» (нулевые секунды
+        // опускаются)
         EntryListItem(
             id = 13L,
             exerciseName = "Планка",
@@ -194,11 +208,17 @@ internal fun EntryListItemRowPreview() {
                 separator = " х ",
                 isSelected = false
             )
-            // 20 (один подход TIME) — выделена, как при показе контекстного меню
+            // «20 сек» (один подход TIME) — выделена, как при показе контекстного меню
             EntryListItemRow(
                 item = previewTimeItem,
                 separator = " х ",
                 isSelected = true
+            )
+            // «4 х 2 мин 30 сек» (несколько подходов TIME — составной пример)
+            EntryListItemRow(
+                item = previewLongDurationItem,
+                separator = " х ",
+                isSelected = false
             )
             // 3×12 (REPS)
             EntryListItemRow(

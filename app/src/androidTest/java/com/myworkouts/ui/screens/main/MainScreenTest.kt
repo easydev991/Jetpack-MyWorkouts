@@ -32,6 +32,9 @@ import org.junit.runner.RunWith
  *
  * Проверяет:
  * - рендер строк списка с названием и значением (5.1);
+ * - форматы длительности в значении строки — «2 мин», «4 х 2 мин 30 сек»,
+ *   «1 час» (change update-entry-list-duration-format, spec «Формат
+ *   значения записи»);
  * - пустое состояние при `entries = emptyList()` (5.1);
  * - long-press → меню «Удалить» → алерт подтверждения → отмена/подтверждение (5.3).
  *
@@ -111,7 +114,7 @@ class MainScreenTest {
         composeTestRule.onNodeWithText(repsItem.exerciseName).assertIsDisplayed()
         composeTestRule.onNodeWithText(timeItem.exerciseName).assertIsDisplayed()
 
-        // Then — значения формата «4 х 10» и «20» (RU-разделитель)
+        // Then — значения формата «4 х 10» и «20 сек» (RU-разделитель)
         composeTestRule
             .onNodeWithText(
                 context.getString(R.string.entry_value_separator).let { sep ->
@@ -119,13 +122,51 @@ class MainScreenTest {
                 }
             ).assertIsDisplayed()
         composeTestRule
-            .onNodeWithText("${timeItem.durationSec}")
-            .assertIsDisplayed()
+            .onNodeWithText(
+                // Один подход — без разделителя: длительность форматируется
+                // как на экране создания («20 сек»)
+                "${timeItem.durationSec} " +
+                    context.getString(R.string.entry_duration_seconds_short)
+            ).assertIsDisplayed()
 
         // Then — заглушка пустого состояния не видна
         composeTestRule
             .onAllNodesWithText(context.getString(R.string.entry_list_empty))
             .assertCountEquals(0)
+    }
+
+    /**
+     * Спец-сценарии длительности (spec «Формат значения записи»):
+     * «2 мин» — нулевые секунды опускаются; «4 х 2 мин 30 сек» —
+     * составная часть при нескольких подходах; «1 час» — слово из
+     * plurals (максимум пикера — 3600 секунд).
+     */
+    @Test
+    fun content_when_duration_entries_then_shows_minutes_composite_and_hour_values() {
+        // Given — записи 1×120 сек, 4×150 сек и 1×3600 сек
+        val separator = context.getString(R.string.entry_value_separator)
+        val minutesShort = context.getString(R.string.entry_duration_minutes_short)
+        val secondsShort = context.getString(R.string.entry_duration_seconds_short)
+        val minuteItem = timeItem.copy(id = 11L, sets = 1, durationSec = 120)
+        val compositeItem = timeItem.copy(id = 12L, sets = 4, durationSec = 150)
+        val hourItem = timeItem.copy(id = 13L, sets = 1, durationSec = 3600)
+        setContent(success(listOf(minuteItem, compositeItem, hourItem)))
+
+        // Then — «2 мин»: нулевая часть секунд опускается
+        composeTestRule
+            .onNodeWithText("2 $minutesShort")
+            .assertIsDisplayed()
+
+        // Then — «4 х 2 мин 30 сек»: несколько подходов — через разделитель
+        composeTestRule
+            .onNodeWithText("4$separator" + "2 $minutesShort 30 $secondsShort")
+            .assertIsDisplayed()
+
+        // Then — «1 час»: слово «час» из plurals-ресурса
+        composeTestRule
+            .onNodeWithText(
+                context.resources.getQuantityString(R.plurals.entry_duration_hours, 1, 1)
+            ).assertIsDisplayed()
     }
 
     @Test

@@ -4,12 +4,13 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 /**
- * JVM-тесты форматтера значения записи главного экрана
- * (design Decision 3: форматтер — чистая функция с разделителем-параметром).
+ * JVM-тесты форматтера значения записи главного экрана.
  *
  * Локализованный разделитель (« х »/« x ») передаётся параметром —
  * функция тестируется без Android-ресурсов. В UI разделитель берётся
- * из `stringResource`.
+ * из `stringResource`. Значение — готовая к показу строка: повторы
+ * или отформатированная длительность (`formatDurationResource`); склейка
+ * тестируется отдельно от текста длительности.
  */
 class EntryValueFormatterTest {
     /** Локализованный разделитель для теста (ASCII — locale-neutral). */
@@ -20,7 +21,12 @@ class EntryValueFormatterTest {
         // Given — 4 подхода по 10 повторов
 
         // When
-        val result = formatEntryValue(sets = 4, value = 10, separator = separator)
+        val result =
+            formatEntryValue(
+                sets = 4,
+                value = "10",
+                separator = separator
+            )
 
         // Then — «4 x 10»
         assertEquals("4 x 10", result)
@@ -31,7 +37,12 @@ class EntryValueFormatterTest {
         // Given — 1 подход по 10 повторов
 
         // When
-        val result = formatEntryValue(sets = 1, value = 10, separator = separator)
+        val result =
+            formatEntryValue(
+                sets = 1,
+                value = "10",
+                separator = separator
+            )
 
         // Then — «10»
         assertEquals("10", result)
@@ -39,24 +50,50 @@ class EntryValueFormatterTest {
 
     @Test
     fun format_entry_value_when_multiple_sets_of_duration_then_sets_x_duration() {
-        // Given — 3 подхода по 20 секунд
+        // Given — 3 подхода по 20 секунд («20 сек» — готовый текст длительности)
 
         // When
-        val result = formatEntryValue(sets = 3, value = 20, separator = separator)
+        val result =
+            formatEntryValue(
+                sets = 3,
+                value = "20 сек",
+                separator = separator
+            )
 
-        // Then — «3 x 20»
-        assertEquals("3 x 20", result)
+        // Then — «3 x 20 сек»
+        assertEquals("3 x 20 сек", result)
+    }
+
+    @Test
+    fun format_entry_value_when_multiple_sets_minutes_and_seconds_then_both_parts() {
+        // Given — 4 подхода по 150 секунд
+
+        // When
+        val result =
+            formatEntryValue(
+                sets = 4,
+                value = "2 мин 30 сек",
+                separator = separator
+            )
+
+        // Then — «4 x 2 мин 30 сек»
+        assertEquals("4 x 2 мин 30 сек", result)
     }
 
     @Test
     fun format_entry_value_when_single_set_of_duration_then_only_duration() {
-        // Given — 1 подход длительностью 20 секунд
+        // Given — 1 подход длительностью 3600 секунд
 
         // When
-        val result = formatEntryValue(sets = 1, value = 20, separator = separator)
+        val result =
+            formatEntryValue(
+                sets = 1,
+                value = "1 час",
+                separator = separator
+            )
 
-        // Then — «20»
-        assertEquals("20", result)
+        // Then — «1 час» (без разделителя при одном подходе)
+        assertEquals("1 час", result)
     }
 
     @Test
@@ -64,7 +101,12 @@ class EntryValueFormatterTest {
         // Given — русский разделитель « х » (U+0445)
 
         // When
-        val result = formatEntryValue(sets = 4, value = 10, separator = " х ")
+        val result =
+            formatEntryValue(
+                sets = 4,
+                value = "10",
+                separator = " х "
+            )
 
         // Then
         assertEquals("4 х 10", result)

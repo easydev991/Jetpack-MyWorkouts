@@ -20,14 +20,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
 import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.ui.util.formatDurationResource
 
 /**
  * Переиспользуемая строка списка записей главного экрана
  * (workout-entries-list, design Decision 5).
  *
  * `Column` из двух строк: первая — «название — значение» (формат
- * «4 х 10»/«10» через [formatEntryValue], оба текста `FontWeight.Medium`
- * — design Decision 4), вторая — доп. вес: слева метка «Дополнительный
+ * «подходы × значение» через [formatEntryValue]: повторы — «4 х 10»,
+ * длительность — человекочитаемый текст [formatDurationResource] —
+ * «3 х 20 сек», «2 мин»; оба текста `FontWeight.Medium` — design
+ * Decision 4), вторая — доп. вес: слева метка «Дополнительный
  * вес» цветом `onSurfaceVariant`, справа значение («5 кг» через
  * [formatWeightKg] и ресурс `entry_list_weight_value`). Строка веса
  * рендерится только при `weightKg > 0.0`; без веса вид строки
@@ -52,10 +55,16 @@ internal fun EntryListItemRow(
     isSelected: Boolean,
     modifier: Modifier = Modifier
 ) {
+    // Тип значения различается: повторы или отформатированная длительность
+    // (spec «Формат значения записи»). «Оба null» недостижимо при валидной
+    // записи (`EntryValidator`); fallback «0» сохранён, чтобы ветка была
+    // тотальной.
     val value =
         formatEntryValue(
             sets = item.sets,
-            value = item.reps ?: item.durationSec ?: 0,
+            value =
+                item.reps?.toString()
+                    ?: formatDurationResource(item.durationSec ?: 0),
             separator = separator
         )
     val backgroundColor =
