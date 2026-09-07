@@ -58,6 +58,9 @@
     <string name="entry_duration_not_selected">Not selected</string>
     <string name="entry_save">Save</string>
     <string name="entry_save_error">Failed to save the entry</string>
+    <string name="entry_confirm_close_dialog_title">Close?</string>
+    <string name="entry_confirm_close_dialog_message">Unsaved changes will be lost</string>
+    <string name="entry_confirm_close">Close</string>
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
     <string name="entry_duration_minutes_short">min</string>

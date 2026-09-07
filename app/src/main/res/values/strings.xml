@@ -58,6 +58,9 @@
     <string name="entry_duration_not_selected">Не выбрана</string>
     <string name="entry_save">Сохранить</string>
     <string name="entry_save_error">Не удалось сохранить запись</string>
+    <string name="entry_confirm_close_dialog_title">Закрыть?</string>
+    <string name="entry_confirm_close_dialog_message">Несохранённые изменения будут потеряны</string>
+    <string name="entry_confirm_close">Закрыть</string>
     <string name="ok">ОК</string>
     <string name="cancel">Отмена</string>
     <string name="entry_duration_minutes_short">мин</string>

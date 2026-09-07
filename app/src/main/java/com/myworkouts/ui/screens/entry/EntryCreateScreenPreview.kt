@@ -294,3 +294,12 @@ internal fun SaveBottomBarPreview() {
         }
     }
 }
+
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun EntryCloseConfirmDialogPreview() {
+    JetpackMyWorkoutsTheme {
+        EntryCloseConfirmDialog(onConfirm = {}, onDismiss = {})
+    }
+}

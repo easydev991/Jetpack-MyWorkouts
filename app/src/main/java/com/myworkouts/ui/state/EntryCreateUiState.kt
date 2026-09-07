@@ -65,4 +65,26 @@ data class EntryCreateUiState(
      */
     val canSave: Boolean
         get() = formValid && (!isEditMode || hasChanges)
+
+    /**
+     * Вычисляемое «есть что терять» при закрытии экрана без сохранения:
+     * в режиме редактирования — [canSave] («валидная форма И есть отличия»);
+     * в режиме создания — отличие любого поля от дефолта (дата/время не
+     * учитываются — предзаполняются моментом открытия; вес сравнивается
+     * численно: «0», «0.0» — дефолт «без веса»).
+     *
+     * Сравнение значений, а не факта ввода: откат поля до дефолта гасит
+     * условие (add-entry-close-confirmation, design Decision 1).
+     */
+    val hasUnsavedChanges: Boolean
+        get() = if (isEditMode) canSave else createModeChanges
+
+    private val createModeChanges: Boolean
+        get() =
+            selectedExercise != null ||
+                setsText.toIntOrNull() != 1 ||
+                repsText.isNotEmpty() ||
+                durationSec != null ||
+                (weightText.toDoubleOrNull() ?: 0.0) != 0.0 ||
+                comment.isNotEmpty()
 }

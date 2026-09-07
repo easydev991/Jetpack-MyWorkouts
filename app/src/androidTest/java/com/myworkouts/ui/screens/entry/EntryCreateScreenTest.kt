@@ -20,6 +20,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
@@ -593,5 +594,192 @@ class EntryCreateScreenTest {
         composeTestRule
             .onNodeWithText(context.getString(R.string.entry_save))
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun content_when_unsaved_changes_and_back_arrow_clicked_then_confirm_dialog_shown() {
+        // Given — режим создания с несохранёнными изменениями (комментарий)
+        var backClicked = false
+        composeTestRule.setContent {
+            EntryCreateScreenContent(
+                state =
+                    stateFor(EntryCreateUiState(comment = "Хорошая техника"))
+                        .copy(onBackClick = { backClicked = true })
+            )
+        }
+
+        // When — тап по стрелке «назад» в TopAppBar
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.back))
+            .performClick()
+
+        // Then — диалог подтверждения виден, экран не закрыт
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_confirm_close_dialog_title))
+            .assertIsDisplayed()
+        assertTrue("Диалог показан — экран не должен закрыться сразу", !backClicked)
+    }
+
+    @Test
+    fun content_when_confirm_dialog_cancel_clicked_then_dialog_hidden_and_content_visible() {
+        // Given — диалог подтверждения открыт (есть изменения)
+        setContent(EntryCreateUiState(comment = "Хорошая техника"))
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.back))
+            .performClick()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_confirm_close_dialog_title))
+            .assertIsDisplayed()
+
+        // When — «Отмена»
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.cancel))
+            .performClick()
+
+        // Then — диалог скрыт, экран открыт с введёнными данными
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_confirm_close_dialog_title))
+            .assertCountEquals(0)
+        composeTestRule.onNodeWithText("Хорошая техника").assertIsDisplayed()
+    }
+
+    @Test
+    fun content_when_confirm_dialog_close_clicked_then_on_back_click_called() {
+        // Given — диалог подтверждения открыт (есть изменения)
+        var backClicked = false
+        composeTestRule.setContent {
+            EntryCreateScreenContent(
+                state =
+                    stateFor(EntryCreateUiState(comment = "Хорошая техника"))
+                        .copy(onBackClick = { backClicked = true })
+            )
+        }
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.back))
+            .performClick()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_confirm_close_dialog_title))
+            .assertIsDisplayed()
+
+        // When — «Закрыть»
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_confirm_close))
+            .performClick()
+
+        // Then — экран закрывается без сохранения
+        assertTrue("Подтверждение должно закрывать экран (onBackClick)", backClicked)
+    }
+
+    @Test
+    fun content_when_unsaved_changes_and_system_back_pressed_then_confirm_dialog_shown() {
+        // Given — режим создания с несохранёнными изменениями
+        setContent(EntryCreateUiState(comment = "Хорошая техника"))
+
+        // When — системная кнопка/жест «назад»
+        Espresso.pressBack()
+
+        // Then — тот же диалог подтверждения, что и для стрелки TopAppBar
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_confirm_close_dialog_title))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun content_when_no_changes_and_back_arrow_clicked_then_on_back_click_without_dialog() {
+        // Given — дефолтная форма создания (изменений нет)
+        var backClicked = false
+        composeTestRule.setContent {
+            EntryCreateScreenContent(
+                state = stateFor().copy(onBackClick = { backClicked = true })
+            )
+        }
+
+        // When — тап по стрелке «назад»
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.back))
+            .performClick()
+
+        // Then — экран закрылся сразу, без диалога
+        assertTrue("Без изменений стрелка должна закрывать экран сразу", backClicked)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_confirm_close_dialog_title))
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun content_when_edit_form_changed_valid_and_back_arrow_clicked_then_confirm_dialog_shown() {
+        // Given — режим редактирования: форма изменена и валидна
+        setContent(
+            EntryCreateUiState(
+                selectedExercise = repsExercise,
+                setsText = "3",
+                repsText = "10",
+                isEditMode = true,
+                hasChanges = true
+            )
+        )
+
+        // When — тап по стрелке «назад»
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.back))
+            .performClick()
+
+        // Then — диалог подтверждения
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_confirm_close_dialog_title))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun content_when_edit_form_changed_invalid_and_back_arrow_clicked_then_no_dialog() {
+        // Given — режим редактирования: форма изменена, но невалидна
+        // (очищены повторы) — canSave = false
+        var backClicked = false
+        composeTestRule.setContent {
+            EntryCreateScreenContent(
+                state =
+                    stateFor(
+                        EntryCreateUiState(
+                            selectedExercise = repsExercise,
+                            repsText = "",
+                            isEditMode = true,
+                            hasChanges = true
+                        )
+                    ).copy(onBackClick = { backClicked = true })
+            )
+        }
+
+        // When — тап по стрелке «назад»
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.back))
+            .performClick()
+
+        // Then — экран закрылся сразу, без диалога
+        assertTrue("Невалидная форма закрывается без диалога", backClicked)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_confirm_close_dialog_title))
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun content_when_save_clicked_then_no_confirm_dialog() {
+        // Given — валидная форма создания с изменениями
+        setContent(
+            EntryCreateUiState(
+                selectedExercise = repsExercise,
+                setsText = "3",
+                repsText = "10"
+            )
+        )
+
+        // When — тап по «Сохранить»
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_save))
+            .performClick()
+
+        // Then — путь сохранения не перехватывается: диалога нет
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_confirm_close_dialog_title))
+            .assertCountEquals(0)
     }
 }
