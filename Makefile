@@ -25,13 +25,28 @@ clean:
 	./gradlew clean
 
 # Тестирование
-## test: Запуск unit-тестов (JVM, без устройства)
-test:
-	./gradlew test --console=plain
+# $(1) — gradle-задача, $(2) — директория с XML-результатами
+define run_tests
+	@./gradlew $(1) --console=plain; BUILD_STATUS=$$?; \
+	if [ $$BUILD_STATUS -ne 0 ]; then \
+		echo ""; \
+		echo "================================================================================"; \
+		printf "$(RED)[FAIL] СБОРКА ПРОВАЛИЛАСЬ С ОШИБКАМИ$(RESET)\n"; \
+		echo "================================================================================"; \
+		exit 1; \
+	else \
+		echo ""; \
+		python3 scripts/test_report.py $(2); \
+	fi
+endef
 
-## android-test: Запуск интеграционных тестов на Android устройстве
+## test: Запуск unit-тестов (JVM, без устройства) со статистикой в консоли
+test:
+	$(call run_tests,test,app/build/test-results)
+
+## android-test: Запуск интеграционных тестов на Android устройстве со статистикой в консоли
 android-test:
-	./gradlew connectedDebugAndroidTest --console=plain
+	$(call run_tests,connectedDebugAndroidTest,app/build/outputs/androidTest-results/connected/debug)
 
 # Анализ кода
 ## lint: Запуск ktlint, detekt и markdownlint (проверка)

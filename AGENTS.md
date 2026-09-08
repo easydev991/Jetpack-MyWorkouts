@@ -36,6 +36,13 @@ DataStore, Room. Manual DI — без Hilt.
 
 `make test` — JVM. `make android-test` — на подключённом устройстве.
 
+**Запуск тестов — один прогон → один отчёт**: `make test` / `make android-test`
+уже вызывают `scripts/test_report.py` (статистика + список упавших).
+Повторно гонять `make` или `find … -name 'TEST-*.xml'` ради чтения того
+же отчёта — запрещено (минyты впустую). Перечитать отчёт без повторного
+прогона: `python3 scripts/test_report.py <dir>`. Полные правила —
+`.opencode/rules/test-execution.md`.
+
 **TDD для логики**: use-cases, ViewModel, репозитории, валидация —
 сначала падающий тест, потом реализация (red-green-refactor).
 Не применяется к верстке/навигации — там Compose UI-тесты по факту.
