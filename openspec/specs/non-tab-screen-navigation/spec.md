@@ -15,7 +15,8 @@ NOT contain `icon`, `titleResId`, or other UI metadata. Each subclass
 is an `object` with a unique `route` string. `Screen` SHALL be the
 single source of truth for navigation route strings; the navigation
 graph in `RootScreen` SHALL use `Screen.Main.route`, `Screen.More.route`,
-`Screen.Appearance.route` as the registered destinations.
+`Screen.Appearance.route`, `Screen.AppData.route` as the registered
+destinations.
 
 #### Scenario: Screen has only route parameter
 
@@ -28,6 +29,12 @@ graph in `RootScreen` SHALL use `Screen.Main.route`, `Screen.More.route`,
 - **WHEN** `Screen.Appearance` is referenced
 - **THEN** `Screen.Appearance.route == "appearance"`
 - **AND** `Screen.Appearance` is an `object` instance of `Screen`
+
+#### Scenario: AppData object added to sealed Screen
+
+- **WHEN** `Screen.AppData` is referenced
+- **THEN** `Screen.AppData.route == "app_data"`
+- **AND** `Screen.AppData` is an `object` instance of `Screen`
 
 ### Requirement: BottomTab data class holds tab UI metadata
 
