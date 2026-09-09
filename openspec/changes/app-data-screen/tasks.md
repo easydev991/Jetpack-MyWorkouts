@@ -1,16 +1,16 @@
 ## 1. Тестовая база и контракты данных
 
-- [ ] 1.1 Добавить в `gradle/libs.versions.toml` и `app/build.gradle.kts`
+- [x] 1.1 Добавить в `gradle/libs.versions.toml` и `app/build.gradle.kts`
   test-зависимость `org.json:json` (`testImplementation`) — дизайн
   Decision 1; проверить: `make test` собирается, существующие тесты зелёные
-- [ ] 1.2 Создать типы: `domain/model/BackupImportResult.kt`
+- [x] 1.2 Создать типы: `domain/model/BackupImportResult.kt`
   (`addedExercises`, `addedEntries`), `domain/model/BackupEntry.kt`
   (запись с `exerciseName` вместо `exerciseId`, без `modifiedAt` —
   Decision 6) и `domain/usecase/BackupException.kt` вместе с
   `enum class BackupError { EXPORT, INVALID_FILE, IMPORT, DELETE }`
   (русские сообщения) — дизайн Decisions 3–6; проверить:
   компиляция `./gradlew compileDebugKotlin`
-- [ ] 1.3 Объявить новые методы интерфейса `WorkoutDataRepository`:
+- [x] 1.3 Объявить новые методы интерфейса `WorkoutDataRepository`:
   `getAllExercises`, `getAllEntries`, `importData`, `deleteAllData`
   (сигнатуры — дизайн Decision 6) и сразу добавить компилирующиеся заглушки-реализации
   `RoomWorkoutDataRepository` (`TODO()`-тела; полная реализация —
@@ -20,7 +20,7 @@
   `SectionsFakeRepository` в `MainScreenSectionsTest` (заглушки
   `TODO()`/`error(...)` достаточно); проверить: `make lint` и
   `./gradlew compileDebugAndroidTestKotlin` проходят
-- [ ] 1.4 Расширить оба fake-репозитория JVM-тестов новыми методами на
+- [x] 1.4 Расширить оба fake-репозитория JVM-тестов новыми методами на
   `MutableStateFlow` — только чтобы существующие тесты компилировались —
   `MainViewModelFakeRepository`
   (`MainViewModelTest.kt`) и `FakeWorkoutDataRepository`
@@ -29,7 +29,7 @@
 
 ## 2. Экспорт: тесты (red)
 
-- [ ] 2.1 Создать компилирующийся скелет `ExportBackupUseCase`
+- [x] 2.1 Создать компилирующийся скелет `ExportBackupUseCase`
   (сигнатура из дизайна Decision 3, `TODO()`-тела), затем написать
   падающий `ExportBackupUseCaseTest`
   (`app/src/test/java/com/myworkouts/domain/usecase/`): сборка JSON
@@ -38,13 +38,13 @@
   `exerciseName` без id БД, `null`-поля сериализуются, отступ 2,
   человекочитаемость — дизайн Decision 2; проверить: тест падает
   (`TODO()`-тела скелета), `make test` компилируется
-- [ ] 2.2 Дополнить тест: экспорт пустых данных даёт валидный файл с
+- [x] 2.2 Дополнить тест: экспорт пустых данных даёт валидный файл с
   пустыми массивами, ошибка репозитория → `Result.failure`;
   проверить: красный перед реализацией
 
 ## 3. Экспорт: реализация (green)
 
-- [ ] 3.1 Реализовать сборку JSON (чистая функция над
+- [x] 3.1 Реализовать сборку JSON (чистая функция над
   `List<Exercise>` / `List<ExerciseEntry>` через `org.json`) и
   `ExportBackupUseCase`: снимок через `getAllExercises` /
   `getAllEntries`, запись в `contentResolver.openOutputStream(uri)` на
@@ -53,7 +53,7 @@
 
 ## 4. Импорт: тесты (red)
 
-- [ ] 4.1 Создать компилирующийся скелет `ImportBackupUseCase`
+- [x] 4.1 Создать компилирующийся скелет `ImportBackupUseCase`
   (сигнатура из дизайна Decision 3, `TODO()`-тела), затем написать
   падающий `ImportBackupUseCaseTest`: корректный файл —
   новые упражнения добавлены, существующие по имени
@@ -62,24 +62,24 @@
   дедуплицируются по
   содержимому, запись связывается с упражнением по имени (дубликат имени
   не создаёт новое упражнение) — дизайн Decision 4; проверить: красный
-- [ ] 4.2 Дополнить тесты merge: запись без упражнения (ни в файле, ни в
+- [x] 4.2 Дополнить тесты merge: запись без упражнения (ни в файле, ни в
   каталоге) пропускается без провала импорта, и use-case передаёт в
   `importData` только записи с разрешённым именем (неразрешимое имя не
   доходит до репозитория — его `IllegalStateException`-защита не
   срабатывает); запись, не прошедшая
   `EntryValidator`, пропускается; повторный импорт того же файла
   идемпотентен (счётчики добавлений = 0); проверить: красный
-- [ ] 4.3 Дополнить тесты ошибок файла: не-JSON, отсутствие/неверный тип
+- [x] 4.3 Дополнить тесты ошибок файла: не-JSON, отсутствие/неверный тип
   `version`/`exercises`/`entries`, `version != 1`, элемент без
   обязательных полей, неизвестное значение enum — `Result.failure(
   BackupException)`, данные fake-репозитория не изменились; проверить:
   красный
-- [ ] 4.4 Дополнить тест: неизвестные поля объектов игнорируются,
+- [x] 4.4 Дополнить тест: неизвестные поля объектов игнорируются,
   импорт успешен; проверить: красный
 
 ## 5. Импорт: реализация (green)
 
-- [ ] 5.1 Реализовать парсер JSON (валидация — дизайн Decision 5) и
+- [x] 5.1 Реализовать парсер JSON (валидация — дизайн Decision 5) и
   `ImportBackupUseCase`: чтение `openInputStream` на `Dispatchers.IO`,
   полный парсинг до записи, merge-алгоритм Decision 4, транзакционная
   вставка через `repository.importData`, возврат
@@ -87,7 +87,7 @@
 
 ## 6. Репозиторий и DAO (androidTest → реализация)
 
-- [ ] 6.1 Объявить DAO-методы (`ExerciseDao.getAll/deleteAll`,
+- [x] 6.1 Объявить DAO-методы (`ExerciseDao.getAll/deleteAll`,
   `ExerciseEntryDao.getAll/deleteAll/insertAll`) — Room-декларации
   компилируются сразу (реализация — аннотации), затем написать androidTest:
   DAO-методы возвращают/пишут корректные данные; `deleteAllData`
@@ -97,7 +97,7 @@
   `IllegalStateException` внутри транзакции → откат; unique-индекса на
   имени упражнения в БД нет); проверить: тесты
   репозитория красные (`TODO()`-заглушки задачи 1.3), DAO-тесты зелёные
-- [ ] 6.2 Реализовать `RoomWorkoutDataRepository` на объявленных в 6.1
+- [x] 6.2 Реализовать `RoomWorkoutDataRepository` на объявленных в 6.1
   DAO-методах:
   конструктор-параметры `database: WorkoutDatabase` и
   `standardExercises: List<StandardExercise>`, `withTransaction` для
@@ -111,7 +111,7 @@
 
 ## 7. ViewModel: тесты (red) → реализация (green)
 
-- [ ] 7.1 Создать компилирующиеся скелеты `AppDataUiState` (data class
+- [x] 7.1 Создать компилирующиеся скелеты `AppDataUiState` (data class
   с полями из дизайна Decision 7) и `AppDataViewModel` (companion
   `factory`, `TODO()`-тела), затем написать падающий
   `AppDataViewModelTest`
@@ -126,7 +126,7 @@
   `MainDispatcherRule` (`Dispatchers.setMain`/`resetMain`,
   `StandardTestDispatcher`) и `advanceUntilIdle()` после действий;
   проверить: красный
-- [ ] 7.2 Реализовать `ui/state/AppDataUiState.kt` и
+- [x] 7.2 Реализовать `ui/state/AppDataUiState.kt` и
   `ui/viewmodel/AppDataViewModel.kt` с companion
   `factory(repository, context)` (образец — `AppearanceViewModel`;
   фабрика сохраняет `context.applicationContext` и создаёт use-case'ы):
@@ -136,7 +136,7 @@
 
 ## 8. Строки и навигация
 
-- [ ] 8.1 Добавить строки ru (`values/strings.xml`, значения по
+- [x] 8.1 Добавить строки ru (`values/strings.xml`, значения по
   умолчанию) + en (`values-en/strings.xml`): `app_data`, `create_backup`,
   `restore_from_backup`, `delete_all_data`, `delete_all_dialog_text`,
   текст и кнопки диалога удаления (новый ключ `delete`; `cancel` уже
@@ -145,7 +145,7 @@
   `error_invalid_backup`, `error_delete_failed`) — навык
   `localization`; проверить:
   `make lint` без предупреждений о MissingTranslation
-- [ ] 8.2 Маршрут `object AppData : Screen(route = "app_data")` в
+- [x] 8.2 Маршрут `object AppData : Screen(route = "app_data")` в
   `navigation/Screen.kt`; кнопка «Данные приложения» на `MoreScreen` (по
   образцу кнопки «Оформление приложения», `navigate(Screen.AppData.route)
   { popUpTo(Screen.More.route) }`); destination в `RootScreen`
@@ -154,7 +154,7 @@
 
 ## 9. Экран «Данные приложения»
 
-- [ ] 9.1 Реализовать `ui/screens/appdata/AppDataScreen.kt` (+ отдельный
+- [x] 9.1 Реализовать `ui/screens/appdata/AppDataScreen.kt` (+ отдельный
   `AppDataScreenPreview.kt`) и зарегистрировать composable-destination
   `Screen.AppData.route` в `RootScreen` рядом с Appearance: TopAppBar со
   стрелкой назад, три кнопки; ViewModel — через
@@ -169,11 +169,11 @@
   Decision 7, спека `app-data-management`; проверить: ручная проверка на
   эмуляторе по сценариям спеки (экспорт, импорт, отмена диалога,
   удаление, тосты, нижняя панель скрыта на экране)
-- [ ] 9.2 Preview светлая + тёмная тема, `showBackground = true`,
+- [x] 9.2 Preview светлая + тёмная тема, `showBackground = true`,
   `locale = "ru"`, ключевые состояния рядом (есть данные / нет данных /
   операция идёт) — конвенция AGENTS.md; проверить: превью рендерятся в
   IDE/`make lint`
-- [ ] 9.3 Написать androidTest экрана (`AppDataScreenTest`): заголовок,
+- [x] 9.3 Написать androidTest экрана (`AppDataScreenTest`): заголовок,
   кнопки скрыты при `!hasData` (пустой каталог без кастомных упражнений),
   кнопка экспорта видима при наличии только кастомных упражнений, диалог
   удаления открывается/отменяется,
@@ -182,15 +182,15 @@
   семантику кнопки (видимость/кликабельность; пиксельные проверки цвета
   в проекте не применяются); проверить: зелёный
   `make android-test`
-- [ ] 9.4 Написать androidTest кнопки на «Ещё» (текст ru, навигация на
+- [x] 9.4 Написать androidTest кнопки на «Ещё» (текст ru, навигация на
   `app_data`, нижняя панель скрыта на destination) по образцу
   `MoreScreenTest`; проверить: зелёный `make android-test`
 
 ## 10. Финальная проверка
 
-- [ ] 10.1 Прогнать `make format && make lint && make test` и
+- [x] 10.1 Прогнать `make format && make lint && make test` и
   `make android-test` на подключённом устройстве — всё зелёное
-- [ ] 10.2 Пройти по сценариям `specs/app-data-management/spec.md` и
+- [x] 10.2 Пройти по сценариям `specs/app-data-management/spec.md` и
   дельт `more-screen`, `workout-data`, `non-tab-screen-navigation`:
   каждый сценарий подтверждён тестом или ручной
   проверкой; отметить расхождения в `design.md` или исправить код

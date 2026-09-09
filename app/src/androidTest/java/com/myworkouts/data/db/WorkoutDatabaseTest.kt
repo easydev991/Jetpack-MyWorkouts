@@ -42,13 +42,11 @@ class WorkoutDatabaseTest {
 
     @Before
     fun setUp() {
-        // Тесты сценария «Первый запуск» должны находить чистую базу:
-        // production-фабрика открывает файловую БД устройства, где могли
-        // остаться записи от ручной проверки — удаляем файл до открытия.
+        // In-memory-БД: проверяем production-настройку и prepopulate,
+        // не затирая файл данных приложения на устройстве
         val ctx = ruContext()
-        ctx.getDatabasePath(WorkoutDatabase.DATABASE_NAME).delete()
         database =
-            WorkoutDatabase.create(
+            WorkoutDatabase.createInMemory(
                 context = ctx,
                 standardExercises = standardExercises(ctx)
             )
@@ -196,14 +194,13 @@ class WorkoutDatabaseTest {
                     .size
             assertEquals(13, firstCount)
 
-            // When — закрываем БД и открываем новую (callback.onCreate
-            // сработает только при первом создании файла; для in-memory
-            // каждое открытие — новый «файл», проверка sanity-чек: контракт
-            // «ровно 13» не нарушается).
+            // When — закрываем БД и открываем новую: callback.onCreate
+            // срабатывает при каждом создании in-memory-базы, поэтому
+            // контракт «ровно 13» проверяется на свежем экземпляре
             database.close()
             val ctx = ruContext()
             database =
-                WorkoutDatabase.create(
+                WorkoutDatabase.createInMemory(
                     context = ctx,
                     standardExercises = standardExercises(ctx)
                 )

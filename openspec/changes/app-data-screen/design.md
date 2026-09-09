@@ -101,7 +101,7 @@
 JSON; при ошибке файл, созданный SAF, остаётся пустым — это шум, но не
 потеря данных (SAF URI одноразовый).
 - `ImportBackupUseCase(repository, context)`: `suspend operator fun
-  invoke(uri: Uri): Result<BackupImportResult>` — чтение
+  invoke(uri: Uri): Result<Unit>` — чтение
   `openInputStream` на `Dispatchers.IO`, парсинг (Decision 5), merge
   (Decision 4) через `importData(...)`.
 - Удаление всех данных — единственный вызов
@@ -110,7 +110,7 @@ JSON; при ошибке файл, созданный SAF, остаётся п�
   (как `MainViewModel` вызывает `deleteEntry`).
 
 Своё исключение `BackupException(message, error)` — `error: BackupError`,
-`enum class BackupError { EXPORT, INVALID_FILE, IMPORT, DELETE }`
+`enum class BackupError { EXPORT, INVALID_FILE }`
 (рядом с исключением в `domain/usecase/`); русское
 `message` — только для лога, пользовательский текст локализуется в UI по
 `error` (Decision 7). Ошибки БД проходят в `Result.failure` как есть,
@@ -157,8 +157,8 @@ data-адаптер — при появлении второй точки пот
    (в) записи, не прошедшие `EntryValidator` против разрешённого
    упражнения (`measuredBy`). Пропуск записи не роняет импорт —
    файл собственного формата мог быть отредактирован вручную.
-4. Итог — `BackupImportResult(addedExercises, addedEntries)` для тестов
-   и лога; тост успеха — простая строка без счётчиков (Decision 7).
+4. Итог — `Result<Unit>` от `importData`; тост успеха — простая строка
+   без счётчиков (Decision 7).
 
 Диалог подтверждения не нужен: операция только добавляет, откат =
 «Удалить все данные».
@@ -195,10 +195,9 @@ data-адаптер — при появлении второй точки пот
 - `suspend fun getAllEntries(): Result<List<ExerciseEntry>>`
 - `suspend fun importData(exercises: List<Exercise>, entries:
   List<BackupEntry>): Result<Unit>` — вставляет только
-  переданное (дедупликация, валидация и подсчёт `BackupImportResult` —
+  переданное (дедупликация и валидация —
   задача use-case по своему снимку каталога, Decision 4; репозиторий —
-  чистое хранение, счётчики из него дублировали бы размеры переданных
-  списков). `BackupEntry` (`domain/model`) — запись без `exerciseId` и
+  чистое хранение). `BackupEntry` (`domain/model`) — запись без `exerciseId` и
   `modifiedAt`, но с `exerciseName`: ровно поля элемента `entries` файла.
   Репозиторий внутри транзакции сам разрешает имена → id: вставляет
   упражнения одиночными `insert` в цикле (каждый возвращает id), строит
@@ -365,9 +364,9 @@ DAO от другой базы сделал бы `androidx.room.withTransaction`
   принято для MVP; учёт правок через сравнение с каноническим набором —
   при запросах.
 - [Пропуск «плохих» элементов при импорте может пройти незамеченным] →
-  счётчики `BackupImportResult` пишутся в лог; тост успеха — без
-  счётчиков (простые строки, без plurals); пропущенное не теряется
-  молча — его просто нет.
+  принято осознанно: счётчиков нет (читателей не было, см. амендмент
+  о код-ревью), тост успеха — простая строка (без plurals);
+  пропущенное не теряется молча — его просто нет.
 - [`org.json:json` в testImplementation отличается от Android-реализации
   в редких edge-cases] → схема использует только базовые
   `JSONObject`/`JSONArray` операции; расхождение на них неизвестно.
@@ -381,3 +380,32 @@ DAO от другой базы сделал бы `androidx.room.withTransaction`
 Схема БД и существующие данные не затрагиваются; откат — revert коммита.
 Формат `version: 1` фиксируется с первого релиза фичи: будущие изменения
 формата обязаны читать `1` или отказываться с понятной ошибкой.
+
+## Amendments (по итогам ручной проверки)
+
+- [Кнопки экрана «Данные приложения» — по ширине текста, по центру
+  колонки] → паддинг кнопок из
+  `button_horizontal_padding`, интервал — `spacing_xxsmall` через
+  `Column.spacedBy`; контент-логика (`AppDataButtons`/
+  `DeleteAllDialog`) вынесена из `AppDataScreenContent` в бюджет
+  detekt.
+- [Интервал между кнопками экрана «Ещё» — единый] → задаётся один раз
+  в `Column` через `Arrangement.spacedBy(spacing_xxsmall)`;
+  `NavigationButtons` (вынесенные кнопки «Оформление»/«Данные») не имеют
+  layout-обёртки и являются прямыми measurables колонки, отдельные
+  `Spacer` убраны.
+- [`WorkoutDatabaseTest` не трогает файл прод-БД] → добавлена
+  тест-фабрика `WorkoutDatabase.createInMemory` (та же настройка и
+  prepopulate, что в `create`, сид-callback выделен в `seedCallback`);
+  прежний setUp с `getDatabasePath(DATABASE_NAME).delete()` стирал
+  данные приложения при каждом полном `make android-test`.
+- [Мёртвый код по итогам код-ревью] → `BackupError` сокращён до
+  `{ EXPORT, INVALID_FILE }`: IMPORT/DELETE никогда не конструировались,
+  when-ветки ViewModel были недостижимы. `BackupImportResult` удалён —
+  счётчики не имели читателей, `ImportBackupUseCase.invoke` возвращает
+  `Result<Unit>`, идемпотентность в тестах проверяется по аргументам
+  вызовов `importData` (пустые списки на повторе). Описания задач 1.2,
+  4.2 и 5.1 в `tasks.md` отражают состояние на момент их выполнения
+  и задним числом не переписываются. Инлайн `NavigationButtons` в
+  `Column` рассмотрён и отклонён: тело `MoreScreen` превысило бы
+  detekt `LongMethod: 60` при экономии ~9 строк.

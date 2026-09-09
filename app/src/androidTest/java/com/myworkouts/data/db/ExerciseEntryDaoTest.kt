@@ -199,4 +199,51 @@ class ExerciseEntryDaoTest {
 
             collectJob.cancel()
         }
+
+    @Test
+    fun getAll_returnsSnapshotOfAllEntries() =
+        runBlocking {
+            // Given — две записи с разными датами
+            entryDao.insert(sampleEntry(existingExerciseId))
+            entryDao.insert(sampleEntry(existingExerciseId).copy(date = 1_700_000_100_000L))
+
+            // When
+            val snapshot = entryDao.getAll()
+
+            // Then — обе в снимке, поля доезжают без потерь
+            assertEquals(2, snapshot.size)
+            assertTrue(snapshot.all { it.exerciseId == existingExerciseId })
+            assertTrue(snapshot.any { it.date == 1_700_000_100_000L })
+        }
+
+    @Test
+    fun insertAll_writesEveryEntity() =
+        runBlocking {
+            // Given
+            val entries =
+                listOf(
+                    sampleEntry(existingExerciseId),
+                    sampleEntry(existingExerciseId).copy(sets = 5)
+                )
+
+            // When
+            entryDao.insertAll(entries)
+
+            // Then
+            assertEquals(2, entryDao.getAll().size)
+            assertTrue(entryDao.getAll().any { it.sets == 5 })
+        }
+
+    @Test
+    fun deleteAll_removesEveryRow() =
+        runBlocking {
+            // Given
+            entryDao.insert(sampleEntry(existingExerciseId))
+
+            // When
+            entryDao.deleteAll()
+
+            // Then
+            assertTrue(entryDao.getAll().isEmpty())
+        }
 }

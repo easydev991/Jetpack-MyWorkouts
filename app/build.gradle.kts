@@ -65,6 +65,9 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
+    // Эталонная реализация org.json для JVM unit-тестов: в android.jar это
+    // заглушки, бросающие "not mocked" (app-data-screen, design Decision 1).
+    testImplementation(libs.org.json)
     testRuntimeOnly(libs.junit.platform.launcher)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

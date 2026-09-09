@@ -54,4 +54,25 @@ interface ExerciseEntryDao {
     /** Удаляет запись по идентификатору. Отсутствующий id — успех без эффекта. */
     @Query("DELETE FROM exercise_entries WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    /**
+     * Разовый снимок всех записей — для экспорта и дедупликации импорта
+     * (app-data-screen, design Decision 6).
+     */
+    @Query("SELECT * FROM exercise_entries")
+    suspend fun getAll(): List<ExerciseEntryEntity>
+
+    /**
+     * Массовая вставка подготовленных записей внутри транзакции `importData`
+     * (app-data-screen, design Decision 6).
+     */
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(entities: List<ExerciseEntryEntity>)
+
+    /**
+     * Удаляет все записи. Только внутри транзакций массовых операций
+     * (app-data-screen, design Decision 6).
+     */
+    @Query("DELETE FROM exercise_entries")
+    suspend fun deleteAll()
 }

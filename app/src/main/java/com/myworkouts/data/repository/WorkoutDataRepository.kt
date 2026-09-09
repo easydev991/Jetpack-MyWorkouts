@@ -1,5 +1,6 @@
 package com.myworkouts.data.repository
 
+import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
@@ -12,7 +13,12 @@ import kotlinx.coroutines.flow.Flow
  * нужен для fake-репозитория на `MutableStateFlow` в JVM-тестах ViewModel
  * (design.md Decision 1 change `entry-create-screen`). API реактивный там,
  * где нужен список (`Flow`), и `suspend` + `Result` для точечных операций.
+ *
+ * `TooManyFunctions` подавлен осознанно: 13 методов — точечные операции
+ * экранов + снимки и массовые операции управления данными
+ * (app-data-screen); единый контракт вместо интерфейсов под каждый экран.
  */
+@Suppress("TooManyFunctions")
 interface WorkoutDataRepository {
     /**
      * Возвращает реактивный список упражнений каталога, отфильтрованный
@@ -57,4 +63,43 @@ interface WorkoutDataRepository {
      * таблицы записей.
      */
     fun entries(): Flow<List<EntryListItem>>
+
+    /**
+     * Разовый снимок всего каталога упражнений — стандартных и
+     * пользовательских (app-data-screen, design Decision 6). Отдельный
+     * метод вместо `exercises("").first()`: `exercises(query)` —
+     * UI-поисковый `Flow` с LIKE-фильтром, разовый снимок через него —
+     * неявная семантика. Для экспорта и дедупликации импорта.
+     */
+    suspend fun getAllExercises(): Result<List<Exercise>>
+
+    /**
+     * Разовый снимок всех записей о выполнении (app-data-screen, design
+     * Decision 6) — для экспорта и дедупликации импорта.
+     */
+    suspend fun getAllEntries(): Result<List<ExerciseEntry>>
+
+    /**
+     * Транзакционная вставка подготовленных use-case'ом данных
+     * (app-data-screen, design Decision 6): дедупликация и валидация —
+     * задача use-case, репозиторий отвечает только за хранение. Внутри
+     * той же транзакции разрешает `exerciseName` в id (вставленные
+     * упражнения — одиночными insert с возвратом id); неразрешимое имя —
+     * защита от бага use-case. При любой ошибке — откат без частичных
+     * вставок.
+     */
+    suspend fun importData(
+        exercises: List<Exercise>,
+        entries: List<BackupEntry>
+    ): Result<Unit>
+
+    /**
+     * Массовый сброс (app-data-screen, design Decision 6): удаляет все
+     * записи и все упражнения одной транзакцией и восстанавливает
+     * стандартный набор (`isCustom = false`). Единственное намеренное
+     * исключение из правила «стандартное упражнение нельзя удалить»:
+     * работает на уровне DAO внутри транзакции, а не через
+     * [deleteExercise].
+     */
+    suspend fun deleteAllData(): Result<Unit>
 }

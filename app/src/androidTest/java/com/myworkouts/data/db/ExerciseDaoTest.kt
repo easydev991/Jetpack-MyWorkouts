@@ -144,4 +144,43 @@ class ExerciseDaoTest {
             // Then
             assertEquals(first[0].name, byId?.name)
         }
+
+    @Test
+    fun getAll_returnsWholeCatalog_asSnapshot() =
+        runBlocking {
+            // Given — в setUp вставлено 4 упражнения
+
+            // When
+            val snapshot = dao.getAll()
+
+            // Then — полный снимок без фильтра и сортировки поиска
+            assertEquals(4, snapshot.size)
+            assertTrue(snapshot.any { it.name == "Подтягивания" && !it.isCustom })
+        }
+
+    @Test
+    fun getAll_onEmptyCatalog_returnsEmptyList() =
+        runBlocking {
+            // Given
+            dao.deleteAll()
+
+            // When
+            val snapshot = dao.getAll()
+
+            // Then
+            assertTrue(snapshot.isEmpty())
+        }
+
+    @Test
+    fun deleteAll_removesEveryRow() =
+        runBlocking {
+            // Given — 4 упражнения из setUp
+
+            // When
+            dao.deleteAll()
+
+            // Then
+            assertTrue(dao.getAll().isEmpty())
+            assertEquals(0, dao.observeExercises("").first().size)
+        }
 }

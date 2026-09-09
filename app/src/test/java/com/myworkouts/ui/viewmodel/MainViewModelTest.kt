@@ -1,6 +1,7 @@
 package com.myworkouts.ui.viewmodel
 
 import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
@@ -68,6 +69,25 @@ private class MainViewModelFakeRepository(
     }
 
     override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
+
+    // Новые методы контракта (app-data-screen, задача 1.4): реализованы на
+    // состоянии Flow только для компиляции существующих тестов — MainViewModel
+    // их не вызывает; запись-Entity фейк не хранит, снимок записей пуст.
+
+    override suspend fun getAllExercises(): Result<List<Exercise>> = Result.success(catalog.value)
+
+    override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = Result.success(emptyList())
+
+    override suspend fun importData(
+        exercises: List<Exercise>,
+        entries: List<BackupEntry>
+    ): Result<Unit> = Result.success(Unit)
+
+    override suspend fun deleteAllData(): Result<Unit> {
+        entriesFlow.value = emptyList()
+        catalog.value = emptyList()
+        return Result.success(Unit)
+    }
 }
 
 /**

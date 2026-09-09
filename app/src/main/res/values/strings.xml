@@ -82,4 +82,19 @@
     <string name="entry_list_weight_label">Дополнительный вес</string>
     <string name="entry_list_weight_value">%1$s кг</string>
     <string name="entry_section_yesterday">Вчера</string>
+
+    <!-- App data screen (экспорт, восстановление, удаление данных) -->
+    <string name="app_data">Данные приложения</string>
+    <string name="create_backup">Создать резервную копию</string>
+    <string name="restore_from_backup">Восстановить из резервной копии</string>
+    <string name="delete_all_data">Удалить все данные</string>
+    <string name="delete_all_dialog_text">Все записи и пользовательские упражнения будут удалены без возможности отмены. Стандартный набор упражнений будет восстановлен.</string>
+    <string name="delete">Удалить</string>
+    <string name="backup_created">Резервная копия создана</string>
+    <string name="backup_restored">Данные восстановлены из резервной копии</string>
+    <string name="all_data_deleted">Все данные удалены</string>
+    <string name="error_export_failed">Не удалось создать резервную копию</string>
+    <string name="error_import_failed">Не удалось восстановить данные</string>
+    <string name="error_invalid_backup">Файл не является резервной копией или повреждён</string>
+    <string name="error_delete_failed">Не удалось удалить данные</string>
 </resources>

@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -21,10 +22,12 @@ import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.navigation.BottomTabs
 import com.myworkouts.navigation.Screen
+import com.myworkouts.ui.screens.appdata.AppDataScreen
 import com.myworkouts.ui.screens.appearance.AppearanceScreen
 import com.myworkouts.ui.screens.entry.EntryCreateScreen
 import com.myworkouts.ui.screens.main.MainScreen
 import com.myworkouts.ui.screens.more.MoreScreen
+import com.myworkouts.ui.viewmodel.AppDataViewModel
 import com.myworkouts.ui.viewmodel.AppearanceViewModel
 import com.myworkouts.ui.viewmodel.EntryCreateViewModel
 import com.myworkouts.ui.viewmodel.MainViewModel
@@ -96,6 +99,16 @@ fun RootScreen(
                     viewModel =
                         viewModel(
                             factory = AppearanceViewModel.factory(dataStore)
+                        ),
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.AppData.route) {
+                val context = LocalContext.current
+                AppDataScreen(
+                    viewModel =
+                        viewModel(
+                            factory = AppDataViewModel.factory(repository, context)
                         ),
                     onBackClick = { navController.popBackStack() }
                 )

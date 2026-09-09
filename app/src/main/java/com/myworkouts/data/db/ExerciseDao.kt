@@ -51,4 +51,20 @@ interface ExerciseDao {
     /** Удаляет упражнение по идентификатору. Отсутствующий id — успех без эффекта. */
     @Query("DELETE FROM exercises WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    /**
+     * Разовый снимок всего каталога без поискового фильтра и сортировки —
+     * для экспорта и дедупликации импорта (app-data-screen, design
+     * Decision 6).
+     */
+    @Query("SELECT * FROM exercises")
+    suspend fun getAll(): List<ExerciseEntity>
+
+    /**
+     * Удаляет все упражнения каталога. Только внутри транзакции
+     * `deleteAllData` (app-data-screen, design Decision 6): FK не даст
+     * выполниться, пока в БД есть записи.
+     */
+    @Query("DELETE FROM exercises")
+    suspend fun deleteAll()
 }

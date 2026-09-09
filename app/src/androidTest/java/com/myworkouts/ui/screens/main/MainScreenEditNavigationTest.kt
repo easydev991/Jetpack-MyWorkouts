@@ -17,6 +17,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
@@ -103,6 +104,17 @@ class MainScreenEditNavigationTest {
             override suspend fun deleteEntry(id: Long): Result<Unit> = Result.success(Unit)
 
             override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
+
+            override suspend fun getAllExercises(): Result<List<Exercise>> = error("Не используется в этом тесте")
+
+            override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = error("Не используется в этом тесте")
+
+            override suspend fun importData(
+                exercises: List<Exercise>,
+                entries: List<BackupEntry>
+            ): Result<Unit> = error("Не используется в этом тесте")
+
+            override suspend fun deleteAllData(): Result<Unit> = error("Не используется в этом тесте")
         }
 
     /**

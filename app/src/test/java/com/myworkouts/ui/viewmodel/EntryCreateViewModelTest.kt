@@ -1,6 +1,7 @@
 package com.myworkouts.ui.viewmodel
 
 import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
@@ -75,6 +76,20 @@ private class FakeWorkoutDataRepository(
     override suspend fun deleteEntry(id: Long): Result<Unit> = Result.success(Unit)
 
     override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
+
+    // Новые методы контракта (app-data-screen, задача 1.4): заглушки на
+    // состоянии Flow для компиляции — EntryCreateViewModel их не вызывает.
+
+    override suspend fun getAllExercises(): Result<List<Exercise>> = Result.success(catalog.value)
+
+    override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = Result.success(emptyList())
+
+    override suspend fun importData(
+        exercises: List<Exercise>,
+        entries: List<BackupEntry>
+    ): Result<Unit> = Result.success(Unit)
+
+    override suspend fun deleteAllData(): Result<Unit> = Result.success(Unit)
 }
 
 /**

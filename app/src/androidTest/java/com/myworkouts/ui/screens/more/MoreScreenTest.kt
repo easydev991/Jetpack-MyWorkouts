@@ -15,6 +15,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.BuildConfig
 import com.myworkouts.R
+import com.myworkouts.navigation.BottomTabs
 import com.myworkouts.navigation.Screen
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -37,8 +38,8 @@ class MoreScreenTest {
 
     /**
      * Test-Harness: оборачивает [MoreScreen] в `NavHost` с двумя
-     * destinations — [Screen.More] (стартовый) и [Screen.Appearance]
-     * (заглушка). Без графа `navigate(...)` бросает
+     * destinations — [Screen.More] (стартовый) и [Screen.Appearance]/
+     * [Screen.AppData] (заглушки). Без графа `navigate(...)` бросает
      * `IllegalArgumentException: Navigation graph has not been set`,
      * потому что production-код вызывает `popUpTo(Screen.More.route)`,
      * что требует зарегистрированного маршрута.
@@ -52,6 +53,9 @@ class MoreScreenTest {
                 MoreScreen(navController = navController)
             }
             composable(Screen.Appearance.route) {
+                // Заглушка — реальный экран тестируется отдельно.
+            }
+            composable(Screen.AppData.route) {
                 // Заглушка — реальный экран тестируется отдельно.
             }
         }
@@ -83,6 +87,64 @@ class MoreScreenTest {
         composeTestRule
             .onNodeWithText(context.getString(R.string.feedback_send))
             .assertIsDisplayed()
+    }
+
+    /**
+     * Проверяет, что кнопка «Данные приложения» (ru) отображается на
+     * экране (app-data-screen, спека more-screen).
+     */
+    @Test
+    fun more_screen_when_displayed_then_shows_app_data_button() {
+        // Given
+        composeTestRule.setContent {
+            MoreScreenWithNavHost()
+        }
+
+        // Then
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.app_data))
+            .assertIsDisplayed()
+    }
+
+    /**
+     * Проверяет, что клик по кнопке «Данные приложения» переводит
+     * навигацию на маршрут [Screen.AppData].
+     */
+    @Test
+    fun more_screen_when_app_data_button_clicked_then_navigates_to_app_data_route() {
+        // Given
+        lateinit var navController: NavHostController
+        composeTestRule.setContent {
+            MoreScreenWithNavHost(onControllerReady = { navController = it })
+        }
+
+        // When
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.app_data))
+            .performClick()
+
+        // Then
+        composeTestRule.waitForIdle()
+        val actualRoute = navController.currentDestination?.route
+        assert(actualRoute == Screen.AppData.route) {
+            "Ожидался переход на маршрут \"${Screen.AppData.route}\", " +
+                "но текущий маршрут — \"$actualRoute\""
+        }
+    }
+
+    /**
+     * Спека app-data-management «Нижняя панель скрыта» (статическая
+     * часть): маршрут `app_data` не входит в нижние табы — RootScreen
+     * прячет панель по условию `currentRoute in BottomTabs`. Видимая
+     * часть (панель реально исчезает) проверяется вручную.
+     */
+    @Test
+    fun more_screen_app_data_route_is_not_bottom_tab() {
+        // Then
+        val tabRoutes = BottomTabs.map { it.route }
+        assert(Screen.AppData.route !in tabRoutes) {
+            "Маршрут \"${Screen.AppData.route}\" не должен быть нижним табом: $tabRoutes"
+        }
     }
 
     /**

@@ -80,4 +80,19 @@
     <string name="entry_list_weight_label">Extra weight</string>
     <string name="entry_list_weight_value">%1$s kg</string>
     <string name="entry_section_yesterday">Yesterday</string>
+
+    <!-- App data screen (export, restore, delete data) -->
+    <string name="app_data">App data</string>
+    <string name="create_backup">Create backup</string>
+    <string name="restore_from_backup">Restore from backup</string>
+    <string name="delete_all_data">Delete all data</string>
+    <string name="delete_all_dialog_text">All entries and custom exercises will be deleted without undo. The standard exercise set will be restored.</string>
+    <string name="delete">Delete</string>
+    <string name="backup_created">Backup created</string>
+    <string name="backup_restored">Data restored from backup</string>
+    <string name="all_data_deleted">All data deleted</string>
+    <string name="error_export_failed">Failed to create backup</string>
+    <string name="error_import_failed">Failed to restore data</string>
+    <string name="error_invalid_backup">The file is not a backup or is corrupted</string>
+    <string name="error_delete_failed">Failed to delete data</string>
 </resources>

@@ -45,17 +45,11 @@ class MainActivity : ComponentActivity() {
 
         val dataStore = AppSettingsDataStore(applicationContext)
         // DI-цепочка данных (design.md Decision 3): БД → репозиторий создаются
-        // один раз, как и dataStore; prepopulate — standardExercises(context).
-        val database =
-            WorkoutDatabase.create(
-                applicationContext,
-                standardExercises(applicationContext)
-            )
-        val repository =
-            RoomWorkoutDataRepository(
-                exerciseDao = database.exerciseDao(),
-                exerciseEntryDao = database.exerciseEntryDao()
-            )
+        // один раз, как и dataStore; prepopulate и восстановление стандартного
+        // набора в deleteAllData — один и тот же список standardExercises.
+        val standard = standardExercises(applicationContext)
+        val database = WorkoutDatabase.create(applicationContext, standard)
+        val repository = RoomWorkoutDataRepository(database, standard)
 
         setContent {
             val theme by dataStore.theme.collectAsState(initial = AppTheme.SYSTEM)

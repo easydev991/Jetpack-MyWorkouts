@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.myworkouts.data.db.ExerciseEntity
+import com.myworkouts.data.db.StandardExercise
 import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
@@ -59,8 +60,19 @@ class RoomWorkoutDataRepositoryTest {
                 .build()
         repository =
             RoomWorkoutDataRepository(
-                exerciseDao = database.exerciseDao(),
-                exerciseEntryDao = database.exerciseEntryDao()
+                database = database,
+                standardExercises =
+                    listOf(
+                        StandardExercise(
+                            name = "Подтягивания",
+                            category = ExerciseCategory.PULL
+                        ),
+                        StandardExercise(
+                            name = "Планка",
+                            category = ExerciseCategory.CORE,
+                            measuredBy = ExerciseMeasuredBy.TIME
+                        )
+                    )
             )
         // Подложим два упражнения — REPS (Подтягивания) и TIME (Планка) —
         // чтобы были валидные `exerciseId` обоих типов измерения.

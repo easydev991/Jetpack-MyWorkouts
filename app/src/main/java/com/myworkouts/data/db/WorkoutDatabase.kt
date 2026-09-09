@@ -61,34 +61,56 @@ abstract class WorkoutDatabase : RoomDatabase() {
                     WorkoutDatabase::class.java,
                     DATABASE_NAME
                 ).fallbackToDestructiveMigration()
-                .addCallback(
-                    object : Callback() {
-                        override fun onCreate(db: SupportSQLiteDatabase) {
-                            super.onCreate(db)
-                            val now = System.currentTimeMillis()
-                            db.beginTransaction()
-                            try {
-                                standardExercises.forEach { exercise ->
-                                    val args: Array<Any?> =
-                                        arrayOf(
-                                            exercise.name,
-                                            exercise.category.name,
-                                            now,
-                                            exercise.measuredBy.name
-                                        )
-                                    db.execSQL(
-                                        "INSERT INTO exercises " +
-                                            "(name, category, is_custom, comment, created_at, measured_by) " +
-                                            "VALUES (?, ?, 0, NULL, ?, ?)",
-                                        args
-                                    )
-                                }
-                                db.setTransactionSuccessful()
-                            } finally {
-                                db.endTransaction()
-                            }
+                .addCallback(seedCallback(standardExercises))
+                .build()
+
+        /**
+         * In-memory-вариант [create] для инструментальных тестов: та же
+         * настройка и prepopulate, но без файла на диске — тесты не
+         * затирают данные приложения на устройстве.
+         */
+        fun createInMemory(
+            context: Context,
+            standardExercises: List<StandardExercise>
+        ): WorkoutDatabase =
+            Room
+                .inMemoryDatabaseBuilder(
+                    context.applicationContext,
+                    WorkoutDatabase::class.java
+                ).addCallback(seedCallback(standardExercises))
+                .build()
+
+        /**
+         * Prepopulate стандартного набора при первом создании БД
+         * (design.md Decision 4).
+         */
+        private fun seedCallback(standardExercises: List<StandardExercise>): Callback =
+            object : Callback() {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    super.onCreate(db)
+                    val now = System.currentTimeMillis()
+                    db.beginTransaction()
+                    try {
+                        standardExercises.forEach { exercise ->
+                            val args: Array<Any?> =
+                                arrayOf(
+                                    exercise.name,
+                                    exercise.category.name,
+                                    now,
+                                    exercise.measuredBy.name
+                                )
+                            db.execSQL(
+                                "INSERT INTO exercises " +
+                                    "(name, category, is_custom, comment, created_at, measured_by) " +
+                                    "VALUES (?, ?, 0, NULL, ?, ?)",
+                                args
+                            )
                         }
+                        db.setTransactionSuccessful()
+                    } finally {
+                        db.endTransaction()
                     }
-                ).build()
+                }
+            }
     }
 }

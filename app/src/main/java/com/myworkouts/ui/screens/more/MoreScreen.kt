@@ -7,15 +7,14 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -42,10 +41,10 @@ import com.myworkouts.navigation.Screen
 /**
  * Экран «Ещё» — точка входа в дополнительные настройки приложения.
  *
- * Содержит кнопки перехода к экрану «Оформление приложения» и
- * «Отправить обратную связь». По мере появления новых кнопок
- * структура экрана — `Box` + `Column` с фиксированными `Spacer` между
- * кнопками. Версия приложения прижата к низу через
+ * Содержит кнопки перехода к экрану «Оформление приложения»,
+ * «Данные приложения» и «Отправить обратную связь». По мере появления
+ * новых кнопок структура экрана — `Box` + `Column` с единым интервалом
+ * через `Arrangement.spacedBy`. Версия приложения прижата к низу через
  * `Box.BottomCenter`.
  *
  * @implNote NavController обязательный (callback-обёртка — лишний
@@ -79,23 +78,14 @@ fun MoreScreen(
         ) {
             Column(
                 modifier = Modifier.fillMaxSize(),
+                // Единый интервал между всеми кнопками колонки, включая
+                // обе кнопки внутри NavigationButtons (они без обёртки —
+                // прямые measurables этой Column)
+                verticalArrangement =
+                    Arrangement.spacedBy(dimensionResource(R.dimen.spacing_xxsmall)),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                FilledTonalButton(
-                    onClick = {
-                        navController.navigate(Screen.Appearance.route) {
-                            popUpTo(Screen.More.route)
-                        }
-                    },
-                    contentPadding =
-                        PaddingValues(
-                            horizontal = dimensionResource(R.dimen.button_horizontal_padding)
-                        )
-                ) {
-                    Text(stringResource(R.string.appearance_title))
-                }
-
-                Spacer(Modifier.height(dimensionResource(R.dimen.spacing_xxsmall)))
+                NavigationButtons(navController = navController)
 
                 FilledTonalButton(
                     onClick = { sendFeedback(context) },
@@ -120,6 +110,43 @@ fun MoreScreen(
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+/**
+ * Кнопки перехода на не-табовые экраны настроек: «Оформление
+ * приложения» и «Данные приложения» (app-data-screen, спека
+ * more-screen). Без layout-обёртки: интервал между кнопками задаёт
+ * родительская `Column` через `spacedBy`.
+ */
+@Composable
+private fun NavigationButtons(navController: NavHostController) {
+    FilledTonalButton(
+        onClick = {
+            navController.navigate(Screen.Appearance.route) {
+                popUpTo(Screen.More.route)
+            }
+        },
+        contentPadding =
+            PaddingValues(
+                horizontal = dimensionResource(R.dimen.button_horizontal_padding)
+            )
+    ) {
+        Text(stringResource(R.string.appearance_title))
+    }
+
+    FilledTonalButton(
+        onClick = {
+            navController.navigate(Screen.AppData.route) {
+                popUpTo(Screen.More.route)
+            }
+        },
+        contentPadding =
+            PaddingValues(
+                horizontal = dimensionResource(R.dimen.button_horizontal_padding)
+            )
+    ) {
+        Text(stringResource(R.string.app_data))
     }
 }
 

@@ -1,11 +1,16 @@
 package com.myworkouts.data.repository
 
 import android.database.sqlite.SQLiteConstraintException
+import androidx.room.withTransaction
 import com.myworkouts.data.db.ExerciseDao
 import com.myworkouts.data.db.ExerciseEntryDao
+import com.myworkouts.data.db.ExerciseEntryEntity
+import com.myworkouts.data.db.StandardExercise
+import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.data.db.toDomain
 import com.myworkouts.data.db.toEntity
 import com.myworkouts.data.db.toListItem
+import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
@@ -21,13 +26,25 @@ import kotlinx.coroutines.flow.map
  * список каталога реактивный (`Flow`), точечные операции — `suspend`
  * с `Result` для обработки ошибок БД.
  *
- * @property exerciseDao DAO каталога упражнений
- * @property exerciseEntryDao DAO записей о выполнении
+ * @property database база приложения: DAO берутся из неё, массовным
+ *   операциям (app-data-screen, design Decision 6) нужна транзакция
+ *   `withTransaction` — DAO от другой базы сделали бы её бессмысленной
+ * @property standardExercises стандартный набор для восстановления в
+ *   [deleteAllData] — тот же список, что передаётся в
+ *   [com.myworkouts.data.db.WorkoutDatabase.create]
+ *
+ * `TooManyFunctions` подавлен осознанно: 14 методов — единый контракт
+ * [WorkoutDataRepository] (app-data-screen); дробить реализацию на части
+ * хуже подавления.
  */
+@Suppress("TooManyFunctions")
 class RoomWorkoutDataRepository(
-    private val exerciseDao: ExerciseDao,
-    private val exerciseEntryDao: ExerciseEntryDao
+    private val database: WorkoutDatabase,
+    private val standardExercises: List<StandardExercise>
 ) : WorkoutDataRepository {
+    private val exerciseDao: ExerciseDao = database.exerciseDao()
+    private val exerciseEntryDao: ExerciseEntryDao = database.exerciseEntryDao()
+
     /**
      * Возвращает реактивный список упражнений каталога, отфильтрованный
      * по подстроке названия (без учёта регистра) и отсортированный по имени.
@@ -161,4 +178,79 @@ class RoomWorkoutDataRepository(
             throw e
         }
     }
+
+    override suspend fun getAllExercises(): Result<List<Exercise>> = runCatching { exerciseDao.getAll().map { it.toDomain() } }
+
+    override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = runCatching { exerciseEntryDao.getAll().map { it.toDomain() } }
+
+    override suspend fun importData(
+        exercises: List<Exercise>,
+        entries: List<BackupEntry>
+    ): Result<Unit> =
+        runCatching {
+            database.withTransaction {
+                // Карта «ключ имени → id» поверх текущего каталога и
+                // вставленных упражнений (design Decision 6). Вставка —
+                // одиночными insert: нужен возвращённый id для связей.
+                val idsByKey =
+                    buildMap {
+                        exerciseDao.getAll().forEach { entity ->
+                            put(entity.name.trim().lowercase(), entity.id)
+                        }
+                        exercises.forEach { exercise ->
+                            val id = exerciseDao.insert(exercise.toEntity())
+                            put(exercise.name.trim().lowercase(), id)
+                        }
+                    }
+                val now = System.currentTimeMillis()
+                val entities =
+                    entries.map { backup ->
+                        val exerciseId =
+                            idsByKey[backup.exerciseName.trim().lowercase()]
+                                // Неразрешимое имя — защита от бага use-case:
+                                // он такие записи отфильтровал (Decision 4).
+                                ?: error(
+                                    "Имя упражнения не разрешено каталогом: " +
+                                        backup.exerciseName
+                                )
+                        ExerciseEntryEntity(
+                            exerciseId = exerciseId,
+                            workoutId = null,
+                            date = backup.date,
+                            sets = backup.sets,
+                            reps = backup.reps,
+                            weightKg = backup.weightKg,
+                            durationSec = backup.durationSec,
+                            comment = backup.comment,
+                            createdAt = backup.createdAt,
+                            modifiedAt = now
+                        )
+                    }
+                exerciseEntryDao.insertAll(entities)
+            }
+        }
+
+    override suspend fun deleteAllData(): Result<Unit> =
+        runCatching {
+            database.withTransaction {
+                exerciseEntryDao.deleteAll()
+                exerciseDao.deleteAll()
+                // Восстановление стандартного набора тем же маппингом, что
+                // и prepopulate: isCustom = false, честный createdAt = now.
+                val now = System.currentTimeMillis()
+                standardExercises.forEach { standard ->
+                    exerciseDao.insert(
+                        Exercise(
+                            id = 0L,
+                            name = standard.name,
+                            category = standard.category,
+                            isCustom = false,
+                            comment = null,
+                            createdAt = now,
+                            measuredBy = standard.measuredBy
+                        ).toEntity()
+                    )
+                }
+            }
+        }
 }
