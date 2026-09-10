@@ -1,6 +1,7 @@
 package com.myworkouts.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -22,6 +23,9 @@ sealed class Screen(
 ) {
     /** Главный экран — список тренировок (нижняя навигация). */
     object Main : Screen(route = "main")
+
+    /** Экран «Упражнения» — каталог упражнений (нижняя навигация, условная видимость). */
+    object Exercises : Screen(route = "exercises")
 
     /** Экран «Ещё» — точка входа в дополнительные настройки (нижняя навигация). */
     object More : Screen(route = "more")
@@ -84,7 +88,12 @@ data class BottomTab(
     val titleResId: Int
 )
 
-/** Список нижних вкладок в порядке отрисовки слева направо. */
+/**
+ * Список нижних вкладок в порядке отрисовки слева направо. Полный
+ * статичный список — единый источник правды по составу и порядку;
+ * рантайм-видимость отдельных вкладок здесь НЕ фильтруется
+ * (exercises-tab, design Decision 7) — см. [visibleTabs].
+ */
 val BottomTabs: List<BottomTab> =
     listOf(
         BottomTab(
@@ -93,8 +102,25 @@ val BottomTabs: List<BottomTab> =
             titleResId = R.string.workouts_title
         ),
         BottomTab(
+            route = Screen.Exercises.route,
+            icon = Icons.Filled.FitnessCenter,
+            titleResId = R.string.exercises_title
+        ),
+        BottomTab(
             route = Screen.More.route,
             icon = Icons.Filled.Menu,
             titleResId = R.string.more_title
         )
     )
+
+/**
+ * Видимые нижние вкладки при текущем значении настройки
+ * `show_exercises_tab` (exercises-tab, design Decision 7): pure-функция
+ * вместо фильтра на use site — JVM-тест покрывает оба состояния бара
+ * без androidTest с реальным DataStore.
+ *
+ * @param showExercisesTab Показывать вкладку «Упражнения»
+ * @return [BottomTabs] без Exercises при выключенной настройке
+ */
+fun visibleTabs(showExercisesTab: Boolean): List<BottomTab> =
+    BottomTabs.filterNot { !showExercisesTab && it.route == Screen.Exercises.route }

@@ -2,6 +2,13 @@
     <string name="app_name">Мои тренировки</string>
     <string name="workouts_title">Тренировки</string>
     <string name="more_title">Ещё</string>
+    <string name="exercises_title">Упражнения</string>
+    <string name="exercises_add_exercise">Добавить упражнение</string>
+    <string name="exercise_measured_by_reps">повторы</string>
+    <string name="exercise_measured_by_time">длительность</string>
+    <string name="exercises_list_empty">Нет упражнений</string>
+    <string name="more_exercises_tab_show">Показать вкладку \"Упражнения\"</string>
+    <string name="more_exercises_tab_hide">Скрыть вкладку \"Упражнения\"</string>
     <string name="add_workout">Добавить тренировку</string>
     <string name="app_version">Версия приложения: %1$s</string>
 

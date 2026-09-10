@@ -46,17 +46,17 @@ Room-Flow, который в штатной работе не ошибается
 `onAddExerciseClick`) и делегирует в `internal ExercisesScreenContent`.
 UI-тесты и превью работают без ViewModel и fake-репозитория.
 
-### Decision 4: FAB — заглушка через `Log.d`
+### Decision 4: FAB — заглушка с пустым колбэком
 
-`onClick` пишет `Log.d(TAG, "…")` с русским сообщением; тег — `private
-const` в файле экрана. Никакой навигации и состояния. Когда появится экран
-создания, `onAddExerciseClick` сменится на `navController.navigate(...)`
-по образцу `onAddEntryClick` у Main — сигнатура `ExercisesScreenState` уже
-готова (Decision 3). Внешняя `ExercisesScreen` при этом принимает только
-`viewModel` (канон `tab-navigation/spec.md`) — будущий change добавит
-`onAddExerciseClick` и в её сигнатуру с проводкой из `RootScreen` (у него
-`navController`, Decision 8), т.е. затронет обе сигнатуры, а не только
-внутреннюю.
+`onAddExerciseClick` в `ExercisesScreenState` имеет дефолт `= {}`; экран
+не передаёт лямбду. Никакой навигации, состояния и логирования: `Log.d`
+с тегом-`private const` убраны — future change всё равно заменит колбэк
+целиком на `navController.navigate(...)` по образцу `onAddEntryClick` у
+Main, сигнатура `ExercisesScreenState` уже готова (Decision 3). Внешняя
+`ExercisesScreen` при этом принимает только `viewModel` (канон
+`tab-navigation/spec.md`) — будущий change добавит `onAddExerciseClick` и
+в её сигнатуру с проводкой из `RootScreen` (у него `navController`,
+Decision 8), т.е. затронет обе сигнатуры, а не только внутреннюю.
 
 ### Decision 5: лейбл `measuredBy` — private `@Composable` с тотальным `when`
 
@@ -99,12 +99,12 @@ Screen.Exercises.route }`): извлечение в именованную фу�
 `rememberCoroutineScope().launch { dataStore.setShowExercisesTab(it) }`.
 MoreScreen остаётся без ViewModel (его текущий принцип) и получает только
 `Boolean` + колбэк — MoreScreenTest не нужен fake-DataStore. Альтернатива
-`MoreViewModel` отвергнута: целый класс + factory ради одного свитча.
+`MoreViewModel` отвергнута: целый класс + factory ради одной кнопки.
 
 ## Risks / Trade-offs
 
 - [FAB-заглушка разочаровывает пользователя] → осознанно: экран создания —
-  отдельный future change; лог делает поведение наблюдаемым в logcat.
+  отдельный future change; тап без видимой реакции принят как трейд-офф.
 - [Каталог большой, без поиска] → сортировка по имени уже есть, поиск —
   future change (query-параметр `exercises(query)` уже поддерживает его на
   стороне данных).

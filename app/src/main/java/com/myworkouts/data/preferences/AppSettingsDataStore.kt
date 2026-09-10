@@ -25,6 +25,9 @@ private val THEME_KEY = stringPreferencesKey("theme")
 /** DataStore-ключ для переключателя динамических цветов. */
 private val USE_DYNAMIC_COLORS_KEY = booleanPreferencesKey("use_dynamic_colors")
 
+/** DataStore-ключ для видимости вкладки «Упражнения» в нижней навигации. */
+private val SHOW_EXERCISES_TAB_KEY = booleanPreferencesKey("show_exercises_tab")
+
 /**
  * Реализация DataStore для настроек оформления приложения.
  *
@@ -32,8 +35,8 @@ private val USE_DYNAMIC_COLORS_KEY = booleanPreferencesKey("use_dynamic_colors")
  * иначе DataStore ругнётся на утечку при уничтожении Activity)
  *
  * @implNote class, не MyWorkoutsApplication (одна зависимость — лишняя
- * сущность). Хранит ровно 2 ключа (theme/use_dynamic_colors). Новые
- * ключи — точечно по фичам, имя файла appearance_prefs НЕ менять
+ * сущность). Хранит 3 ключа (theme/use_dynamic_colors/show_exercises_tab).
+ * Новые ключи — точечно по фичам, имя файла appearance_prefs НЕ менять
  * (миграция DataStore). Если появится 2-я зависимость от DataStore —
  * вынести в MyWorkoutsApplication.
  */
@@ -87,5 +90,27 @@ class AppSettingsDataStore(
         context.dataStore.data
             .map { preferences ->
                 preferences[USE_DYNAMIC_COLORS_KEY] ?: true
+            }
+
+    /**
+     * Сохраняет настройку видимости вкладки «Упражнения».
+     *
+     * @param show Показывать вкладку «Упражнения» в нижней навигации
+     */
+    suspend fun setShowExercisesTab(show: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SHOW_EXERCISES_TAB_KEY] = show
+        }
+    }
+
+    /**
+     * Flow для отслеживания видимости вкладки «Упражнения».
+     * При первом запуске возвращает значение по умолчанию (false) —
+     * каталог нужен не всем, кому нужен — включит тоггл на «Ещё».
+     */
+    val showExercisesTab: Flow<Boolean> =
+        context.dataStore.data
+            .map { preferences ->
+                preferences[SHOW_EXERCISES_TAB_KEY] ?: false
             }
 }

@@ -41,14 +41,17 @@ import com.myworkouts.navigation.Screen
 /**
  * Экран «Ещё» — точка входа в дополнительные настройки приложения.
  *
- * Содержит кнопки перехода к экрану «Оформление приложения»,
+ * Содержит кнопку переключения видимости вкладки «Упражнения»
+ * (exercises-tab), кнопки перехода к экрану «Оформление приложения»,
  * «Данные приложения» и «Отправить обратную связь». По мере появления
  * новых кнопок структура экрана — `Box` + `Column` с единым интервалом
  * через `Arrangement.spacedBy`. Версия приложения прижата к низу через
  * `Box.BottomCenter`.
  *
  * @implNote NavController обязательный (callback-обёртка — лишний
- * indirection при единственном вызове в RootScreen). Column
+ * indirection при единственном вызове в RootScreen). Состояние кнопки и
+ * запись — выше по потоку, в RootScreen (design Decision 8): экран
+ * остаётся без ViewModel, получает `Boolean` + колбэк. Column
  * с дефолтным `Arrangement.Top` прижимает кнопки к верху, горизонтальное
  * центрирование через `Alignment.CenterHorizontally`; версия
  * приложения позиционируется независимо в Box.
@@ -57,6 +60,8 @@ import com.myworkouts.navigation.Screen
 @Composable
 fun MoreScreen(
     navController: NavHostController,
+    showExercisesTab: Boolean,
+    onShowExercisesTabChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -87,6 +92,14 @@ fun MoreScreen(
             ) {
                 NavigationButtons(navController = navController)
 
+                // Кнопка видимости вкладки «Упражнения» (more-screen,
+                // design Decision 8): сразу после навигационных кнопок,
+                // до feedback.
+                ExercisesTabToggle(
+                    showExercisesTab = showExercisesTab,
+                    onShowExercisesTabChange = onShowExercisesTabChange
+                )
+
                 FilledTonalButton(
                     onClick = { sendFeedback(context) },
                     contentPadding =
@@ -110,6 +123,32 @@ fun MoreScreen(
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+/**
+ * Кнопка видимости вкладки «Упражнения» (exercises-tab, design
+ * Decision 8): в стиле остальных кнопок экрана, текст зависит от
+ * состояния — «Показать вкладку…» при скрытой вкладке, «Скрыть…» при
+ * показанной. Тап по кнопке переключает настройку.
+ */
+@Composable
+internal fun ExercisesTabToggle(
+    showExercisesTab: Boolean,
+    onShowExercisesTabChange: (Boolean) -> Unit
+) {
+    FilledTonalButton(
+        onClick = { onShowExercisesTabChange(!showExercisesTab) },
+        contentPadding =
+            PaddingValues(
+                horizontal = dimensionResource(R.dimen.button_horizontal_padding)
+            )
+    ) {
+        Text(
+            stringResource(
+                if (showExercisesTab) R.string.more_exercises_tab_hide else R.string.more_exercises_tab_show
+            )
+        )
     }
 }
 

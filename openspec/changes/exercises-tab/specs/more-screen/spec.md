@@ -1,36 +1,40 @@
 ## ADDED Requirements
 
-### Requirement: MoreScreen имеет тоггл «Показывать вкладку "Упражнения"»
+### Requirement: MoreScreen имеет кнопку видимости вкладки «Упражнения»
 
 На экране «Ещё» сразу после навигационных кнопок и до feedback-кнопки
-(`R.string.feedback_send`) SHALL быть строка с `Switch`
-и подписью `R.string.more_exercises_tab` («Показывать вкладку
-"Упражнения"» / "Show Exercises tab"). `MoreScreen` SHALL принимать параметры
-`showExercisesTab: Boolean` и `onShowExercisesTabChange: (Boolean) -> Unit`
-(состояние и запись — выше по потоку, в `RootScreen`; у экрана нет
-ViewModel). `Switch.checked` SHALL равняться `showExercisesTab`;
-переключение SHALL вызывать `onShowExercisesTabChange` с новым значением.
+(`R.string.feedback_send`) SHALL быть кнопка (`FilledTonalButton`, в стиле
+остальных кнопок экрана) переключения видимости вкладки «Упражнения».
+`MoreScreen` SHALL принимать параметры `showExercisesTab: Boolean` и
+`onShowExercisesTabChange: (Boolean) -> Unit` (состояние и запись — выше по
+потоку, в `RootScreen`; у экрана нет ViewModel). Надпись кнопки SHALL
+зависеть от состояния: `R.string.more_exercises_tab_show` («Показать вкладку
+"Упражнения"» / "Show Exercises tab") при `showExercisesTab = false`,
+`R.string.more_exercises_tab_hide` («Скрыть вкладку "Упражнения"» /
+"Hide Exercises tab") при `showExercisesTab = true`; нажатие кнопки SHALL
+вызывать `onShowExercisesTabChange` с новым значением.
 
-#### Scenario: Russian locale toggle label
+#### Scenario: Russian locale button label when tab is hidden
 
-- **WHEN** `MoreScreen` composed с активной русской локалью
-- **THEN** видна подпись «Показывать вкладку "Упражнения"» рядом со `Switch`
+- **WHEN** `MoreScreen` composed с активной русской локалью и
+  `showExercisesTab = false`
+- **THEN** на кнопке виден текст «Показать вкладку "Упражнения"»
 
-#### Scenario: English locale toggle label
+#### Scenario: English locale button label when tab is hidden
 
-- **WHEN** `MoreScreen` composed с активной английской локалью
-- **THEN** видна подпись "Show Exercises tab" рядом со `Switch`
+- **WHEN** `MoreScreen` composed с активной английской локалью и
+  `showExercisesTab = false`
+- **THEN** на кнопке виден текст "Show Exercises tab"
 
-#### Scenario: Switch отражает состояние настройки
+#### Scenario: Надпись отражает состояние настройки
 
 - **WHEN** `MoreScreen(navController, showExercisesTab = true, ...)`
-- **THEN** `Switch` включён
-- **WHEN** `MoreScreen(navController, showExercisesTab = false, ...)`
-- **THEN** `Switch` выключен
+- **THEN** на кнопке текст «Скрыть вкладку "Упражнения"» /
+  "Hide Exercises tab"
 
-#### Scenario: Переключение вызывает колбэк
+#### Scenario: Нажатие кнопки вызывает колбэк
 
-- **WHEN** пользователь taps `Switch` при `showExercisesTab = false`
+- **WHEN** пользователь нажимает кнопку при `showExercisesTab = false`
 - **THEN** вызывается `onShowExercisesTabChange(true)`
 
 ### Requirement: Настройка видимости вкладки сохраняется в DataStore
@@ -40,7 +44,7 @@ ViewModel). `Switch.checked` SHALL равняться `showExercisesTab`;
 ключи — точечно по фичам»): `Flow<Boolean>` с дефолтом `false` при первом
 запуске + suspend-setter. `RootScreen` SHALL собирать настройку из
 `dataStore` (тот же экземпляр, что передан из `MainActivity`) и при
-переключении тоггла писать её в DataStore. Включение настройки SHALL
+переключении кнопки писать её в DataStore. Включение настройки SHALL
 добавлять вкладку «Упражнения» в `NavigationBar`, выключение — убирать
 (видимые вкладки — см. `tab-navigation/spec.md`).
 
@@ -52,13 +56,13 @@ ViewModel). `Switch.checked` SHALL равняться `showExercisesTab`;
 
 #### Scenario: Настройка переживает перезапуск
 
-- **WHEN** пользователь включил тоггл, перезапустил приложение
+- **WHEN** пользователь включил настройку, перезапустил приложение
 - **THEN** `showExercisesTab` эмитит `true`
 - **AND** вкладка «Упражнения» видна в нижней навигации
 
-#### Scenario: Переключение тоггла меняет нижнюю навигацию
+#### Scenario: Переключение настройки меняет нижнюю навигацию
 
-- **WHEN** тоггл включён и пользователь выключает его
+- **WHEN** настройка включена и пользователь выключает её кнопкой
 - **THEN** вкладка «Упражнения» исчезает из `NavigationBar` без
   перезапуска приложения
 - **AND** порядок оставшихся вкладок («Тренировки», «Ещё») не меняется
@@ -104,8 +108,8 @@ required first parameter. The `navController` is used to navigate to
 is no fallback or `LocalNavController` lookup — the parameter is
 explicit and required. Параметры `showExercisesTab: Boolean` и
 `onShowExercisesTabChange: (Boolean) -> Unit` — также обязательные,
-без default-значений (design Decision 8): пара используется строкой
-со `Switch` из ADDED-требования выше.
+без default-значений (design Decision 8): пара используется кнопкой
+видимости вкладки из ADDED-требования выше.
 
 #### Scenario: NavController is passed from RootScreen
 

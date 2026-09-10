@@ -1,6 +1,9 @@
 package com.myworkouts.ui.screens.more
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -26,8 +29,8 @@ import org.junit.runner.RunWith
  * Компонентные тесты для [MoreScreen].
  *
  * Проверяет наличие кнопки «Оформление приложения», корректность
- * отображения версии приложения и переход на маршрут `Screen.Appearance`
- * при клике.
+ * отображения версии приложения, переход на маршрут `Screen.Appearance`
+ * при клике и кнопку видимости вкладки «Упражнения» (exercises-tab).
  */
 @RunWith(AndroidJUnit4::class)
 class MoreScreenTest {
@@ -50,7 +53,11 @@ class MoreScreenTest {
         onControllerReady(navController)
         NavHost(navController = navController, startDestination = Screen.More.route) {
             composable(Screen.More.route) {
-                MoreScreen(navController = navController)
+                MoreScreen(
+                    navController = navController,
+                    showExercisesTab = false,
+                    onShowExercisesTabChange = {}
+                )
             }
             composable(Screen.Appearance.route) {
                 // Заглушка — реальный экран тестируется отдельно.
@@ -226,5 +233,87 @@ class MoreScreenTest {
             rightMargin,
             1f
         )
+    }
+
+    /**
+     * Test-Harness для кнопки видимости вкладки (exercises-tab):
+     * [MoreScreen] с параметром `showExercisesTab` и колбэком-получателем.
+     * NavHost не нужен — кнопка не навигирует, а `navController` здесь лишь
+     * обязательный параметр.
+     */
+    @Composable
+    private fun MoreScreenWithToggle(
+        showExercisesTab: Boolean,
+        onShowExercisesTabChange: (Boolean) -> Unit = {}
+    ) {
+        MoreScreen(
+            navController = rememberNavController(),
+            showExercisesTab = showExercisesTab,
+            onShowExercisesTabChange = onShowExercisesTabChange
+        )
+    }
+
+    /** При скрытой вкладке кнопка показывает «Показать…». */
+    @Test
+    fun more_screen_when_setting_off_then_shows_show_label() {
+        // Given — настройка выключена
+        composeTestRule.setContent {
+            MoreScreenWithToggle(showExercisesTab = false)
+        }
+
+        // Then
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.more_exercises_tab_show))
+            .assertIsDisplayed()
+    }
+
+    /** При показанной вкладке кнопка показывает «Скрыть…». */
+    @Test
+    fun more_screen_when_setting_on_then_shows_hide_label() {
+        // Given — настройка включена
+        composeTestRule.setContent {
+            MoreScreenWithToggle(showExercisesTab = true)
+        }
+
+        // Then
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.more_exercises_tab_hide))
+            .assertIsDisplayed()
+    }
+
+    /** Клик по кнопке вызывает колбэк и меняет надпись. */
+    @Test
+    fun more_screen_when_toggle_clicked_then_calls_on_show_exercises_tab_change() {
+        // Given — stateful-harness: колбэк обновляет состояние, как
+        // реальный RootScreen через DataStore
+        var showExercisesTab by mutableStateOf(false)
+        var changedTo: Boolean? = null
+        composeTestRule.setContent {
+            MoreScreenWithToggle(
+                showExercisesTab = showExercisesTab,
+                onShowExercisesTabChange = {
+                    showExercisesTab = it
+                    changedTo = it
+                }
+            )
+        }
+
+        // When
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.more_exercises_tab_show))
+            .performClick()
+
+        // Then
+        composeTestRule.waitForIdle()
+        assertEquals(
+            "Тап по кнопке при showExercisesTab = false вызывает " +
+                "onShowExercisesTabChange(true)",
+            true,
+            changedTo
+        )
+        // После обновления состояния надпись сменилась на «Скрыть…»
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.more_exercises_tab_hide))
+            .assertIsDisplayed()
     }
 }

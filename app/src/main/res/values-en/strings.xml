@@ -2,6 +2,13 @@
     <string name="app_name">My workouts</string>
     <string name="workouts_title">Workouts</string>
     <string name="more_title">More</string>
+    <string name="exercises_title">Exercises</string>
+    <string name="exercises_add_exercise">Add exercise</string>
+    <string name="exercise_measured_by_reps">reps</string>
+    <string name="exercise_measured_by_time">duration</string>
+    <string name="exercises_list_empty">No exercises</string>
+    <string name="more_exercises_tab_show">Show Exercises tab</string>
+    <string name="more_exercises_tab_hide">Hide Exercises tab</string>
     <string name="add_workout">Add workout</string>
     <string name="app_version">App version: %1$s</string>
 
