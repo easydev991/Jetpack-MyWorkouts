@@ -1,0 +1,195 @@
+## RENAMED Requirements
+
+### Requirement: RootScreen hosts NavHost with the registered destinations
+
+- FROM: `### Requirement: RootScreen hosts NavHost with the three destinations`
+- TO: `### Requirement: RootScreen hosts NavHost with the registered destinations`
+
+## MODIFIED Requirements
+
+### Requirement: RootScreen hosts NavHost with the registered destinations
+
+`RootScreen` SHALL use `rememberNavController()` and a `NavHost` containing
+a `composable` entry for each registered destination: `Screen.Main.route`
+calling `MainScreen(...)`, `Screen.Exercises.route` calling
+`ExercisesScreen(viewModel = viewModel(factory =
+ExercisesViewModel.factory(repository)))`, `Screen.More.route` calling
+`MoreScreen(navController = navController, showExercisesTab =
+showExercisesTab, onShowExercisesTabChange = ...)`, `Screen.Appearance.route`
+calling `AppearanceScreen(...)`, `Screen.AppData.route` calling
+`AppDataScreen(...)`, and `Screen.EntryCreate.route` (with arguments)
+calling `EntryCreateScreen(...)`. The start destination SHALL be
+`Screen.Main.route`. `RootScreen` SHALL accept `dataStore:
+AppSettingsDataStore` and `repository: WorkoutDataRepository` as required
+parameters (passed from `MainActivity`) — it SHALL NOT construct a second
+`AppSettingsDataStore` for the same `appearance_prefs` file. `RootScreen`
+SHALL collect `dataStore.showExercisesTab` as state, filter the visible
+tabs from it (see «NavigationBar visibility follows current route») and
+pass the value plus a write-through callback into `MoreScreen`.
+
+The `exercises` destination SHALL stay registered in the `NavHost`
+regardless of the setting — hiding the tab hides only the
+`NavigationBarItem`, so re-enabling the tab is instant and needs no graph
+change.
+
+#### Scenario: Navigation to the Exercises tab
+
+- **WHEN** the setting is enabled and user taps the "Упражнения" tab in
+  the `NavigationBar`
+- **THEN** `NavController` navigates to `Screen.Exercises.route`
+- **AND** `ExercisesScreen` is composed with
+  `ExercisesViewModel.factory(repository)`
+
+#### Scenario: Exercises destination stays registered when the tab is hidden
+
+- **WHEN** the setting is disabled (`show_exercises_tab = false`)
+- **THEN** the `NavHost` still contains the `composable` entry for
+  `Screen.Exercises.route`
+- **AND** no `NavigationBarItem` for it is rendered
+
+#### Scenario: Navigation to the More tab
+
+- **WHEN** user taps the "Ещё" tab in the `NavigationBar`
+- **THEN** `NavController` navigates to `Screen.More.route`
+- **AND** `MoreScreen(navController = navController, showExercisesTab =
+  showExercisesTab, onShowExercisesTabChange = ...)` is composed
+
+#### Scenario: Navigation to the Appearance destination from More
+
+- **WHEN** `MoreScreen`'s "Оформление приложения" button is tapped
+- **THEN** `NavController` navigates to `Screen.Appearance.route`
+- **AND** `AppearanceScreen` is composed with `AppearanceViewModel.factory(dataStore)`
+
+#### Scenario: Back from Appearance returns to More
+
+- **WHEN** user is on `Screen.Appearance.route` and taps the back
+  navigation icon in the `TopAppBar`
+- **THEN** `onBackClick` invokes `navController.popBackStack()`
+- **AND** the previous destination (`Screen.More.route`) is composed
+
+#### Scenario: saveState preserves Appearance sub-destination across tab switches
+
+- **WHEN** user navigates Main → More → Appearance → taps the Main tab
+- **THEN** the `More` back-stack (with `Appearance` on top) is saved
+  via `popUpTo(navController.graph.findStartDestination().id) {
+  saveState = true }` in `NavigationBarItem.onClick`; the active
+  back-stack becomes `[Screen.Main.route]`
+- **AND** when user taps the More tab again, the active destination
+  becomes `Screen.Appearance.route` (restored via `restoreState =
+  true` — the saved `[Screen.Main.route, Screen.More.route,
+  Screen.Appearance.route]` back-stack is restored with Appearance on
+  top, NOT `[Screen.Main.route, Screen.More.route]`)
+
+#### Scenario: Back from Appearance returns to More after tab switch
+
+- **WHEN** user is on `Screen.Appearance.route`, taps the Main tab,
+  taps the More tab, then taps the back navigation icon in
+  Appearance's `TopAppBar`
+- **THEN** `navController.popBackStack()` pops Appearance
+- **AND** the active destination is `Screen.More.route` (the restored
+  More tab state, NOT `Screen.Main.route`)
+- **AND** `Screen.Main.route` remains at the bottom of the back-stack
+  as the start destination (`popUpTo` uses
+  `findStartDestination().id`, not `Screen.More.route`, so Main is
+  never popped off)
+
+### Requirement: NavigationBar highlights the active tab via currentBackStackEntryAsState
+
+`RootScreen` SHALL derive the active tab from `navController.currentBackStackEntryAsState()?.destination?.route` (NOT from a separate `ViewModel`). A `NavigationBarItem` SHALL be `selected = true` when the current route equals its `tab.route`.
+
+#### Scenario: Active tab indicator follows navigation
+
+- **WHEN** user is on the `More` tab
+- **THEN** the `NavigationBarItem` for `More` shows the `selected` styling
+- **AND** the `Main` tab does not show `selected` styling
+
+#### Scenario: NavigationBar iterates BottomTabs
+
+- **WHEN** `RootScreen` is composed
+- **THEN** its `NavigationBar` iterates the visible tabs
+  (`BottomTabs` filtered by the `show_exercises_tab` setting) via
+  `forEach { tab -> ... }`
+- **AND** the number of `NavigationBarItem`s equals the number of visible
+  tabs (3 with the setting on, 2 with it off)
+
+#### Scenario: Appearance destination has no NavigationBarItem
+
+- **WHEN** user is on `Screen.Appearance.route`
+- **THEN** no `NavigationBarItem` is `selected`
+
+### Requirement: NavigationBar visibility follows current route
+
+`RootScreen`'s `Scaffold.bottomBar` SHALL render the `NavigationBar`
+only when `currentRoute` (from
+`navController.currentBackStackEntryAsState()?.destination?.route`)
+equals one of the routes of the VISIBLE tabs. The visible tabs SHALL be
+computed as `BottomTabs` filtered by the `show_exercises_tab` setting:
+when the setting is `false`, the Exercises entry is excluded; when
+`true`, all of `BottomTabs` is visible. For any route outside the
+visible-tab routes (e.g. `Screen.Appearance.route`, or
+`Screen.Exercises.route` while the setting is off), the `bottomBar`
+slot SHALL render nothing — the `NavigationBar` MUST NOT be present
+in the composition tree. The routes SHALL be derived from `BottomTabs`
+(single source of truth for tab order and membership), not hardcoded —
+the only runtime filter is the Exercises entry per the setting.
+
+#### Scenario: NavigationBar visible on Main
+
+- **WHEN** the active route is `Screen.Main.route`
+- **THEN** the `NavigationBar` is visible
+- **AND** the `Main` `NavigationBarItem` shows the `selected` styling
+
+#### Scenario: NavigationBar visible on More
+
+- **WHEN** the active route is `Screen.More.route`
+- **THEN** the `NavigationBar` is visible
+- **AND** the `More` `NavigationBarItem` shows the `selected` styling
+
+#### Scenario: NavigationBar visible on Exercises when the setting is on
+
+- **WHEN** the setting is enabled and the active route is
+  `Screen.Exercises.route`
+- **THEN** the `NavigationBar` is visible with three items
+- **AND** the Exercises `NavigationBarItem` shows the `selected` styling
+
+#### Scenario: NavigationBar hidden on Appearance
+
+- **WHEN** the active route is `Screen.Appearance.route`
+- **THEN** the `NavigationBar` is NOT present in the composition tree
+- **AND** zero `NavigationBarItem`s are rendered
+- **AND** no vertical space is reserved for the bottom bar
+  (the screen body fills the area down to the system navigation bar)
+
+#### Scenario: NavigationBar hidden on Exercises when the setting is off
+
+- **WHEN** the setting is disabled (`show_exercises_tab = false`) and the
+  active route is `Screen.Exercises.route`
+- **THEN** the `NavigationBar` is NOT present in the composition tree
+  (exercises is outside the visible-tab routes — контракт для будущих
+  изменений, см. design exercises-tab Risks)
+
+#### Scenario: NavigationBar reappears when returning to a tab
+
+- **WHEN** user is on `Screen.Appearance.route` and navigates back to
+  `Screen.More.route` (via the back arrow or system back gesture)
+- **THEN** the `NavigationBar` becomes visible again
+- **AND** the `More` `NavigationBarItem` shows the `selected` styling
+
+#### Scenario: Visibility is derived from BottomTabs
+
+- **WHEN** the code is read
+- **THEN** the visibility check is `currentRoute in` the routes of the
+  visible tabs (no hardcoded list of tab routes)
+- **AND** the visible tabs are `BottomTabs` with the Exercises entry
+  excluded iff `showExercisesTab == false`
+
+#### Scenario: Adding a new tab automatically shows the bar on it
+
+- **WHEN** a developer adds a new `BottomTab` entry to `BottomTabs`
+- **THEN** no other code change is required for the `NavigationBar` to
+  appear on that route — the visibility predicate is computed from the
+  visible-tab routes; only tabs with an explicit visibility setting
+  (currently Exercises) are conditional
+- **AND** a future conditional tab (like Exercises) additionally requires
+  extending the visible-tab computation and a corresponding key in
+  `AppSettingsDataStore`
