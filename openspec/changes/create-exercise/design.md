@@ -1,7 +1,8 @@
 ## Context
 
-В проекте уже есть зрелый образец не-tab экрана с формой — `EntryCreateScreen`
-+ `EntryCreateViewModel` + `EntryCreateUiState`. Все конвенции (обёртка +
+В проекте уже есть зрелый образец не-tab экрана с формой —
+`EntryCreateScreen` + `EntryCreateViewModel` + `EntryCreateUiState`.
+Все конвенции (обёртка +
 internal `Content` + data class `ScreenState` + `Scaffold` с `topBar`
 / `bottomBar`, `SaveBottomBar` поверх клавиатуры, manual DI через
 `viewModelFactory`, реактивная подписка на `repository.exercises(...)`)
@@ -216,7 +217,7 @@ YAGNI — нет причин тянуть `java.time.Instant` ради одно
 
 **Выбор:** `ExerciseCreateScreenContent` SHALL содержать
 `BackHandler(enabled = state.uiState.hasUnsavedChanges) { attemptClose() }`
-+ `AlertDialog` через новый internal-компонент
+и `AlertDialog` через новый internal-компонент
 `ExerciseCreateCloseConfirmDialog` (паттерн-близнец
 `EntryCloseConfirmDialog` из `EntryCreateScreen.kt` L170–195).
 `hasUnsavedChanges` — computed-свойство в `ExerciseCreateUiState`
@@ -247,6 +248,33 @@ L68–70, 72) — текст универсален для любой формы
   отдельный refactoring change (затрагивает `EntryCreateScreen.kt` и
   существующие тесты); в рамках этого change — близнец; рефакторинг
   откладывается, паттерн аналогичен Decision 6 про `CategoryDropdownField`.
+
+### Decision 9: Без автоскролла каталога к новому упражнению
+
+**Выбор:** После сохранения упражнения `ExercisesScreen` НЕ скроллится
+автоматически к новой строке — позиция прокрутки `LazyColumn`
+сохраняется (закрепление за первым видимым элементом), новое
+упражнение вставляется первым и оказывается выше текущего viewport.
+Чтобы увидеть его, пользователь проскролливает к началу списка.
+Реактивность списка не нарушена: эмиссия со вставленной строкой
+доходит до UI за ~100 мс (подтверждено логами `ExercisesViewModel`
+и тестами `ExercisesLiveUpdateTest`,
+`ExerciseCreateLiveUpdateIntegrationTest` — все зелёные).
+
+**Обоснование:** Решение пользователя («оставляем как есть»).
+Стандартное поведение `LazyColumn` — не дёргать позицию пользователя.
+То же поведение и у списка записей на главном экране (`MainScreen`,
+`EntryListItems`): при большом количестве записей новая запись
+(секция «Сегодня», верх списка) тоже требует скролла наверх при
+возврате с экрана создания. Оба списка согласованы; асимметричный
+автоскролл только на одном из них — UX-рассогласование.
+
+**Альтернатива отклонена:** Автоскролл к новой строке
+(`rememberLazyListState` + `LaunchedEffect` + одноразовое
+событие «вставка произошла» в `UiState` по конвенции проекта,
+enum/sealed-kind) — добавляет состояние и тесты в двух местах
+(`ExercisesScreen` + `MainScreen` для симметрии); польза мала,
+YAGNI. Если позже потребуется — делать на обоих экранах одинаково.
 
 ## Risks / Trade-offs
 

@@ -1,6 +1,6 @@
 ## 1. UiState + ViewModel (JVM, TDD)
 
-- [ ] 1.1 Red: `app/src/test/java/com/myworkouts/ui/viewmodel/ExerciseCreateViewModelTest.kt` —
+- [x] 1.1 Red: `app/src/test/java/com/myworkouts/ui/viewmodel/ExerciseCreateViewModelTest.kt` —
   тесты на `ExerciseCreateViewModel` с fake-репозиторием на
   `MutableStateFlow`/`MutableList`. Кейсы: дефолт `measuredBy == REPS`
   при создании VM (без вызовов `onMeasuredByChange`); пустая форма →
@@ -50,7 +50,7 @@
   "com.myworkouts.ui.viewmodel.ExerciseCreateViewModelTest"` — тесты
   красные (класс/функции ещё не существуют).
 
-- [ ] 1.2 Green: `app/src/main/java/com/myworkouts/ui/state/ExerciseCreateUiState.kt`
+- [x] 1.2 Green: `app/src/main/java/com/myworkouts/ui/state/ExerciseCreateUiState.kt`
   — `data class ExerciseCreateUiState(val name: String? = null, val
   category: ExerciseCategory? = null, val measuredBy: ExerciseMeasuredBy =
   ExerciseMeasuredBy.REPS, val comment: String? = null, val isSaveError:
@@ -74,7 +74,7 @@
 
 ## 2. Сортировка в ExerciseDao
 
-- [ ] 2.1 Red: добавить новые сценарии в существующий
+- [x] 2.1 Red: добавить новые сценарии в существующий
   `app/src/androidTest/java/com/myworkouts/data/db/ExerciseDaoTest.kt`
   (рядом с тестом `search_results_areSortedByNameCaseInsensitive` —
   переиспользуем ту же инфраструктуру `setUp`/`tearDown`/in-memory Room;
@@ -116,7 +116,7 @@
   зелёные и до, и после 2.2 (дополнительная страховка от регресса
   по name-коллации после перестановки ORDER BY).
 
-- [ ] 2.2 Green: в `app/src/main/java/com/myworkouts/data/db/ExerciseDao.kt`
+- [x] 2.2 Green: в `app/src/main/java/com/myworkouts/data/db/ExerciseDao.kt`
   изменить `@Query("SELECT * FROM exercises WHERE name LIKE '%' || :query
   || '%' COLLATE NOCASE ORDER BY name COLLATE NOCASE")` на
   `@Query("SELECT * FROM exercises WHERE name LIKE '%' || :query || '%'
@@ -134,7 +134,7 @@
 
 ## 3. Строковые ресурсы (ru/en)
 
-- [ ] 3.1 Добавить русские строки в
+- [x] 3.1 Добавить русские строки в
   `app/src/main/res/values/strings.xml`:
   `exercise_create_title` = «Новое упражнение», `exercise_field_name` =
   «Название», `exercise_field_category` = «Категория»,
@@ -170,7 +170,7 @@
   Verification:
   `aapt2 dump strings` или запуск приложения — ресурсы видны.
 
-- [ ] 3.2 Добавить английские варианты в
+- [x] 3.2 Добавить английские варианты в
   `app/src/main/res/values-en/strings.xml` — те же 11 ключей
   (3 поля формы: name, category, comment + плейсхолдер
   `category_select` + заголовок `exercise_create_title` + текст ошибки
@@ -189,11 +189,11 @@
 
 ## 4. Навигация (route + RootScreen)
 
-- [ ] 4.1 В `app/src/main/java/com/myworkouts/navigation/Screen.kt` добавить
+- [x] 4.1 В `app/src/main/java/com/myworkouts/navigation/Screen.kt` добавить
   `object ExerciseCreate : Screen(route = "exercise_create")` после
   `EntryCreate`. Verification: компиляция `./gradlew compileDebugKotlin`.
 
-- [ ] 4.2 В `app/src/main/java/com/myworkouts/ui/screens/root/RootScreen.kt`
+- [x] 4.2 В `app/src/main/java/com/myworkouts/ui/screens/root/RootScreen.kt`
   сделать три правки: (a) в `AppNavHost` зарегистрировать новый
   destination `composable(Screen.ExerciseCreate.route) { ExerciseCreateScreen(
   viewModel = viewModel(factory = ExerciseCreateViewModel.factory(repository)),
@@ -218,8 +218,12 @@
   компиляция `./gradlew compileDebugKotlin` + ручной запуск
   (`make install`) — тап FAB открывает новый экран, кнопка назад в
   TopAppBar возвращает на `ExercisesScreen`, нижний бар скрыт.
+  **Статус:** заглушка этапа 4 заменена полным блоком
+  `ExerciseCreateScreen(viewModel = viewModel(factory =
+  ExerciseCreateViewModel.factory(repository)), onBackClick = {
+  navController.popBackStack() })` при выполнении 5.2 — задача закрыта.
 
-- [ ] 4.3 В `app/src/main/java/com/myworkouts/ui/screens/exercises/ExercisesScreen.kt`
+- [x] 4.3 В `app/src/main/java/com/myworkouts/ui/screens/exercises/ExercisesScreen.kt`
   сделать две правки: (a) добавить обязательный параметр
   `onAddExerciseClick: () -> Unit` в сигнатуру `fun ExercisesScreen(
   viewModel: ExercisesViewModel, onAddExerciseClick: () -> Unit, modifier:
@@ -245,7 +249,7 @@
 
 ## 5. UI экрана (androidTest, TDD)
 
-- [ ] 5.1a Red: `app/src/androidTest/java/com/myworkouts/ui/screens/exercises/ExerciseCreateScreenTest.kt`
+- [x] 5.1a Red: `app/src/androidTest/java/com/myworkouts/ui/screens/exercises/ExerciseCreateScreenTest.kt`
   — инструментальный Compose-тест на рендер `ExerciseCreateScreenContent`
   с `createComposeRule()` (паттерн устоявшийся в проекте:
   `EntryCreateScreenTest` / `ExercisesScreenTest` / `MoreScreenTest` /
@@ -267,7 +271,7 @@
   красный (только рендер-кейсы, NavHost-сценарий идёт в 5.1b,
   isSaveError — в 5.1c).
 
-- [ ] 5.1b Регрессионный тест по факту (НЕ TDD — навигация/верстка не
+- [x] 5.1b Регрессионный тест по факту (НЕ TDD — навигация/верстка не
   покрывается red-green циклом, см. AGENTS.md L39–43). Добавить в файл
   `ExercisesScreenTest.kt` (НЕ в новый файл и НЕ через отдельный
   `ExerciseCreateScreenWithNavHost` — это согласуется с 7.2 и
@@ -292,7 +296,7 @@
   Verification: тот же `--tests` файл — зелёный (новый NavHost-сценарий
   проходит; никаких red-кейсов для навигации).
 
-- [ ] 5.1c Red: добавить в тот же файл `ExerciseCreateScreenTest.kt`
+- [x] 5.1c Red: добавить в тот же файл `ExerciseCreateScreenTest.kt`
   отдельный тест-кейс на рендер блока ошибки сохранения. Тест
   рендерит `ExerciseCreateScreenContent` с готовым
   `ExerciseCreateScreenState` (паттерн — `EntryCreateScreenTest`,
@@ -310,7 +314,7 @@
   зависит от NavHost-harness. Verification: тот же `--tests`
   файл — красный (isSaveError-кейс).
 
-- [ ] 5.1d Red: добавить в тот же файл `ExerciseCreateScreenTest.kt`
+- [x] 5.1d Red: добавить в тот же файл `ExerciseCreateScreenTest.kt`
   отдельные тест-кейсы на `BackHandler` + диалог подтверждения
   закрытия (требование спек «BackHandler + hasUnsavedChanges —
   подтверждение закрытия», паттерн `EntryCreateScreenTest` —
@@ -318,7 +322,7 @@
   `state.uiState.hasUnsavedChanges = true` (например, `name = "Жим"`)
   тап стрелки `TopAppBar.navigationIcon` показывает `AlertDialog`
   с текстом «Закрыть?» и кнопками «Закрыть» (`colorScheme.error`)
-  + «Отмена»; тап «Закрыть» в диалоге вызывает `state.onBackClick()`
+  и «Отмена»; тап «Закрыть» в диалоге вызывает `state.onBackClick()`
   ровно один раз; тап «Отмена» НЕ вызывает `state.onBackClick()`
   (диалог скрывается, экран остаётся); (b) при
   `state.uiState.hasUnsavedChanges = false` (только что открытая
@@ -329,7 +333,7 @@
   симуляции системного back. Verification: тот же `--tests` файл —
   красный (BackHandler-кейс).
 
-- [ ] 5.2 Green: `app/src/main/java/com/myworkouts/ui/screens/exercises/ExerciseCreateScreen.kt`
+- [x] 5.2 Green: `app/src/main/java/com/myworkouts/ui/screens/exercises/ExerciseCreateScreen.kt`
   — `@Composable fun ExerciseCreateScreen(viewModel:
   ExerciseCreateViewModel, onBackClick: () -> Unit, modifier: Modifier =
   Modifier)` (обёртка; `modifier` прокидывается в `Scaffold`),
@@ -389,7 +393,7 @@
 
 ## 6. Превью
 
-- [ ] 6.1 Создать
+- [x] 6.1 Создать
   `app/src/main/java/com/myworkouts/ui/screens/exercises/ExerciseCreateScreenPreview.kt`
   — файл с минимум 8 `@Preview`-функциями (4 состояния × 2 темы:
   светлая `UI_MODE_NIGHT_NO` + тёмная `UI_MODE_NIGHT_YES`), обёрнутыми
@@ -403,7 +407,7 @@
 
 ## 7. Регрессия существующих тестов
 
-- [ ] 7.1 Запустить `app/src/test/java/com/myworkouts/ui/viewmodel/ExercisesViewModelTest.kt`
+- [x] 7.1 Запустить `app/src/test/java/com/myworkouts/ui/viewmodel/ExercisesViewModelTest.kt`
   и убедиться, что после изменения `ORDER BY` тесты остаются зелёными.
   Файл `ExercisesViewModelTest.kt` существует — это контрактный регресс
   (TDD-цикл требует, чтобы шаг был обязательным, не условным). Если
@@ -412,7 +416,7 @@
   Verification: `./gradlew testDebugUnitTest --tests
   "com.myworkouts.ui.viewmodel.ExercisesViewModelTest"` — зелёный.
 
-- [ ] 7.2 Регресс-прогон `app/src/androidTest/java/com/myworkouts/ui/screens/exercises/ExercisesScreenTest.kt`
+- [x] 7.2 Регресс-прогон `app/src/androidTest/java/com/myworkouts/ui/screens/exercises/ExercisesScreenTest.kt`
   после изменения 4.3 (`onAddExerciseClick` стал обязательным
   параметром; дефолт `= {}` удалён). Существующие тесты в этом файле
   уже передают `onAddExerciseClick = {}` именованным аргументом
@@ -429,14 +433,14 @@
 
 ## 8. Финальные проверки
 
-- [ ] 8.1 `make format && make lint && make test && make android-test` —
+- [x] 8.1 `make format && make lint && make test && make android-test` —
   все цели зелёные. Verification: вывод команд без ошибок и
   предупреждений detekt.
 
-- [ ] 8.2 `openspec validate create-exercise` — без ошибок.
+- [x] 8.2 `openspec validate create-exercise` — без ошибок.
   Verification: stdout без `ERROR`/`FAIL`.
 
-- [ ] 8.3 Обновить `AGENTS.md` Project Structure — добавить `exercises/`
+- [x] 8.3 Обновить `AGENTS.md` Project Structure — добавить `exercises/`
   И `appdata/` к перечислению `ui/screens/...` (L97). Реальная
   структура `app/src/main/java/com/myworkouts/ui/screens/` уже
   содержит обе папки (`appdata/`, `appearance/`, `entry/`,
@@ -446,9 +450,21 @@
   архивации change. Verification: `git diff AGENTS.md` — добавлены
   `exercises/` и `appdata/` в список.
 
-- [ ] 8.4 Ручная проверка на эмуляторе (через MCP `adb` или Android
+- [x] 8.4 Ручная проверка на эмуляторе (через MCP `adb` или Android
   Studio): открыть `ExercisesScreen`, тапнуть FAB, заполнить форму
   (имя + категория), нажать «Сохранить» — экран закрывается, новое
-  упражнение первое в списке. Verification: скриншот через
-  `android-debug-bridge_capture_screenshot` после сохранения — новое
-  упражнение сверху списка.
+  упражнение первое в списке. **Нюанс прокрутки (выяснен при ручной
+  проверке этапа 5):** `LazyColumn` сохраняет позицию прокрутки
+  (закрепление за первым видимым элементом), а новое упражнение
+  вставляется первым — выше текущего viewport. Список реактивно
+  обновляется сразу (подтверждено логами `ExercisesViewModel`:
+  эмиссия со вставленной строкой приходит в течение ~100 мс и
+  инструментальными тестами `ExercisesLiveUpdateTest` /
+  `ExerciseCreateLiveUpdateIntegrationTest`), но чтобы УВИДЕТЬ новый
+  первый элемент, каталог нужно проскроллить к началу. Автоскролл
+  к новой вставке отклонён — design.md Decision 9 (оставляем
+  стандартное поведение `LazyColumn`, согласованное со списком
+  записей на главном экране).
+  Verification: скриншот через `android-debug-bridge_capture_screenshot`
+  после сохранения и прокрутки списка к началу — новое упражнение
+  сверху списка.

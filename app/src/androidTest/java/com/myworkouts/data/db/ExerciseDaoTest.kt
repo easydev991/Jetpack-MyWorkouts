@@ -115,6 +115,72 @@ class ExerciseDaoTest {
         }
 
     @Test
+    fun sorting_custom_aboveStandard_regardlessOfAlphabet() =
+        runBlocking {
+            // Given — красный кейс: алфавит противоречит кастомности.
+            // На старом ORDER BY name COLLATE NOCASE первым будет «А».
+            dao.deleteAll()
+            dao.insert(ExerciseEntity(name = "Я", category = "PUSH", isCustom = true, createdAt = 0L))
+            dao.insert(ExerciseEntity(name = "А", category = "PUSH", isCustom = false, createdAt = 0L))
+
+            // When
+            val names = dao.observeExercises("").first().map { it.name }
+
+            // Then — is_custom DESC: кастомное «Я» выше стандартного «А»
+            assertEquals(listOf("Я", "А"), names)
+        }
+
+    @Test
+    fun sorting_custom_newerFirst_regardlessOfAlphabet() =
+        runBlocking {
+            // Given — красный кейс: алфавит противоречит свежести.
+            // На старом ORDER BY name COLLATE NOCASE первой будет «А».
+            dao.deleteAll()
+            dao.insert(ExerciseEntity(name = "А", category = "PUSH", isCustom = true, createdAt = 1_000L))
+            dao.insert(ExerciseEntity(name = "Б", category = "PUSH", isCustom = true, createdAt = 2_000L))
+
+            // When
+            val names = dao.observeExercises("").first().map { it.name }
+
+            // Then — created_at DESC: более новое «Б» выше «А»
+            assertEquals(listOf("Б", "А"), names)
+        }
+
+    @Test
+    fun sorting_custom_sameCreatedAt_sortedByNameCaseInsensitive() =
+        runBlocking {
+            // Given — регрессионный кейс: порядок совпадает на старом и
+            // новом ORDER BY, фиксируем tie-break по имени.
+            dao.deleteAll()
+            dao.insert(ExerciseEntity(name = "Жим", category = "PUSH", isCustom = true, createdAt = 0L))
+            dao.insert(ExerciseEntity(name = "Бег", category = "CARDIO", isCustom = true, createdAt = 0L))
+
+            // When
+            val names = dao.observeExercises("").first().map { it.name }
+
+            // Then — при равном createdAt действует name COLLATE NOCASE
+            assertEquals(listOf("Бег", "Жим"), names)
+        }
+
+    @Test
+    fun sorting_standard_sameCreatedAt_sortedByNameCaseInsensitive() =
+        runBlocking {
+            // Given — регрессионный кейс: у фикстур одинаковый createdAt,
+            // иначе created_at DESC перебьёт name-порядок. SQLite
+            // NOCASE-коллация покрывает только ASCII, поэтому ASCII-выборка.
+            dao.deleteAll()
+            listOf("alpha", "Beta", "CHARLIE", "delta").forEach {
+                dao.insert(ExerciseEntity(name = it, category = "PUSH", isCustom = false, createdAt = 0L))
+            }
+
+            // When
+            val names = dao.observeExercises("").first().map { it.name }
+
+            // Then — NOCASE: лексикографический порядок без учёта регистра
+            assertEquals(listOf("alpha", "Beta", "CHARLIE", "delta"), names)
+        }
+
+    @Test
     fun search_returnsEmpty_whenNoMatch() =
         runBlocking {
             // When

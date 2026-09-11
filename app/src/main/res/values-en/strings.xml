@@ -7,6 +7,19 @@
     <string name="exercise_measured_by_reps">reps</string>
     <string name="exercise_measured_by_time">duration</string>
     <string name="exercises_list_empty">No exercises</string>
+
+    <!-- Exercise create screen (creating an exercise) -->
+    <string name="exercise_create_title">New exercise</string>
+    <string name="exercise_field_name">Name</string>
+    <string name="exercise_field_category">Category</string>
+    <string name="exercise_field_category_select">Select category</string>
+    <string name="exercise_field_comment">Comment</string>
+    <string name="exercise_save_error">Failed to save exercise</string>
+    <string name="exercise_category_push">Push</string>
+    <string name="exercise_category_pull">Pull</string>
+    <string name="exercise_category_legs">Legs</string>
+    <string name="exercise_category_core">Core</string>
+    <string name="exercise_category_cardio">Cardio</string>
     <string name="more_exercises_tab_show">Show Exercises tab</string>
     <string name="more_exercises_tab_hide">Hide Exercises tab</string>
     <string name="add_workout">Add workout</string>

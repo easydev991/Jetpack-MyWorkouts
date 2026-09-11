@@ -6,12 +6,17 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.myworkouts.data.db.ExerciseEntity
 import com.myworkouts.data.db.StandardExercise
 import com.myworkouts.data.db.WorkoutDatabase
+import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,6 +25,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Instrumented-тест для [RoomWorkoutDataRepository] на Room in-memory.
@@ -100,6 +106,99 @@ class RoomWorkoutDataRepositoryTest {
     @After
     fun tearDown() {
         database.close()
+    }
+
+    /**
+     * Живая invalidation каталога: активный коллектор [RoomWorkoutDataRepository.exercises]
+     * получает вторую эмиссию после `addExercise` — без пере-подписки.
+     * Репро баги «каталог упражнений заморожен до перезапуска приложения»
+     * (create-exercise, ручная проверка этапа 5).
+     */
+    @Test
+    fun exercisesFlow_emitsAfterInsert_whileSubscribed() {
+        runBlocking {
+            // Given — активная подписка на каталог, initial-эмиссия получена
+            val emissions = CopyOnWriteArrayList<List<Exercise>>()
+            val job =
+                launch(Dispatchers.Unconfined) {
+                    repository.exercises("").collect { emissions.add(it) }
+                }
+            try {
+                withTimeout(5_000L) {
+                    while (emissions.isEmpty()) delay(50L)
+                }
+
+                // When — вставка при живой подписке
+                repository.addExercise(
+                    Exercise(
+                        id = 0L,
+                        name = "Жим",
+                        category = ExerciseCategory.PUSH,
+                        isCustom = true,
+                        comment = null,
+                        createdAt = 1L,
+                        measuredBy = ExerciseMeasuredBy.REPS
+                    )
+                )
+
+                // Then — вторая эмиссия содержит новое упражнение
+                withTimeout(5_000L) {
+                    while (emissions.none { list -> list.any { it.name == "Жим" } }) {
+                        delay(50L)
+                    }
+                }
+            } finally {
+                job.cancel()
+            }
+        }
+    }
+
+    /**
+     * Живая invalidation записей (контроль к репро каталога): активный
+     * коллектор [RoomWorkoutDataRepository.entries] получает вторую эмиссию
+     * после `addEntry` — главный экран обновляется живьём этим же механизмом.
+     */
+    @Test
+    fun entriesFlow_emitsAfterInsert_whileSubscribed() {
+        runBlocking {
+            // Given — активная подписка на записи, initial-эмиссия получена
+            val emissions = CopyOnWriteArrayList<List<EntryListItem>>()
+            val job =
+                launch(Dispatchers.Unconfined) {
+                    repository.entries().collect { emissions.add(it) }
+                }
+            try {
+                withTimeout(5_000L) {
+                    while (emissions.isEmpty()) delay(50L)
+                }
+
+                // When — вставка при живой подписке (валидный exerciseId из setUp)
+                repository.addEntry(
+                    ExerciseEntry(
+                        id = 0L,
+                        exerciseId = 1L,
+                        workoutId = null,
+                        date = 1_700_000_000_000L,
+                        sets = 1,
+                        reps = 10,
+                        weightKg = null,
+                        durationSec = null,
+                        comment = null,
+                        createdAt = 1L,
+                        modifiedAt = 1L
+                    )
+                )
+
+                // Then — вторая эмиссия содержит новую запись
+                withTimeout(5_000L) {
+                    while (emissions.none { list -> list.isNotEmpty() }) {
+                        delay(50L)
+                    }
+                }
+            } finally {
+                job.cancel()
+            }
+        }
     }
 
     @Test

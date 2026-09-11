@@ -818,7 +818,11 @@ class EntryCreateViewModelTest {
 
             // Then — предзаполненные дата и время записи не меняются (без клэмпа
             // prefill, design Decision 5)
-            assertEquals(LocalDate.of(2024, 7, 10), viewModel.uiState.value.date, "Дата записи из прошлого сохранена без клэмпа")
+            assertEquals(
+                LocalDate.of(2024, 7, 10),
+                viewModel.uiState.value.date,
+                "Дата записи из прошлого сохранена без клэмпа"
+            )
             assertEquals(14, viewModel.uiState.value.hour, "Час записи из прошлого сохранён без клэмпа")
             assertEquals(30, viewModel.uiState.value.minute, "Минута записи из прошлого сохранена без клэмпа")
 
@@ -827,7 +831,11 @@ class EntryCreateViewModelTest {
             viewModel.onDateChange(openDate)
             viewModel.onTimeChange(23, 59)
             advanceUntilIdle()
-            assertEquals(open.hour, viewModel.uiState.value.hour, "В режиме редактирования время на дне открытия клэмпится")
+            assertEquals(
+                open.hour,
+                viewModel.uiState.value.hour,
+                "В режиме редактирования время на дне открытия клэмпится"
+            )
             assertEquals(open.minute, viewModel.uiState.value.minute, "Минута клэмпится и в режиме редактирования")
         }
 
@@ -854,7 +862,11 @@ class EntryCreateViewModelTest {
                 advanceUntilIdle()
                 lateViewModel.onTimeChange(23, 59)
                 advanceUntilIdle()
-                assertEquals(23, lateViewModel.uiState.value.hour, "23:59 в день открытия 23:59 не клэмпится (граница суток)")
+                assertEquals(
+                    23,
+                    lateViewModel.uiState.value.hour,
+                    "23:59 в день открытия 23:59 не клэмпится (граница суток)"
+                )
                 assertEquals(59, lateViewModel.uiState.value.minute, "Минута 23:59 сохраняется на границе суток")
 
                 // Случай 2: открытие 2024-07-16 00:01 GMT+5 (в UTC это ещё
@@ -871,14 +883,22 @@ class EntryCreateViewModelTest {
                 advanceUntilIdle()
                 earlyViewModel.onTimeChange(0, 2)
                 advanceUntilIdle()
-                assertEquals(0, earlyViewModel.uiState.value.hour, "00:02 на дне открытия (00:01) клэмпится на час открытия")
+                assertEquals(
+                    0,
+                    earlyViewModel.uiState.value.hour,
+                    "00:02 на дне открытия (00:01) клэмпится на час открытия"
+                )
                 assertEquals(1, earlyViewModel.uiState.value.minute, "00:02 клэмпится на минуту открытия")
 
                 // Случай 3: прошедшая дата (15-е) допускает любое время
                 earlyViewModel.onDateChange(LocalDate.of(2024, 7, 15))
                 earlyViewModel.onTimeChange(23, 59)
                 advanceUntilIdle()
-                assertEquals(23, earlyViewModel.uiState.value.hour, "На прошлой дате (15-е) 23:59 остаётся: день открытия — 16-е")
+                assertEquals(
+                    23,
+                    earlyViewModel.uiState.value.hour,
+                    "На прошлой дате (15-е) 23:59 остаётся: день открытия — 16-е"
+                )
             } finally {
                 java.util.TimeZone.setDefault(originalZone)
             }

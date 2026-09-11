@@ -7,6 +7,19 @@
     <string name="exercise_measured_by_reps">повторы</string>
     <string name="exercise_measured_by_time">длительность</string>
     <string name="exercises_list_empty">Нет упражнений</string>
+
+    <!-- Exercise create screen (создание упражнения) -->
+    <string name="exercise_create_title">Новое упражнение</string>
+    <string name="exercise_field_name">Название</string>
+    <string name="exercise_field_category">Категория</string>
+    <string name="exercise_field_category_select">Выберите категорию</string>
+    <string name="exercise_field_comment">Комментарий</string>
+    <string name="exercise_save_error">Не удалось сохранить упражнение</string>
+    <string name="exercise_category_push">Толкающие</string>
+    <string name="exercise_category_pull">Тянущие</string>
+    <string name="exercise_category_legs">Ноги</string>
+    <string name="exercise_category_core">Кор</string>
+    <string name="exercise_category_cardio">Кардио</string>
     <string name="more_exercises_tab_show">Показать вкладку \"Упражнения\"</string>
     <string name="more_exercises_tab_hide">Скрыть вкладку \"Упражнения\"</string>
     <string name="add_workout">Добавить тренировку</string>

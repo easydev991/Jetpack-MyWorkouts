@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -17,6 +18,7 @@ import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.state.ExercisesUiState
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,9 +30,10 @@ import org.junit.runner.RunWith
  * [ExercisesScreenState] (без ViewModel и fake-репозитория, design
  * Decision 3). Навигация — NavHost-harness по образцу
  * `MoreScreenTest.MoreScreenWithNavHost`: заглушки-destinations +
- * `onControllerReady`, нижнего бара нет — проверяется только, что
- * `navigate(Screen.Exercises.route)` открывает экран «Упражнения»
- * (FAB-навигация не проверяется — заглушка без навигации).
+ * `onControllerReady`, нижнего бара нет — проверяется, что
+ * `navigate(Screen.Exercises.route)` открывает экран «Упражнения» и
+ * что тап FAB ведёт на `Screen.ExerciseCreate.route` (fill/save-flow
+ * формы — в `ExerciseCreateScreenTest` и ручной проверке 8.4).
  */
 @RunWith(AndroidJUnit4::class)
 class ExercisesScreenTest {
@@ -75,9 +78,11 @@ class ExercisesScreenTest {
     }
 
     /**
-     * Test-Harness: `NavHost` со стартовой заглушкой и destination
+     * Test-Harness: `NavHost` со стартовой заглушкой, destination
      * `Screen.Exercises.route` на [ExercisesScreenContent] (без
-     * ViewModel). Без графа `navigate(...)` бросает
+     * ViewModel) и заглушкой `Screen.ExerciseCreate.route` — без неё
+     * FAB-навигация бросила бы `IllegalArgumentException:
+     * destination not found`. Без графа `navigate(...)` бросает
      * `IllegalArgumentException: Navigation graph has not been set`.
      */
     @Composable
@@ -93,9 +98,14 @@ class ExercisesScreenTest {
                     state =
                         ExercisesScreenState(
                             uiState = ExercisesUiState.Success(exercises = listOf(pullups, plank)),
-                            onAddExerciseClick = {}
+                            onAddExerciseClick = { navController.navigate(Screen.ExerciseCreate.route) }
                         )
                 )
+            }
+            composable(Screen.ExerciseCreate.route) {
+                // Заглушка destination-маршрута: сценарий проверяет
+                // только навигацию FAB → route (fill-flow формы — в
+                // `ExerciseCreateScreenTest`, на пустой заглушке полей нет).
             }
         }
     }
@@ -194,5 +204,36 @@ class ExercisesScreenTest {
         composeTestRule
             .onNodeWithText("Подтягивания")
             .assertIsDisplayed()
+    }
+
+    /**
+     * Проверяет, что тап FAB ведёт на `Screen.ExerciseCreate.route`
+     * (заглушка destination пустая — проверяется только маршрут).
+     */
+    @Test
+    fun exercises_screen_when_fab_clicked_then_navigates_to_exercise_create_route() {
+        // Given — экран «Упражнения» открыт через NavHost-harness
+        lateinit var navController: NavHostController
+        composeTestRule.setContent {
+            ExercisesScreenWithNavHost(onControllerReady = { navController = it })
+        }
+        composeTestRule.runOnIdle {
+            navController.navigate(Screen.Exercises.route)
+        }
+        composeTestRule.waitForIdle()
+
+        // When — тап по FAB «Добавить упражнение»
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.exercises_add_exercise))
+            .performClick()
+
+        // Then — активный маршрут сменился на форму создания упражнения
+        composeTestRule.runOnIdle {
+            assertEquals(
+                "FAB должен навигировать на Screen.ExerciseCreate.route",
+                Screen.ExerciseCreate.route,
+                navController.currentDestination?.route
+            )
+        }
     }
 }

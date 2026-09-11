@@ -1,3 +1,8 @@
+// TooManyFunctions подавлен осознанно: 9 preview-функций — это требование
+// конвенции проекта (светлая + тёмная тема для каждого ключевого состояния,
+// AGENTS.md), а не раздувание логики; дробить превью на файлы хуже подавления.
+@file:Suppress("TooManyFunctions")
+
 package com.myworkouts.ui.screens.entry
 
 import android.content.res.Configuration

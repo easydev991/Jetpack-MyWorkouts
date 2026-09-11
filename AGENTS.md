@@ -101,12 +101,13 @@ DataStore, Room. Manual DI — без Hilt.
 - `domain/model/` — `AppTheme`, `Exercise`, `ExerciseCategory`, `ExerciseEntry`,
   `EntryListItem`, `ExerciseMeasuredBy`
 - `navigation/Screen.kt` (только `route`) + `BottomTab` + `BottomTabs`
-- `ui/screens/{main,entry,more,root,appearance}/`
-- `ui/state/` — `MainUiState.kt`, `EntryCreateUiState.kt`, `AppearanceUiState.kt`
+- `ui/screens/{main,entry,more,root,appearance,appdata,exercises}/`
+- `ui/state/` — `MainUiState.kt`, `EntryCreateUiState.kt`,
+  `ExerciseCreateUiState.kt`, `AppearanceUiState.kt`
 - `ui/theme/{Color,Theme,Type}.kt` ← `Type`, не `Typography`
 - `ui/util/` — `DurationFormatter.kt` (общий для main и entry экранов)
 - `ui/viewmodel/` — `MainViewModel.kt`, `EntryCreateViewModel.kt`,
-  `AppearanceViewModel.kt`
+  `ExerciseCreateViewModel.kt`, `AppearanceViewModel.kt`
 
 `di/`, `util/`, `MyWorkoutsApplication.kt` ещё не созданы — manual DI без
 Hilt; композиционный корень — `MainActivity` (создаёт один раз

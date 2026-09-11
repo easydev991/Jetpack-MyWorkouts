@@ -39,26 +39,33 @@ import com.myworkouts.ui.viewmodel.ExercisesViewModel
 
 /**
  * Экран «Упражнения» — вкладка каталога: реактивный список
- * стандартных и пользовательских упражнений, пустое состояние,
- * FAB-заглушка (exercises-screen, спека).
+ * стандартных и пользовательских упражнений, пустое состояние, FAB
+ * навигации на создание упражнения (exercises-screen, спека).
  *
  * VM-обёртка: подписка на [ExercisesViewModel.uiState]. Вся верстка —
  * в [ExercisesScreenContent].
  *
  * @param viewModel ViewModel с реактивным списком каталога
+ * @param onAddExerciseClick Тап по FAB — навигация на
+ * [com.myworkouts.navigation.Screen.ExerciseCreate] (прокидывается из
+ * `RootScreen`, как `MainScreen → EntryCreateScreen`)
  * @param modifier внешний модификатор
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExercisesScreen(
     viewModel: ExercisesViewModel,
+    onAddExerciseClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     ExercisesScreenContent(
         state =
-            ExercisesScreenState(uiState = uiState),
+            ExercisesScreenState(
+                uiState = uiState,
+                onAddExerciseClick = onAddExerciseClick
+            ),
         modifier = modifier
     )
 }
@@ -69,11 +76,13 @@ fun ExercisesScreen(
  * готовый state без ViewModel (образец — `MainScreenState`).
  *
  * @property uiState Состояние каталога (Loading/Success)
- * @property onAddExerciseClick Тап по FAB (заглушка — design Decision 4)
+ * @property onAddExerciseClick Тап по FAB — навигация на
+ * `Screen.ExerciseCreate` (без значения по умолчанию — колбэк
+ * обязан приходить сверху, из `RootScreen`)
  */
 internal data class ExercisesScreenState(
     val uiState: ExercisesUiState,
-    val onAddExerciseClick: () -> Unit = {}
+    val onAddExerciseClick: () -> Unit
 )
 
 /**

@@ -68,6 +68,15 @@ sealed class Screen(
          */
         fun createRoute(entryId: Long = NO_ENTRY_ID): String = "entry_create?$ARG_ENTRY_ID=$entryId"
     }
+
+    /**
+     * Экран создания упражнения (не в нижней навигации): форма из
+     * имени, категории, типа измерения и комментария. Без аргументов —
+     * экран всегда в режиме «создать новое» (create-exercise, design
+     * Decision 3): аргументы добавляются только при реальной
+     * потребности (ср. [EntryCreate] с его `entryId`).
+     */
+    object ExerciseCreate : Screen(route = "exercise_create")
 }
 
 /**

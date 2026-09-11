@@ -29,12 +29,14 @@ import com.myworkouts.navigation.visibleTabs
 import com.myworkouts.ui.screens.appdata.AppDataScreen
 import com.myworkouts.ui.screens.appearance.AppearanceScreen
 import com.myworkouts.ui.screens.entry.EntryCreateScreen
+import com.myworkouts.ui.screens.exercises.ExerciseCreateScreen
 import com.myworkouts.ui.screens.exercises.ExercisesScreen
 import com.myworkouts.ui.screens.main.MainScreen
 import com.myworkouts.ui.screens.more.MoreScreen
 import com.myworkouts.ui.viewmodel.AppDataViewModel
 import com.myworkouts.ui.viewmodel.AppearanceViewModel
 import com.myworkouts.ui.viewmodel.EntryCreateViewModel
+import com.myworkouts.ui.viewmodel.ExerciseCreateViewModel
 import com.myworkouts.ui.viewmodel.ExercisesViewModel
 import com.myworkouts.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
@@ -137,7 +139,8 @@ private fun AppNavHost(
         }
         composable(Screen.Exercises.route) {
             ExercisesScreen(
-                viewModel = viewModel(factory = ExercisesViewModel.factory(repository))
+                viewModel = viewModel(factory = ExercisesViewModel.factory(repository)),
+                onAddExerciseClick = { navController.navigate(Screen.ExerciseCreate.route) }
             )
         }
         composable(Screen.More.route) {
@@ -168,6 +171,14 @@ private fun AppNavHost(
                     ?: Screen.EntryCreate.NO_ENTRY_ID
             EntryCreateScreen(
                 viewModel = viewModel(factory = EntryCreateViewModel.factory(repository, entryId)),
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+        // ExerciseCreate: фабрика строится в composable-блоке (design
+        // Decision 4), FAB «Упражнений» ведёт на этот маршрут.
+        composable(Screen.ExerciseCreate.route) {
+            ExerciseCreateScreen(
+                viewModel = viewModel(factory = ExerciseCreateViewModel.factory(repository)),
                 onBackClick = { navController.popBackStack() }
             )
         }

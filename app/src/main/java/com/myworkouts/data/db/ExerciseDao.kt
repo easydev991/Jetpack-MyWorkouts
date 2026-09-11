@@ -10,9 +10,10 @@ import kotlinx.coroutines.flow.Flow
 /**
  * DAO каталога упражнений.
  *
- * Поиск и сортировка — в SQL (`ORDER BY name COLLATE NOCASE`,
- * `LIKE '%' || :query || '%' COLLATE NOCASE`), см. design.md Decision 5:
- * фильтрация в Kotlin отклонена как лишняя работа на UI-потоке.
+ * Поиск и сортировка — в SQL (`ORDER BY is_custom DESC, created_at DESC,
+ * name COLLATE NOCASE`, `LIKE '%' || :query || '%' COLLATE NOCASE`), см.
+ * design.md Decision 5: фильтрация в Kotlin отклонена как лишняя работа
+ * на UI-потоке.
  * Спецсимволы LIKE (`%`, `_`) в пользовательском вводе не экранируются —
  * YAGNI для каталога из 13 названий; экранирование добавится миграцией
  * при росте каталога.
@@ -20,14 +21,15 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ExerciseDao {
     /**
-     * Возвращает каталог, отфильтрованный по подстроке названия и
-     * отсортированный по имени без учёта регистра. Пустая подстрока
-     * возвращает весь каталог.
+     * Возвращает каталог, отфильтрованный по подстроке названия
+     * (без учёта регистра) и отсортированный по убыванию кастомности,
+     * затем по убыванию `createdAt`, затем по `name` без учёта регистра.
+     * Пустая подстрока возвращает весь каталог.
      */
     @Query(
         "SELECT * FROM exercises " +
             "WHERE name LIKE '%' || :query || '%' COLLATE NOCASE " +
-            "ORDER BY name COLLATE NOCASE"
+            "ORDER BY is_custom DESC, created_at DESC, name COLLATE NOCASE"
     )
     fun observeExercises(query: String): Flow<List<ExerciseEntity>>
 
