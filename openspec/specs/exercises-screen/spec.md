@@ -3,8 +3,8 @@
 ## Purpose
 
 Экран «Упражнения» — вкладка каталога упражнений (стандартных и
-пользовательских) в нижней навигации: реактивный список только для чтения с
-FAB-заглушкой, из которого позже вырастут создание/редактирование/архивация.
+пользовательских) в нижней навигации: реактивный список только для чтения
+с FAB, открывающим экран создания упражнения.
 
 ## Requirements
 
@@ -56,7 +56,9 @@ SharingStarted.WhileSubscribed(5000), ExercisesUiState.Loading)`.
 `ExercisesUiState` SHALL быть sealed-иерархией `Loading` /
 `Success(exercises: List<Exercise>)` без `Error`-ветки (единственный источник
 — офлайн Room-Flow, прецедент задокументирован в `MainUiState.kt`).
-Сортировка по названию — на стороне SQL (`observeExercises`). Благодаря
+Сортировка SHALL быть на стороне SQL (`observeExercises`); критерии и
+порядок определены требованием «Сортировка каталога — кастомные сверху,
+новые первые» в этом же capability. Благодаря
 реактивности будущие создание/удаление упражнений обновляют список без
 действий экрана.
 
@@ -149,19 +151,6 @@ body — аналогично `entry_list_empty` главного экрана. 
 - **THEN** по центру экрана отображается «Нет упражнений» / "No exercises"
 - **AND** `LazyColumn` не содержит строк
 
-### Requirement: FAB — заглушка без навигации
-
-FAB SHALL быть заглушкой: `onClick` SHALL NOT выполнять навигацию или менять
-состояние экрана (экран создания упражнения появится в будущем change).
-`onAddExerciseClick` в `ExercisesScreenState` SHALL иметь пустое значение
-по умолчанию — экран не передаёт лямбду, пока навигации нет.
-
-#### Scenario: Тап по FAB остаётся на экране
-
-- **WHEN** пользователь taps FAB
-- **THEN** ничего не происходит
-- **AND** активным остаётся `Screen.Exercises.route`
-
 ### Requirement: Заголовок вкладки и экрана локализован ru/en
 
 Строка `exercises_title` SHALL существовать в `res/values/strings.xml`
@@ -180,3 +169,62 @@ FAB SHALL быть заглушкой: `onClick` SHALL NOT выполнять н
 
 - **WHEN** вкладка видна (настройка включена) и локаль устройства `en`
 - **THEN** лейбл вкладки — "Exercises"
+
+### Requirement: FAB открывает ExerciseCreateScreen
+
+`ExercisesScreen` SHALL принимать `onAddExerciseClick: () -> Unit` в
+качестве обязательного параметра (без значения по умолчанию) и
+пробрасывать его в `ExercisesScreenState.onAddExerciseClick`. `FAB`
+(компонент `FloatingActionButton`, без `IconButton`-обёртки —
+паттерн существующего кода, `ExercisesScreen.kt` L101–108) SHALL
+принимать `onClick = state.onAddExerciseClick`. Тап по FAB SHALL
+инициировать навигацию на `Screen.ExerciseCreate.route` через
+колбэк `onAddExerciseClick`, прокидываемый из `RootScreen` (как
+`MainScreen → EntryCreateScreen`). Поле `ExercisesScreenState.onAddExerciseClick:
+() -> Unit` SHALL быть обязательным (без дефолта `= {}`); `ExercisesScreen`
+пробрасывает колбэк из своего параметра в `ExercisesScreenState.onAddExerciseClick`
+при создании state. Экран создания упражнения определён в capability
+`exercise-create-screen`.
+
+#### Scenario: Тап по FAB открывает ExerciseCreateScreen
+
+- **WHEN** пользователь нажимает FAB на `ExercisesScreen`
+- **THEN** `onAddExerciseClick` вызывается ровно один раз
+- **AND** активным становится `Screen.ExerciseCreate.route`
+
+### Requirement: Сортировка каталога — кастомные сверху, новые первые
+
+Каталог упражнений SHALL отображаться в порядке, определяемом SQL-запросом
+репозитория: `ORDER BY is_custom DESC, created_at DESC, name COLLATE
+NOCASE`. Кастомные упражнения (`isCustom = true`) SHALL находиться выше
+стандартных (`isCustom = false`); внутри каждой группы — по убыванию
+`createdAt` (новые сверху); при равных `createdAt` — по `name` без учёта
+регистра (COLLATE NOCASE, по возрастанию) как финальный tie-break
+(действует в обеих группах — кастомных и стандартных).
+
+#### Scenario: Кастомное упражнение выше стандартного
+
+- **WHEN** в каталоге есть упражнение «Жим» (`isCustom = true`) и
+  стандартное «Приседания» (`isCustom = false`)
+- **THEN** в списке «Жим» отображается выше «Приседаний»
+
+#### Scenario: Несколько кастомных — новые сверху
+
+- **WHEN** в каталоге есть два кастомных упражнения: «A» с `createdAt =
+  T1` и «B» с `createdAt = T2 > T1`
+- **THEN** в списке «B» отображается выше «A»
+
+#### Scenario: Равные createdAt — сортировка по имени (COLLATE NOCASE)
+
+- **WHEN** в каталоге есть два кастомных упражнения «Бег» и «Жим» с
+  одинаковым `createdAt`
+- **THEN** в списке «Бег» отображается выше «Жим» (по возрастанию
+  `name` с `COLLATE NOCASE`)
+
+#### Scenario: Стандартные сортированы по имени без учёта регистра (ASCII-выборка)
+
+- **WHEN** в каталоге только стандартные упражнения на ASCII-выборке
+  (паттерн — `ExerciseDaoTest.search_results_areSortedByNameCaseInsensitive`,
+  комментарий L94–95: «SQLite NOCASE-коллация покрывает только ASCII»)
+  с одинаковым `createdAt`: «alpha», «Beta», «CHARLIE», «delta»
+- **THEN** порядок: `alpha`, `Beta`, `CHARLIE`, `delta`
