@@ -28,8 +28,10 @@ import java.time.LocalDate
  *   не найдена
  * @property hasChanges Есть отличия формы от загруженной записи
  *   (вычисляется ViewModel; всегда `false` в режиме создания)
- * @property isEntryMissing Режим редактирования открыт, но запись не
- *   найдена (удалена) — показать подсказку под кнопкой сохранения
+ * @property isEntryMissing При открытии edit-режима запись отсутствует
+ *   в БД (`getEntry` → `success(null)` или `failure`) — показать подсказку
+ *   под кнопкой сохранения. Не меняется после `init {}` — отражает
+ *   результат однократной загрузки при открытии экрана
  */
 data class EntryCreateUiState(
     val exercises: List<Exercise> = emptyList(),
