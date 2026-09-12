@@ -76,24 +76,53 @@ the `show_exercises_tab` setting is off).
 ### Requirement: ExerciseCreate object added to sealed Screen
 
 `Screen.ExerciseCreate` SHALL быть `object ExerciseCreate : Screen(route =
-"exercise_create")`. Route SHALL быть стабильной строкой
-`"exercise_create"` и SHALL регистрироваться в `NavHost` `RootScreen` как
-отдельный `composable("exercise_create") { ... }` (без аргументов —
-упражнение всегда создаётся, редактирования в этом change нет). `Screen`
+"exercise_create?exerciseId={exerciseId}")` с query-параметром
+`exerciseId` — паттерн `Screen.EntryCreate`. Объект SHALL содержать:
+константу `const val ARG_EXERCISE_ID: String = "exerciseId"`,
+`const val NO_EXERCISE_ID: Long = -1L`, фабрику маршрута
+`fun createRoute(exerciseId: Long = NO_EXERCISE_ID) =
+"exercise_create?$ARG_EXERCISE_ID=$exerciseId"` и
+`val arguments = listOf(navArgument(ARG_EXERCISE_ID) { type =
+NavType.LongType; defaultValue = NO_EXERCISE_ID })`. Регистрация в
+`NavHost` `RootScreen`: `composable(Screen.ExerciseCreate.route,
+arguments = Screen.ExerciseCreate.arguments) { ... }`; значение
+`exerciseId` SHALL читаться из `backStackEntry.arguments?.getLong(
+ARG_EXERCISE_ID, Screen.ExerciseCreate.NO_EXERCISE_ID)` и передаваться в
+фабрику `ExerciseCreateViewModel` (по аналогии с `entryId` →
+`EntryCreateViewModel`). Create-режим использует фабрику маршрута без
+параметра: `Screen.ExerciseCreate.createRoute()` даёт
+`"exercise_create?exerciseId=-1"`. `Screen`
 остаётся единственным источником истины для строк навигационных
 маршрутов.
 
 #### Scenario: ExerciseCreate object added to sealed Screen
 
 - **WHEN** `Screen.ExerciseCreate` is referenced
-- **THEN** `Screen.ExerciseCreate.route == "exercise_create"`
-- **AND** `Screen.ExerciseCreate` is an `object` instance of `Screen`
+- **THEN** `Screen.ExerciseCreate.route ==
+  "exercise_create?exerciseId={exerciseId}"`
+- **AND** `Screen.ExerciseCreate` declared as `object` inside sealed
+  `Screen`
+
+#### Scenario: Фабрика маршрута с exerciseId
+
+- **WHEN** `Screen.ExerciseCreate.createRoute(7)` вычислен
+- **THEN** результат `"exercise_create?exerciseId=7"`
+- **AND** `Screen.ExerciseCreate.NO_EXERCISE_ID == -1L`
+
+#### Scenario: Create-режим без параметра
+
+- **WHEN** `Screen.ExerciseCreate.createRoute()` вычислен без аргумента
+- **THEN** результат `"exercise_create?exerciseId=-1"`
+- **AND** `exerciseId == NO_EXERCISE_ID` соответствует create-режиму
 
 #### Scenario: NavHost registers ExerciseCreate destination
 
 - **WHEN** `RootScreen` is composed
-- **THEN** `NavHost` has a `composable("exercise_create") { ... }`
+- **THEN** `NavHost` has a
+  `composable(Screen.ExerciseCreate.route, arguments = ...) { ... }`
   destination рядом с `EntryCreate`
+- **AND** `exerciseId` из аргументов backStackEntry передаётся в фабрику
+  `ExerciseCreateViewModel`
 
 #### Scenario: Bottom navigation скрыта на ExerciseCreate
 
