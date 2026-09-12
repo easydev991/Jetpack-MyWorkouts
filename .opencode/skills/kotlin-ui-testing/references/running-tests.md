@@ -9,11 +9,11 @@
 make android-test    # все androidTest на подключённом устройстве/эмуляторе
 ```
 
-Команда выполняет:
+Под капотом:
 
 ```makefile
 ./gradlew connectedDebugAndroidTest --console=plain
-ANDROID_TEST_GRADLE_EXIT_CODE=$$? python3 scripts/android_test_report.py
+python3 scripts/test_report.py app/build/outputs/androidTest-results/connected/debug
 ```
 
 - `connectedDebugAndroidTest` — инструментированные тесты в debug-сборке
@@ -21,25 +21,49 @@ ANDROID_TEST_GRADLE_EXIT_CODE=$$? python3 scripts/android_test_report.py
 
 ## Отчёт
 
-`scripts/android_test_report.py` — человекочитаемый отчёт:
+`scripts/test_report.py` — человекочитаемый отчёт (тот же скрипт, что
+использует `make test`):
 
 - Exit code 0 — все тесты прошли
-- Exit code 1 — упавшие тесты или ошибка Gradle
-  (`sys.exit(1)` при `failed > 0` или `GRADLE_EXIT_CODE != 0`)
+- Exit code 1 — упавшие тесты (`sys.exit(1)` при `failed > 0`)
 
-Парсинг XML из `app/build/outputs/androidTest-results/connected/debug/`
-(и других возможных путей, включая
-`app/build/reports/androidTests/connected/debug/results`).
+Парсинг XML из `app/build/outputs/androidTest-results/connected/debug/`.
 
-HTML-отчёт в браузере:
+Скрипт запускается **всегда** (и при упавших тестах) — список фейлов
+виден сразу, без `grep` по Gradle-выводу.
+
+### Анти-паттерн: 4 запуска вместо одного
+
+`make android-test` сам печатает список упавших тестов через
+`test_report.py`. Не надо после запуска снова грепать Gradle-вывод:
 
 ```bash
-make android-test-report    # открывает index.html отчёта
+# НЕПРАВИЛЬНО — 4 запуска, лишние ~минуты:
+make android-test 2>&1 | tail -5
+make android-test 2>&1 | grep -E 'FAIL|FAILED' | head -10
+make android-test 2>&1 | tail -5
+make android-test 2>&1 | grep -E 'FAIL|FAILED' | head -10
+
+# ПРАВИЛЬНО — 1 запуск:
+make android-test   # список упавших виден в выводе скрипта, если есть
 ```
+
+Если нужно перечитать отчёт после фикса без нового запуска:
+
+```bash
+python3 scripts/test_report.py app/build/outputs/androidTest-results/connected/debug
+```
+
+(Только если XML ещё на диске — `make clean` его стирает.)
+
+HTML-отчёт Gradle остаётся в
+`app/build/reports/androidTests/connected/debug/index.html` — открывается
+вручную (`make android-test-report` в Makefile отсутствует).
 
 ## Все тесты сразу
 
-В `Makefile` есть отдельные цели для unit и android-тестов:
+В `Makefile` есть раздельные цели для unit и android-тестов.
+Объединённой цели `make test-all` нет:
 
 ```bash
 make test           # JVM unit-тесты (./gradlew test --console=plain)
@@ -48,20 +72,8 @@ make android-test   # androidTest на подключённом устройст
 
 Результаты:
 - Unit: `app/build/test-results/`
-- Интеграционные: `app/build/reports/androidTests/connected/debug/index.html`
-
-## screenshot-tests модуль
-
-Отдельный Gradle-модуль `screenshot-tests/` — генерация скриншотов
-для магазина приложений (fastlane), не обычные тесты:
-
-- `targetProjectPath = ":app"` — зависит от app-модуля
-- Кастомный раннер `ScreenshotTestRunner` (`AndroidJUnitRunner`)
-- `createAndroidComposeRule<MainActivity>()` + `LocaleTestRule`
-  (переключение локалей)
-- Скриншоты через `Screengrab` с `UiAutomatorScreenshotStrategy`
-- Демо-данные вставляются через `database.workoutDao().insertWorkout()` напрямую
-- Результат: `fastlane/metadata/android` (см. `make screenshots`)
+- Интеграционные: `app/build/outputs/androidTest-results/connected/debug/`
+  + `app/build/reports/androidTests/connected/debug/index.html`
 
 ## Один класс
 
@@ -80,11 +92,11 @@ make android-test   # androidTest на подключённом устройст
   ```bash
   # Один тестовый метод
   ./gradlew :app:connectedDebugAndroidTest --console=plain \
-    -Pandroid.testInstrumentationRunnerArguments.class='com.myworkouts.ui.screens.main.MainScreenTest#content_long_press_then_row_selected_semantic_is_true_then_dismiss_restores_false'
+    -Pandroid.testInstrumentationRunnerArguments.class='com.myworkouts.ui.screens.exercises.ExercisesScreenTest#row_long_press_when_standard_then_no_context_menu'
 
   # Весь класс
   ./gradlew :app:connectedDebugAndroidTest --console=plain \
-    -Pandroid.testInstrumentationRunnerArguments.class='com.myworkouts.ui.screens.main.MainScreenTest'
+    -Pandroid.testInstrumentationRunnerArguments.class='com.myworkouts.ui.screens.exercises.ExercisesScreenTest'
   ```
 
   Кавычки вокруг значения обязательны (в `class#method` решётка — не
@@ -99,11 +111,18 @@ make android-test   # androidTest на подключённом устройст
 ## Зависимости androidTest (build.gradle.kts)
 
 ```kotlin
-androidTestImplementation(libs.androidx.junit)            // androidx.test:junit
-androidTestImplementation(libs.turbine)                   // Turbine 1.2.1
 androidTestImplementation(platform(libs.androidx.compose.bom))
 androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+androidTestImplementation(libs.androidx.espresso.core)
+androidTestImplementation(libs.androidx.junit)
 debugImplementation(libs.androidx.compose.ui.test.manifest)
 ```
+
+> `Turbine` в проекте **не подключён** нигде.
+> `kotlinx-coroutines-test` есть только в unit-тестах
+> (`app/build.gradle.kts:66` — `testImplementation`); в `androidTest/`
+> его нет (`androidTestImplementation` в `app/build.gradle.kts:72-75`).
+> В androidTest используется `kotlinx.coroutines.runBlocking` + `.first()`
+> для проверки Flow.
 
 `testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"`

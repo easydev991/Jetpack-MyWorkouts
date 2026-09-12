@@ -1,280 +1,171 @@
 # Component testing — изолированные UI-тесты Compose
 
 Компонентные тесты проверяют отдельный Compose-компонент без реальной
-Activity. В Jetpack-MyWorkouts так тестируются `WorkoutDurationText`, `ColorSelector`,
-`WorkoutTagFilterDialog`, `SaveButton`, секции формы CreateEdit.
+Activity. В Jetpack-MyWorkouts так тестируются (список не
+исчерпывающий — добавьте новый тест, когда появится):
 
-Примеры: `app/src/androidTest/java/com/myworkouts/ui/ds/WorkoutDurationTextTest.kt`,
-`ui/screens/createedit/ColorSelectorUiTest.kt`,
-`ui/screens/events/WorkoutTagFilterDialogTest.kt`.
+- `ExercisesScreenTest` — экран каталога упражнений через
+  `ExercisesScreenContent(state = ...)` без ViewModel
+- `ExerciseCreateScreenTest` — форма создания через
+  `ExerciseCreateScreenContent(state = ...)`
+- `EntryCreateScreenTest` — форма записи через
+  `EntryCreateScreenContent(state = ...)`
+- `MainScreenTest` — главный экран через `MainScreenContent(state = ...)`
+- `MainScreenEditNavigationTest` — клик по строке секции → переход
+  в `EntryCreateScreen`
+- `MainScreenFabNavigationTest` — клик по FAB главного экрана →
+  переход в `ExerciseCreateScreen`
+- `MainScreenSectionsTest` — секции главного экрана с реальной VM
+  и фейковым репозиторием на `MutableStateFlow` (без Room);
+  использует `createAndroidComposeRule(ComponentActivity)` —
+  единственный компонентный тест в проекте с `ComponentActivity`,
+  чтобы у `DropdownMenu` был host
+- `AppearanceScreenTest` / `AppearanceScreenStaticTest` — экран темы
+- `AppDataScreenTest`, `MoreScreenTest` — экраны настроек
+- `ExercisesLiveUpdateTest` — экран каталога с реальной VM + Room in-memory
 
 ## Скелет компонентного теста
 
-```kotlin
-import androidx.compose.ui.test.junit4.v2.createComposeRule
+Полный код — `references/EXAMPLE.md` (раздел «Компонентный UI-тест
+(без Activity)»). Особенности скелета (без повтора кода):
 
-class SomeComponentUiTest {
-    @get:Rule
-    val composeTestRule = createComposeRule()
-
-    private val context = InstrumentationRegistry.getInstrumentation().targetContext
-
-    @Test
-    fun subject_whenCondition_thenResult() {
-        // Given
-        val testText = "5 дней"
-
-        // When
-        composeTestRule.setContent {
-            MyWorkoutsTheme {
-                WorkoutDurationText(formattedText = testText)
-            }
-        }
-
-        // Then
-        composeTestRule
-            .onNodeWithText(testText)
-            .assertExists()
-            .assertTextEquals(testText)
-    }
-}
-```
-
-Ключевое:
 - `createComposeRule()` — v2 API (`androidx.compose.ui.test.junit4.v2`),
-  без Activity, без `@RunWith`
-- `setContent { MyWorkoutsTheme { ... } }` — компонент в теме приложения
-  (WorkoutDurationTextTest обходится без темы — если компонент не зависит от
-  неё, обёртка необязательна)
-- Состояние компонента — через `mutableStateOf` локально в тесте:
+  без Activity
+- Готовый `*ScreenState` (data class с `uiState` и колбэками) —
+  ViewModel и репозиторий не нужны, логика VM покрыта JVM-тестами
+- `setContent { ... }` оборачивает компонент в `JetpackMyWorkoutsTheme`,
+  если компонент зависит от темы; для самодостаточных компонентов
+  обёртка необязательна (тест `MainScreenTest` обходится без неё для
+  проверки чистой логики рендера)
+- Все классы компонентных тестов аннотированы
+  `@RunWith(AndroidJUnit4::class)` (см. `references/fundamentals.md`,
+  раздел «Стек и аннотации»)
+
+## Навигация через NavHost-harness
+
+Когда нужно проверить `navController.navigate(...)` без реальной
+`MainActivity` — оборачиваем экран в минимальный `NavHost` с
+заглушками destinations. Без `NavHost` `navController.navigate(...)`
+бросит `IllegalArgumentException: Navigation graph has not been set`,
+без нужного destination — `IllegalArgumentException: destination not found`.
+
+Полный код `ExercisesScreenWithNavHost` — в `references/EXAMPLE.md`
+→ «Компонентный тест с NavHost-harness и навигацией».
+
+## Тест с реальной ViewModel поверх Room in-memory
+
+`ExercisesLiveUpdateTest` — сценарий «уход с экрана → вставка →
+возврат»: проверяет, что `WhileSubscribed(5000)` доставляет
+invalidation корректно. Полный код (`setUp`/`tearDown` + `setContent`
+с реальной `ExercisesViewModel.factory(repository)` поверх Room in-memory
++ полный сценарий) — в `references/EXAMPLE.md` →
+«Компонентный тест с реальной ViewModel поверх Room in-memory».
+
+Ключевые точки (без кода):
+
+- `Room.inMemoryDatabaseBuilder(...).allowMainThreadQueries().build()`
+  в `@Before`, `database.close()` в `@After`
+- `ExercisesViewModel.factory(repository)` — единая точка входа для VM
+  в тестах (factory живёт рядом с VM)
+- `JetpackMyWorkoutsTheme` оборачивает `NavHost` (если экран зависит
+  от темы)
+- После `runBlocking { repository.addExercise(...) }` в Compose-тесте —
+  `composeTestRule.waitForIdle()` (правило 10)
+- `composeTestRule.runOnIdle { navController.popBackStack() }` —
+  навигация через `runOnIdle`, не из тела теста напрямую
+
+## Тест с фейковым репозиторием на MutableStateFlow
+
+`MainScreenSectionsTest` — реальная VM с фейковым репозиторием
+(без Room). Фейк живёт внутри файла теста как `private class`:
 
 ```kotlin
-var selectedColor by mutableStateOf<Color?>(customColor)
+private lateinit var repository: SectionsFakeRepository
+private lateinit var viewModel: MainViewModel
 
-composeTestRule.setContent {
-    MyWorkoutsTheme {
-        ColorSelector(
-            selectedColor = selectedColor,
-            onColorSelected = { selectedColor = it }
+@Before
+fun setUp() {
+    repository =
+        SectionsFakeRepository(
+            initialEntries =
+                todayEntries() +
+                    entry(id = 101L, name = "Приседания", date = today.minusDays(1), hour = 19) +
+                    entry(id = 201L, name = "Планка", date = today.minusDays(5), hour = 8)
         )
+    viewModel = MainViewModel(repository = repository)
+}
+
+private class SectionsFakeRepository(
+    initialEntries: List<EntryListItem>
+) : WorkoutDataRepository {
+    private val entriesFlow = MutableStateFlow(initialEntries)
+
+    override fun exercises(query: String): Flow<List<Exercise>> = MutableStateFlow(emptyList())
+    override fun entries(): Flow<List<EntryListItem>> = entriesFlow
+
+    override suspend fun addEntry(entry: ExerciseEntry): Result<Long> = Result.success(1L)
+    override suspend fun addExercise(exercise: Exercise): Result<Long> = Result.success(1L)
+    override suspend fun updateExercise(exercise: Exercise): Result<Unit> = Result.success(Unit)
+    override suspend fun updateEntry(entry: ExerciseEntry): Result<Unit> = Result.success(Unit)
+    override suspend fun getEntry(id: Long): Result<ExerciseEntry?> = Result.success(null)
+    override suspend fun deleteEntry(id: Long): Result<Unit> {
+        entriesFlow.value = entriesFlow.value.filterNot { it.id == id }
+        return Result.success(Unit)
     }
+    override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
+    override suspend fun getExercise(id: Long): Result<Exercise?> = Result.success(null)
+    override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = MutableStateFlow(emptySet())
+
+    override suspend fun getAllExercises(): Result<List<Exercise>> = error("Не используется в этом тесте")
+    override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = error("Не используется в этом тесте")
+    override suspend fun importData(
+        exercises: List<Exercise>,
+        entries: List<BackupEntry>
+    ): Result<Unit> = error("Не используется в этом тесте")
+    override suspend fun deleteAllData(): Result<Unit> = error("Не используется в этом тесте")
 }
-```
-
-## Long-press и контекстное меню (DropdownMenu)
-
-Паттерн «длинное нажатие на строке списка → меню в точке тача»:
-`pointerInput { detectTapGestures.onLongPress }` на строке +
-`onGloballyPositioned` для глобальной позиции, **один**
-`DropdownMenu` на уровне списка (не внутри строки — позиция
-привязки плывёт при скролле).
-
-### Состояние меню
-
-```kotlin
-data class ContextMenuState(
-    val item: ListItem,           // ваш доменный тип
-    val offsetInRoot: Offset
-)
-```
-
-### Жест на строке
-
-Сохраняем глобальную позицию в `remember`, локальный `localOffset`
-приходит из `detectTapGestures.onLongPress`:
-
-```kotlin
-@Composable
-private fun RowWithLongPress(
-    item: ListItem,
-    separator: String,
-    onLongPress: (localOffset: Offset, positionInRoot: Offset) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var positionInRoot by remember { mutableStateOf(Offset.Zero) }
-    Row(
-        item = item,
-        separator = separator,
-        modifier = modifier
-            .onGloballyPositioned { coords ->
-                positionInRoot = coords.positionInRoot()
-            }
-            .pointerInput(item.id) {
-                detectTapGestures(
-                    onLongPress = { localOffset ->
-                        onLongPress(localOffset, positionInRoot)
-                    }
-                )
-            }
-    )
-}
-```
-
-### Меню на уровне списка
-
-Один `DropdownMenu` (не на строку); px→dp через `LocalDensity`;
-M3 сам клампит `offset` в границы экрана:
-
-```kotlin
-@Composable
-private fun ListWithContextMenu(
-    items: List<ListItem>,
-    separator: String,
-    contextMenu: ContextMenuState?,
-    onItemLongPress: (ListItem, Offset) -> Unit,
-    onMenuDismiss: () -> Unit,
-    onItemAction: (ListItem) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val density = LocalDensity.current
-    Box(modifier = modifier.fillMaxSize()) {
-        LazyColumn {
-            items(items = items, key = { it.id }) { item ->
-                RowWithLongPress(
-                    item = item,
-                    separator = separator,
-                    onLongPress = { localOffset, positionInRoot ->
-                        onItemLongPress(item, positionInRoot + localOffset)
-                    }
-                )
-            }
-        }
-
-        if (contextMenu != null) {
-            DropdownMenu(
-                expanded = true,
-                onDismissRequest = onMenuDismiss,
-                offset =
-                    DpOffset(
-                        x = with(density) { contextMenu.offsetInRoot.x.toDp() },
-                        y = with(density) { contextMenu.offsetInRoot.y.toDp() }
-                    )
-            ) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.delete)) },
-                    onClick = { onItemAction(contextMenu.item) }
-                )
-            }
-        }
-    }
-}
-```
-
-Подставьте свои имена (`ListItem`, `Row`, `R.string.*`, колбэки) на
-свои — структура и логика те же.
-
-### Тест-покрытие в `androidTest`
-
-- `performTouchInput { longClick() }` →
-  `onNodeWithText("...").assertExists()` — наличие меню и пункта.
-- **Позиция** меню относительно тача UI-тестами не проверяется
-  (`offset` `DropdownMenu` не имеет семантики точной привязки в
-  Compose UI Test) — закрывается ручной проверкой на эмуляторе
-  (см. `references/manual-verification.md`).
-
-## Эмуляция локального состояния в тесте через `var X by remember`
-
-Когда Composable принимает `state = ScreenState(...,
-onTransientChange = ...)` (test/preview-state с колбэками) и внутри
-логики использует **транзитное локальное состояние** (открыто ли
-меню, какой id «pending», что выбрано) — частый антипаттерн:
-callback инкрементируется, но в `state.transient` не проставляется,
-Composable не перерисуется.
-
-**Антипаттерн** (callback срабатывает, но UI не рисуется —
-`assertExists()` для нужной ноды падает):
-
-```kotlin
-var callbackCount = 0
-composeTestRule.setContent {
-    MyScreen(
-        state = ScreenState(
-            uiState = ...,
-            // transient по умолчанию = null
-            onTransientChange = {
-                callbackCount++           // счётчик растёт
-                // но state.transient остаётся null — UI не обновляется
-            }
-        )
-    )
-}
-// ...
-assertEquals(1, callbackCount)            // проходит
-onNodeWithText("Действие").assertExists() // падает: ноды нет
-```
-
-**Корректно** — завести локальный `var transient by remember`,
-callback обновляет **и** локальный `transient`, передаваемый в
-`state.transient`:
-
-```kotlin
-var callbackCount = 0
-composeTestRule.setContent {
-    var transient by remember { mutableStateOf<MyTransient?>(null) }
-    MyScreen(
-        state = ScreenState(
-            uiState = ...,
-            transient = transient,           // обратная подписка
-            onTransientChange = {
-                callbackCount++
-                transient = it
-            }
-        )
-    )
-}
-```
-
-`MutableState` гарантирует рекомпозицию с новым значением. Шаблон
-распространяется на любые транзитные поля стейта: `pendingX`,
-`openMenu`, `selectedItem` и т.п.
-
-## Изоляция зависимостей — TestViewModel
-
-Для тестов экрана CreateEdit используется factory-функция из
-`app/src/androidTest/java/com/myworkouts/ui/screens/createedit/TestViewModel.kt`:
-
-```kotlin
-fun createTestViewModel(): WorkoutEditScreenViewModel =
-    WorkoutEditScreenViewModel(
-        repository = createTestWorkoutRepository(),
-        resourceProvider = createTestResourceProvider(),
-        savedStateHandle = SavedStateHandle(),
-        analyticsService = AnalyticsService(listOf(NoopAnalyticsProvider()))
-    )
-```
-
-Фейковый репозиторий — анонимный `object : WorkoutRepository` с пустыми
-реализациями (все Flow возвращают `flowOf()`, suspend-методы — no-op):
-
-```kotlin
-private fun createTestWorkoutRepository(): WorkoutRepository =
-    object : WorkoutRepository {
-        override fun getAllWorkouts(): Flow<List<Workout>> = flowOf()
-        override fun getAllWorkouts(sortOrder: SortOrder): Flow<List<Workout>> = flowOf()
-        override suspend fun getWorkoutById(id: Long): Workout? = null
-        override fun getWorkoutFlow(id: Long): Flow<Workout?> = flowOf()
-        override fun searchWorkouts(query: String): Flow<List<Workout>> = flowOf()
-        override suspend fun insertWorkout(workout: Workout): Long = 0L
-        override suspend fun updateWorkout(workout: Workout) {}
-        override suspend fun deleteWorkout(workout: Workout) {}
-        override suspend fun deleteAllWorkouts() {}
-        override suspend fun getWorkoutsCount(): Int = 0
-    }
-```
-
-Фейковый ResourceProvider — пустые строки, без `!!`:
-
-```kotlin
-internal fun createTestResourceProvider(): ResourceProvider =
-    object : ResourceProvider {
-        override fun getString(resId: Int, vararg formatArgs: Any): String = ""
-        override fun getQuantityString(resId: Int, quantity: Int, vararg formatArgs: Any): String = ""
-        override fun getYearsString(quantity: Int): String = ""
-        override fun getMonthsString(quantity: Int): String = ""
-    }
 ```
 
 Правила для фейков:
-- Никакого `!!` — все методы возвращают значения по умолчанию, не null
-- `flowOf()` для Flow-методов, `0L` / no-op для suspend
-- Factory-функции лежат рядом с тестами, которые их используют
+- Никакого `!!` — все методы возвращают `Result.success(...)`,
+  не null
+- `MutableStateFlow` для реактивных полей — UI перерисуется на
+  изменение через `value = ...`
+- `error(...)` для методов, которые тест не использует — падает
+  громко, если случайно задействуют
+- Фейк лежит рядом с тестом в одном файле (`private class`), не
+  выносится в общий хелпер
+
+## Long-press и контекстное меню (DropdownMenu)
+
+Паттерн «длинное нажатие на строке списка → меню» — `longClick()`
+через `performTouchInput`. UI-тесты проверяют только наличие
+пунктов меню (`onNodeWithText(context.getString(
+R.string.exercise_list_menu_delete)).assertIsDisplayed()`),
+не позицию `DropdownMenu` — она закрывается ручной проверкой на
+эмуляторе (см. `references/manual-verification.md`):
+
+```kotlin
+@Test
+fun row_long_press_when_standard_then_no_context_menu() {
+    setContentWith(ExercisesUiState.Success(exercises = listOf(pullups, plank)))
+
+    composeTestRule
+        .onNodeWithText("Подтягивания")
+        .performTouchInput { longClick() }
+    composeTestRule.waitForIdle()
+
+    composeTestRule
+        .onAllNodesWithText(context.getString(R.string.exercise_list_menu_edit))
+        .fetchSemanticsNodes()
+        .let { nodes ->
+            assertTrue(
+                "У стандартного упражнения не должно быть пунктов контекстного меню",
+                nodes.isEmpty()
+            )
+        }
+}
+```
+
+`import androidx.compose.ui.test.longClick` — extension-функция
+`TouchInjectionScope`, нужен явный импорт.

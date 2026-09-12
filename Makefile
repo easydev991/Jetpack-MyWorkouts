@@ -26,18 +26,18 @@ clean:
 
 # Тестирование
 # $(1) — gradle-задача, $(2) — директория с XML-результатами
+# ponytail: report-скрипт запускается ВСЕГДА — иначе при упавших тестах
+# список фейлов пришлось бы выковыривать `grep`'ом из Gradle-вывода.
+# Финальный exit = gradle-status (ошибка сборки или тестов), иначе
+# report-status (упавшие тесты → sys.exit(1) внутри скрипта).
 define run_tests
 	@./gradlew $(1) --console=plain; BUILD_STATUS=$$?; \
+	echo ""; \
+	python3 scripts/test_report.py $(2); REPORT_STATUS=$$?; \
 	if [ $$BUILD_STATUS -ne 0 ]; then \
-		echo ""; \
-		echo "================================================================================"; \
-		printf "$(RED)[FAIL] СБОРКА ПРОВАЛИЛАСЬ С ОШИБКАМИ$(RESET)\n"; \
-		echo "================================================================================"; \
-		exit 1; \
-	else \
-		echo ""; \
-		python3 scripts/test_report.py $(2); \
-	fi
+		printf "$(RED)[FAIL] СБОРКА ПРОВАЛИЛАСЬ (exit=$$BUILD_STATUS) — отчёт может быть от предыдущего прогона$(RESET)\n"; \
+		exit $$BUILD_STATUS; \
+	else exit $$REPORT_STATUS; fi
 endef
 
 ## test: Запуск unit-тестов (JVM, без устройства) со статистикой в консоли

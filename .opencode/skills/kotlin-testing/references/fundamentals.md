@@ -8,8 +8,8 @@
 Unit-тесты лежат в `app/src/test/java/` и **зеркалят структуру main**:
 
 ```
-app/src/main/java/com/myworkouts/domain/usecase/CalculateWorkoutDurationUseCase.kt
-app/src/test/java/com/myworkouts/domain/usecase/CalculateWorkoutDurationUseCaseTest.kt
+app/src/main/java/com/myworkouts/data/repository/EntryValidator.kt
+app/src/test/java/com/myworkouts/data/repository/EntryValidatorTest.kt
 ```
 
 Правила:
@@ -32,6 +32,23 @@ import org.junit.jupiter.api.AfterEach
 `org.junit.Assert.*` и `org.junit.Test` — это JUnit 4, не используй
 для unit-тестов. Для androidTest допустимо.
 
+`MockK` импорты — из `io.mockk.*`:
+
+```kotlin
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkStatic   // для android.util.Log и подобных
+import io.mockk.unmockkStatic
+import io.mockk.slot
+import io.mockk.verify
+```
+
+`kotlinx-coroutines-test` — `runTest`, `StandardTestDispatcher`,
+`advanceUntilIdle`, `setMain` / `resetMain`. См. подробнее
+`references/viewmodel-testing.md`.
+
 ## Именование методов
 
 Формат: `functionName_whenCondition_thenExpectedResult` в `snake_case`.
@@ -44,14 +61,20 @@ import org.junit.jupiter.api.AfterEach
 fun calculate_when_same_day_then_returns_today() { ... }
 
 @Test
-fun invoke_when_today_and_showminus_false_then_returns_today_string() { ... }
+fun invoke_whenAfterIntervalDays_thenKeepsCurrentTimeOfDayAndAddsDays() { ... }
 
 @Test
-fun whenViewModelCreated_thenLoadsAllItems() { ... }
+fun roundTripConversion_thenPreservesAllFields() { ... }
 
 @Test
-fun when_color_filter_selected_then_shows_only_matching_items() { ... }
+fun save_when_sets_not_touched_then_saves_prefilled_one_set() { ... }
+
+@Test
+fun restoreBackup_whenInvalidFile_thenErrorInvalidFile() { ... }
 ```
+
+Имя функции и сегменты `when`/`then` могут быть в camelCase —
+главное, что разделители `_`. Подробности — в `SKILL.md` п.3.
 
 **Допустимо, но менее предпочтительно** (русские слова):
 
@@ -68,24 +91,33 @@ fun totaldays_в_calculated_содержит_общее_количество_д�
 
 ```kotlin
 @Test
-fun calculate_when_1_day_difference_then_returns_1_day() {
+fun valid_entry_returns_success() {
     // Given
-    val currentDate = LocalDate.now()
-    val eventDate = currentDate.minusDays(1)
-    val timestamp = eventDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    val entry = baseEntry()
 
     // When
-    val result = useCase(eventTimestamp = timestamp)
+    val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
 
     // Then
-    assertTrue(result is WorkoutDuration.Calculated, "Результат должен быть Calculated")
-    val calculated = result as WorkoutDuration.Calculated
-    assertEquals(1, calculated.period.days, "Должен быть 1 день")
+    assertTrue(result.isSuccess, "Корректная REPS-запись валидна")
 }
 ```
 
-Простые тесты (одна проверка) могут опускать `// When`, если
-очевидно — но маркеры должны быть видны.
+Для тривиальных тестов (`assertThrows`, одна строка действия) — допустим
+объединённый `// When + Then`:
+
+```kotlin
+@Test
+fun valueOf_throws_for_unknown_name() {
+    // Given
+    val unknown = "MADE_UP"
+
+    // When + Then
+    assertTrue(
+        runCatching { ExerciseCategory.valueOf(unknown) }.isFailure
+    )
+}
+```
 
 ## Базовый шаблон (pure, без зависимостей)
 
@@ -93,25 +125,31 @@ fun calculate_when_1_day_difference_then_returns_1_day() {
 шаблон минимален:
 
 ```kotlin
-class CalculateWorkoutDurationUseCaseTest {
-    private val useCase = CalculateWorkoutDurationUseCase()
-
+class EntryValidatorTest {
     @Test
-    fun calculate_when_same_day_then_returns_today() {
+    fun valid_entry_returns_success() {
         // Given
-        val today = LocalDate.now()
-        val timestamp = today.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val entry = baseEntry()
 
         // When
-        val result = useCase(eventTimestamp = timestamp)
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
 
         // Then
-        assertTrue(result is WorkoutDuration.Today, "Результат должен быть Today")
+        assertTrue(result.isSuccess, "Корректная REPS-запись валидна")
     }
 }
 ```
 
-Объект `useCase` создаётся один раз как `val` — он immutable.
+Для объектов с состоянием — поле создаётся один раз как `val`:
+
+```kotlin
+class DurationFormatterTest {
+    @Test
+    fun format_duration_when_seconds_only_then_seconds() {
+        assertEquals("5 сек", formatDuration(5, "", "мин", "сек"))
+    }
+}
+```
 
 ## Шаблон с `@BeforeEach` / `@AfterEach`
 
@@ -119,19 +157,17 @@ class CalculateWorkoutDurationUseCaseTest {
 
 ```kotlin
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-class WorkoutsScreenViewModelTest {
+class MainViewModelTest {
 
-    private lateinit var repository: FakeWorkoutRepository
-    private lateinit var viewModel: WorkoutsScreenViewModel
+    private lateinit var repository: MainViewModelFakeRepository
+    private lateinit var viewModel: MainViewModel
     private lateinit var testDispatcher: TestDispatcher
 
     @BeforeEach
     fun setUp() {
         testDispatcher = StandardTestDispatcher()
         Dispatchers.setMain(testDispatcher)
-
-        repository = FakeWorkoutRepository()
-        viewModel = WorkoutsScreenViewModel(repository, mockk(relaxed = true), mockk(relaxed = true))
+        repository = MainViewModelFakeRepository(initialEntries = listOf(item1, item2))
     }
 
     @AfterEach
@@ -142,42 +178,26 @@ class WorkoutsScreenViewModelTest {
 }
 ```
 
+См. полный шаблон — `references/viewmodel-testing.md`.
+
 ## KDoc на тест-классе
 
 Допустимо и принято:
 
 ```kotlin
 /**
- * Тесты для [CalculateWorkoutDurationUseCase].
+ * Unit-тесты для [EntryValidator].
  */
-class CalculateWorkoutDurationUseCaseTest
+class EntryValidatorTest
 ```
 
 ```kotlin
 /**
- * Unit-тесты для WorkoutsScreenViewModel.
+ * Fake [WorkoutDataRepository] на `MutableStateFlow` для JVM-тестов
+ * [MainViewModel]. Каталог и записи реактивные; …
  */
-class WorkoutsScreenViewModelTest
+private class MainViewModelFakeRepository : WorkoutDataRepository
 ```
-
-## `@DisplayName` (опционально)
-
-JUnit 5 поддерживает `@DisplayName("...")` для читаемого имени в
-IDE/отчётах. В проекте используется редко (только в
-`UserPreferencesDataStoreTest`), но допустимо:
-
-```kotlin
-@DisplayName("Тесты для моделей настроек")
-class UserPreferencesDataStoreTest {
-    @Test
-    @DisplayName("AppTheme enum должен содержать все необходимые значения")
-    fun appTheme_shouldContainAllValues() { ... }
-}
-```
-
-Без `@DisplayName` имя теста — это имя метода (`snake_case`).
-С `@DisplayName` — заголовок из аннотации. Выбирай одно из двух,
-не дублируй.
 
 ## Что НЕ делать
 
@@ -188,3 +208,6 @@ class UserPreferencesDataStoreTest {
 - Не используй `!!` для распаковки результата — `as?` или
   `checkNotNull` + сообщение.
 - Не создавай helper-методы «для красоты» — AAA-маркеры достаточны.
+- Не дублируй канонические примеры (`FakeWorkoutDataRepository`,
+  формат `buildBackupJson`) — оставляй ссылку на `references/EXAMPLE.md`
+  или канонический файл.

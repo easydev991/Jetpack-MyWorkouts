@@ -1,170 +1,189 @@
 # Fakes — Fake-репозитории на MutableStateFlow
 
-Для `WorkoutRepository`, `WorkoutReminderRepository` и других интерфейсов,
-отдающих `Flow`, в проекте принят паттерн **Fake** на `MutableStateFlow`.
-Это надёжнее `mockk() returns flowOf(...)`, потому что эмиссия
-детерминирована и не зависит от порядка `collect`.
+Для `WorkoutDataRepository` и других интерфейсов с `Flow`-методами в
+проекте принят паттерн **Fake** на `MutableStateFlow`. Это надёжнее
+`mockk() returns flowOf(...)`, потому что эмиссия детерминирована и
+не зависит от порядка `collect`.
 
 ## Почему Fake, а не Mock
 
 | Подход | Когда использовать |
 |---|---|
 | `mockk() returns flowOf(...)` | Один-два вызова, не реактивно |
-| **Fake на MutableStateFlow** | `WorkoutRepository`, `WorkoutReminderRepository` — эмиссии, реактивные комбинации, несколько подписчиков |
-| `mockk(relaxed = true)` | `Logger`, `DataStore`, `ResourceProvider` — простые stateless интерфейсы |
+| **Fake на MutableStateFlow** | `WorkoutDataRepository` — реактивные комбинации, несколько подписчиков |
+| `mockk(relaxed = true)` | `AppSettingsDataStore`, `Context`, `ContentResolver` — простые stateless интерфейсы |
 
 Проблема `mockk + flowOf`: `flowOf(...)` — холодный. Если в
 ViewModel несколько `combine` / `flatMapLatest`, эмиссия может
 произойти до того, как подписчик `collect`-ит — тест будет flaky.
 
-## Канонический `FakeWorkoutRepository`
+## Канонический `FakeWorkoutDataRepository` (для MainViewModel)
+
+В тестах `MainViewModel` (список записей на главном экране):
 
 ```kotlin
-private class FakeWorkoutRepository : WorkoutRepository {
-    private val _items = MutableStateFlow<List<Workout>>(emptyList())
+private class MainViewModelFakeRepository(
+    initialEntries: List<EntryListItem> = emptyList()
+) : WorkoutDataRepository {
+    private val entriesFlow = MutableStateFlow(initialEntries)
 
-    fun setWorkouts(items: List<Workout>) {
-        _items.value = items
+    /** Идентификации, переданные в [deleteEntry], в порядке вызова. */
+    val deletedIds: MutableList<Long> = mutableListOf()
+
+    override fun entries(): Flow<List<EntryListItem>> = entriesFlow
+    override fun exercises(query: String): Flow<List<Exercise>> = MutableStateFlow(emptyList())
+
+    override suspend fun deleteEntry(id: Long): Result<Unit> {
+        deletedIds += id
+        entriesFlow.value = entriesFlow.value.filterNot { it.id == id }
+        return Result.success(Unit)
     }
 
-    fun containsWorkout(id: Long): Boolean = _items.value.any { it.id == id }
-
-    override fun getAllWorkouts(): Flow<List<Workout>> = _items
-
-    override fun getAllWorkouts(sortOrder: SortOrder): Flow<List<Workout>> =
-        _items.map { items ->
-            when (sortOrder) {
-                SortOrder.ASCENDING -> items.sortedWith(compareBy({ it.timestamp }, { it.id }))
-                SortOrder.DESCENDING -> items.sortedWith(
-                    compareByDescending<Workout> { it.timestamp }.thenByDescending { it.id }
-                )
-            }
-        }
-
-    override suspend fun getWorkoutById(id: Long): Workout? =
-        _items.value.find { it.id == id }
-
-    override fun getWorkoutFlow(id: Long): Flow<Workout?> =
-        _items.map { items -> items.find { it.id == id } }
-
-    override fun searchWorkouts(query: String): Flow<List<Workout>> =
-        _items.map { items ->
-            items.filter { workout ->
-                workout.title.contains(query, ignoreCase = true) ||
-                    workout.details.contains(query, ignoreCase = true)
-            }
-        }
-
-    override suspend fun insertWorkout(workout: Workout): Long {
-        val newId = (_items.value.maxOfOrNull { it.id } ?: 0) + 1
-        val newWorkout = workout.copy(id = newId)
-        _items.value = _items.value + newWorkout
-        return newId
-    }
-
-    override suspend fun updateWorkout(workout: Workout) {
-        _items.value = _items.value.map { if (it.id == workout.id) item else it }
-    }
-
-    override suspend fun deleteWorkout(workout: Workout) {
-        _items.value = _items.value.filterNot { it.id == workout.id }
-    }
-
-    override suspend fun deleteAllWorkouts() {
-        _items.value = emptyList()
-    }
-
-    override suspend fun getWorkoutsCount(): Int = _items.value.size
+    // ... остальные методы контракта — заглушки Result.success / MutableStateFlow(emptyList())
+    // (addEntry, addExercise, updateExercise, updateEntry, getEntry,
+    //  deleteExercise, getExercise, exerciseIdsWithLinkedEntries,
+    //  getAllExercises, getAllEntries, importData, deleteAllData).
 }
 ```
+
+Полный пример — `app/src/test/java/com/myworkouts/ui/viewmodel/MainViewModelTest.kt`.
 
 Тонкости:
 - `private class` — внутри тест-класса, не выноси в общий файл.
-- Метод `setWorkouts(items)` — публичный для теста, не часть интерфейса.
-- Дополнительные геттеры (`containsWorkout`, `items`) — допустимы,
-  если упрощают assertions.
-- `_items.value = newList` — триггерит эмиссию во всех подписчиках.
+- Метод-запись (`deletedIds`) — публичный для теста, не часть интерфейса.
+- `entriesFlow.value = newList` — триггерит эмиссию во всех подписчиках.
+- Имя класса — префикс по тестируемой VM: `MainViewModelFakeRepository`,
+  `ExercisesViewModelFakeRepository`, `AppDataViewModelFakeRepository`.
+  В test source set `private` на top-level изолирует только в пределах
+  модуля — разные классы не должны конфликтовать.
 
-## Канонический `FakeWorkoutReminderDao`
+## Канонический `FakeWorkoutDataRepository` (для EntryCreateViewModel)
 
-Для data-слоя (тестирование `WorkoutReminderRepositoryImpl`):
+Каталог фиксирован, `addEntry`/`updateEntry` записывают переданную
+запись и возвращают настраиваемый результат, `getEntry` отвечает
+настраиваемой записью (`null` — «не найдена»):
 
 ```kotlin
-private class FakeWorkoutReminderDao : WorkoutReminderDao {
-    private val storage = linkedMapOf<Long, WorkoutReminderEntity>()
+private class FakeWorkoutDataRepository(
+    exercises: List<Exercise>
+) : WorkoutDataRepository {
+    private val catalog = MutableStateFlow(exercises)
 
-    override suspend fun getReminderByItemId(workoutId: Long): WorkoutReminderEntity? = storage[workoutId]
+    var addedEntry: ExerciseEntry? = null
+        private set
 
-    override suspend fun getFutureActiveReminders(nowEpochMillis: Long): List<WorkoutReminderEntity> =
-        storage.values.filter {
-            it.status == WorkoutReminderStatus.ACTIVE.name &&
-                it.targetEpochMillis > nowEpochMillis
-        }
+    var addEntryResult: Result<Long> = Result.success(1L)
 
-    override suspend fun upsertReminder(reminder: WorkoutReminderEntity) {
-        storage[reminder.workoutId] = reminder
+    /** Ответ `getEntry`; `null` — запись не найдена. */
+    var entryById: ExerciseEntry? = null
+
+    var updatedEntry: ExerciseEntry? = null
+        private set
+
+    override fun exercises(query: String): Flow<List<Exercise>> = catalog
+    override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(emptyList())
+
+    override suspend fun addEntry(entry: ExerciseEntry): Result<Long> {
+        addedEntry = entry
+        return addEntryResult
     }
 
-    override suspend fun updateStatus(workoutId: Long, status: String, updatedAt: Long) {
-        val current = storage[workoutId] ?: return
-        storage[workoutId] = current.copy(status = status, updatedAt = updatedAt)
+    override suspend fun updateEntry(entry: ExerciseEntry): Result<Unit> {
+        updatedEntry = entry
+        return Result.success(Unit)
     }
 
-    override suspend fun deleteByItemId(workoutId: Long) {
-        storage.remove(workoutId)
+    override suspend fun getEntry(id: Long): Result<ExerciseEntry?> = Result.success(entryById)
+
+    // ... остальные методы — заглушки
+}
+```
+
+Полный пример — `app/src/test/java/com/myworkouts/ui/viewmodel/EntryCreateViewModelTest.kt`.
+
+## Канонический `FakeExerciseRepository` (для ExerciseCreateViewModel)
+
+Каталог реактивный, `addExercise` записывает переданное упражнение и
+возвращает настраиваемый результат:
+
+```kotlin
+private class FakeExerciseRepository : WorkoutDataRepository {
+    private val catalog = MutableStateFlow<List<Exercise>>(emptyList())
+
+    /** Упражнения, переданные в `addExercise`, в порядке вызовов. */
+    val addedExercises = mutableListOf<Exercise>()
+
+    /** Настраиваемый результат `addExercise`. */
+    var addExerciseResult: Result<Long> = Result.success(1L)
+
+    override fun exercises(query: String): Flow<List<Exercise>> = catalog
+    override suspend fun addExercise(exercise: Exercise): Result<Long> {
+        addedExercises.add(exercise)
+        return addExerciseResult
+    }
+
+    // ... остальные методы — заглушки
+}
+```
+
+Полный пример — `app/src/test/java/com/myworkouts/ui/viewmodel/ExerciseCreateViewModelTest.kt`.
+
+## Fake с настраиваемыми failure-ветками (для ExercisesViewModel)
+
+`ExercisesViewModel` тестирует pre-check FK + ошибки репозитория —
+`deleteExerciseResult` и `linkedEntries` настраиваются из тестов:
+
+```kotlin
+private class ExercisesViewModelFakeRepository(
+    initialCatalog: List<Exercise> = emptyList()
+) : WorkoutDataRepository {
+    val catalog = MutableStateFlow(initialCatalog)
+
+    val linkedEntries: MutableStateFlow<Set<Long>> = MutableStateFlow(emptySet())
+
+    var deleteExerciseResult: Result<Unit> = Result.success(Unit)
+    var lastDeletedExerciseId: Long? = null
+
+    override fun exercises(query: String): Flow<List<Exercise>> = catalog
+    override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = linkedEntries
+
+    override suspend fun deleteExercise(id: Long): Result<Unit> {
+        lastDeletedExerciseId = id
+        return deleteExerciseResult
     }
 }
 ```
 
-## Другие Fakes
+Полный пример — `app/src/test/java/com/myworkouts/ui/viewmodel/ExercisesViewModelTest.kt`.
 
-**`FakeWorkoutReminderManager`** — для тестов `WorkoutDetailsScreenViewModel`:
+## Fake для AppDataViewModel
+
+`entries()`/`exercises("")` — реактивные (нужны для `hasData`), use-case'ы
+замоканы отдельно, поэтому снимки (`getAllExercises`/`getAllEntries`) и
+`importData` — тривиальные заглушки:
 
 ```kotlin
-private class FakeWorkoutReminderManager : WorkoutReminderManager {
-    var activeReminder: WorkoutReminder? = null
-    val clearedItemIds = mutableListOf<Long>()
+private class AppDataViewModelFakeRepository(
+    entries: List<EntryListItem> = emptyList(),
+    private val exercises: List<Exercise> = emptyList()
+) : WorkoutDataRepository {
+    private val entriesFlow = MutableStateFlow(entries)
+    private val catalogFlow = MutableStateFlow(exercises)
 
-    override suspend fun saveReminder(request: WorkoutReminderRequest, itemTitle: String): Result<Unit> =
-        Result.success(Unit)
+    var deleteAllDataResult: Result<Unit> = Result.success(Unit)
 
-    override suspend fun clearReminder(workoutId: Long) {
-        clearedItemIds += workoutId
-        activeReminder = null
-    }
+    override fun entries(): Flow<List<EntryListItem>> = entriesFlow
+    override fun exercises(query: String): Flow<List<Exercise>> = catalogFlow
 
-    override suspend fun getActiveReminder(workoutId: Long): WorkoutReminder? =
-        activeReminder?.takeIf { it.workoutId == workoutId }
+    override suspend fun getAllExercises(): Result<List<Exercise>> = Result.success(catalogFlow.value)
+    override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = Result.success(emptyList())
+    override suspend fun deleteAllData(): Result<Unit> = deleteAllDataResult
 
-    override suspend fun consumeReminder(workoutId: Long) = Unit
-    override suspend fun rescheduleFutureReminders() = Unit
+    // ... остальные методы — заглушки
 }
 ```
 
-Использование в тесте:
-
-```kotlin
-reminderManager.activeReminder = futureReminder
-// ...
-assertEquals(listOf(testItemId), reminderManager.clearedItemIds)
-```
-
-**`FakeWorkoutReminderScheduler`** — для `DefaultWorkoutReminderManagerTest`:
-
-```kotlin
-private class FakeWorkoutReminderScheduler : WorkoutReminderScheduler {
-    val scheduled = mutableListOf<ScheduledReminder>()
-    var lastCancelledItemId: Long? = null
-
-    override fun schedule(reminder: ScheduledReminder) {
-        scheduled += reminder
-    }
-
-    override fun cancel(workoutId: Long) {
-        lastCancelledItemId = workoutId
-    }
-}
-```
+Полный пример — `app/src/test/java/com/myworkouts/ui/viewmodel/AppDataViewModelTest.kt`.
 
 ## Где размещать Fakes
 
@@ -173,34 +192,33 @@ private class FakeWorkoutReminderScheduler : WorkoutReminderScheduler {
 не загрязняет `app/src/test/java/`.
 
 Выносить в общий файл (`test/fakes/`) — **только если** один и тот же
-Fake используется в 3+ тест-классах. Порог формально пройден:
-`FakeWorkoutRepository` сейчас дублируется в 5 тест-классах:
+Fake переиспользуется без модификаций в **6+** тест-классах. Практический
+порог: даже при 5 дублях выносить рано — каждый экземпляр подгоняется
+под свой набор assertions (`deletedIds` нужен только в одном тесте,
+настраиваемые `addEntryResult`/`linkedEntries` — только в других), и
+единый Fake теряет в гибкости.
 
-- `WorkoutsScreenViewModelTest`
-- `WorkoutDetailsScreenViewModelTest`
-- `WorkoutEditScreenViewModelTest` (вариация `FakeWorkoutRepositoryWithLoggingDisabled`)
-- `WorkoutEditScreenViewModelReminderTest`
-- `DefaultWorkoutReminderManagerTest`
-
-Но выносить не стали — каждая версия подогнана под свой набор
-assertions (например, `containsWorkout` есть только в
-`WorkoutDetailsScreenViewModelTest`, отключённый логгер — только в
-`WorkoutEditScreenViewModelTest`). Решение по выносу принимать
-по месту при появлении 6+ дублирований или при существенных
-изменениях контракта `WorkoutRepository`.
+> Каждый из существующих Fake (`MainViewModelFakeRepository`,
+> `ExercisesViewModelFakeRepository`, `AppDataViewModelFakeRepository`,
+> `FakeWorkoutDataRepository`, `FakeExerciseRepository`) — подогнан
+> под свой набор assertions. Выносить пока рано: 5/6 не достигли
+> порога, и вариации перевешивают выгоду от общего файла. При 6+ дублях
+> или при существенных изменениях контракта `WorkoutDataRepository`
+> решение принимается по месту.
 
 ## Именование Fake-классов
 
-- `Fake<InterfaceName>` — стандартный префикс.
-- `Fake<InterfaceName>With<Modifier>` — если есть вариант:
-  `FakeWorkoutRepositoryWithLoggingDisabled` (для
-  `WorkoutEditScreenViewModelTest`, где нужно убедиться, что логгер
-  не вызывается).
+- `<ViewModelName>FakeRepository` — стандартный префикс
+  (`MainViewModelFakeRepository`, `ExercisesViewModelFakeRepository`).
+- `Fake<InterfaceName>` — допустимо, если один Fake покрывает несколько
+  тестов одной VM (`FakeWorkoutDataRepository`,
+  `FakeExerciseRepository`).
 
 ## Когда Fake НЕ нужен
 
 - Repository не использует Flow (только suspend `Result<T>`) —
-  хватит `mockk()` + `coEvery`.
+  хватит `mockk()` + `coEvery` (`AppearanceViewModel` +
+  `AppSettingsDataStore` — пример).
 - Repository возвращает данные из реального источника (DAO, сеть) —
   это integration test, не unit.
 - Один метод, одна проверка — `mockk(relaxed = true)` быстрее

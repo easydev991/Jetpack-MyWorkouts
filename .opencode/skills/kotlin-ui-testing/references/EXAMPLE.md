@@ -3,305 +3,238 @@
 Полные примеры тестов из реального кода Jetpack-MyWorkouts.
 Файлы: `app/src/androidTest/java/com/myworkouts/...`
 
+Все примеры в этом файле — **реальные** сокращённые фрагменты
+существующих тестов. Сверяйся с ними при написании новых.
+
 ## Компонентный UI-тест (без Activity)
 
-`ui/ds/WorkoutDurationTextTest.kt` — компонент `WorkoutDurationText`, без темы и
-без `@RunWith` (v2 API):
+`ui/screens/exercises/ExercisesScreenTest.kt` — компонент
+`ExercisesScreenContent` с готовым `ExercisesScreenState`,
+v2 API `createComposeRule()`, `@RunWith(AndroidJUnit4::class)`
+(все компонентные тесты в проекте аннотированы):
 
 ```kotlin
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
 
-class WorkoutDurationTextTest {
-    @get:Rule
-    val composeTestRule = createComposeRule()
-
-    @Test
-    fun workoutDurationText_whenDisplayed_thenShowsCorrectText() {
-        // Given
-        val testText = "5 дней"
-
-        // When
-        composeTestRule.setContent {
-            WorkoutDurationText(formattedText = testText)
-        }
-
-        // Then
-        composeTestRule
-            .onNodeWithText(testText)
-            .assertExists()
-            .assertTextEquals(testText)
-    }
-
-    @Test
-    fun workoutDurationText_whenEmptyText_thenShowsEmpty() {
-        // Given
-        val emptyText = ""
-
-        // When
-        composeTestRule.setContent {
-            WorkoutDurationText(formattedText = emptyText)
-        }
-
-        // Then
-        composeTestRule.onNodeWithText(emptyText).assertExists()
-    }
-}
-```
-
-## Компонентный тест с колбэками (диалог)
-
-`ui/screens/events/WorkoutTagFilterDialogTest.kt` — без `@RunWith`,
-в `MyWorkoutsTheme`, строки из ресурсов:
-
-```kotlin
-import androidx.compose.ui.test.junit4.v2.createComposeRule
-
-class WorkoutTagFilterDialogTest {
+@RunWith(AndroidJUnit4::class)
+class ExercisesScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
-    private val colorDescription = context.getString(R.string.color)
-    private val resetText = context.getString(R.string.reset)
-    private val applyText = context.getString(R.string.apply)
-    private val titleText = context.getString(R.string.filter_by_color)
 
-    @Test
-    fun dialog_whenSameColorClicked_thenDeselects() {
-        // Given - фильтр не установлен
-        val currentFilter: Int? = null
-
+    private fun setContentWith(uiState: ExercisesUiState) {
         composeTestRule.setContent {
-            MyWorkoutsTheme {
-                WorkoutTagFilterDialog(
-                    availableColors = availableColors,
-                    currentFilter = currentFilter,
-                    onApply = {},
-                    onDismiss = {}
+            ExercisesScreenContent(
+                state = ExercisesScreenState(
+                    uiState = uiState,
+                    onAddExerciseClick = {}
                 )
-            }
-        }
-
-        // When: кликаем по красному цвету дважды — выделение снимается
-        composeTestRule
-            .onAllNodesWithContentDescription(colorDescription)[0]
-            .performClick()
-        composeTestRule
-            .onAllNodesWithContentDescription(colorDescription)[0]
-            .performClick()
-
-        // Then: нет фильтра и нет черновика — кнопка «Сбросить» неактивна
-        composeTestRule
-            .onNodeWithText(resetText)
-            .assertIsNotEnabled()
-    }
-
-    @Test
-    fun dialog_whenResetWithoutCurrentFilterButWithDraft_thenDialogStaysOpen() {
-        // Given
-        var onApplyCalled = false
-        composeTestRule.setContent {
-            MyWorkoutsTheme {
-                WorkoutTagFilterDialog(
-                    availableColors = availableColors,
-                    currentFilter = null,
-                    onApply = { onApplyCalled = true },
-                    onDismiss = {}
-                )
-            }
-        }
-
-        // When: сброс без активного фильтра
-        composeTestRule.onAllNodesWithContentDescription(colorDescription)[0].performClick()
-        composeTestRule.onNodeWithText(resetText).performClick()
-
-        // Then: диалог остаётся открытым, onApply не вызван
-        composeTestRule.onNodeWithText(titleText).assertIsDisplayed()
-        composeTestRule.runOnIdle {
-            org.junit.Assert.assertFalse(
-                "При сбросе черновика без фильтра onApply не должен вызываться",
-                onApplyCalled
             )
         }
     }
+
+    @Test
+    fun exercises_screen_when_empty_then_shows_empty_state() {
+        // Given
+        setContentWith(ExercisesUiState.Success(exercises = emptyList()))
+
+        // Then
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercises_list_empty))
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Подтягивания")
+            .assertDoesNotExist()
+    }
 }
 ```
 
-## Интеграционный тест с MainActivity
+## Компонентный тест с NavHost-harness и навигацией
 
-`ui/screens/events/WorkoutsScreenSearchVisibilityUiTest.kt` — v2 API
-`createAndroidComposeRule`, `@RunWith(AndroidJUnit4::class)`, реальный
-DAO, вставка через `runBlocking`, `waitForIdle`:
+Тот же `ExercisesScreenTest` — навигация проверяется через
+минимальный `NavHost` с заглушкой destination (без неё
+`navController.navigate(...)` бросит `IllegalArgumentException`):
+
+```kotlin
+@Composable
+private fun ExercisesScreenWithNavHost(onControllerReady: (NavHostController) -> Unit = {}) {
+    val navController = rememberNavController()
+    onControllerReady(navController)
+    NavHost(navController = navController, startDestination = "stub") {
+        composable("stub") { /* Заглушка стартового маршрута */ }
+        composable(Screen.Exercises.route) {
+            ExercisesScreenContent(
+                state = ExercisesScreenState(
+                    uiState = ExercisesUiState.Success(exercises = listOf(pullups, plank)),
+                    onAddExerciseClick = { navController.navigate(Screen.ExerciseCreate.route) }
+                )
+            )
+        }
+        composable(Screen.ExerciseCreate.route) {
+            // Заглушка destination-маршрута.
+        }
+    }
+}
+
+@Test
+fun exercises_screen_when_fab_clicked_then_navigates_to_exercise_create_route() {
+    // Given — экран открыт через NavHost-harness
+    lateinit var navController: NavHostController
+    composeTestRule.setContent {
+        ExercisesScreenWithNavHost(onControllerReady = { navController = it })
+    }
+    composeTestRule.runOnIdle {
+        navController.navigate(Screen.Exercises.route)
+    }
+    composeTestRule.waitForIdle()
+
+    // When — тап по FAB
+    composeTestRule
+        .onNodeWithContentDescription(context.getString(R.string.exercises_add_exercise))
+        .performClick()
+
+    // Then — активный маршрут сменился на форму создания
+    composeTestRule.runOnIdle {
+        assertEquals(
+            "FAB должен навигировать на Screen.ExerciseCreate.route",
+            Screen.ExerciseCreate.route,
+            navController.currentDestination?.route
+        )
+    }
+}
+```
+
+## Компонентный тест с реальной ViewModel поверх Room in-memory
+
+`ui/screens/exercises/ExercisesLiveUpdateTest.kt` — реальная
+`ExercisesViewModel`, реальный Room in-memory, `NavHost`-harness
+(без `MainActivity`):
 
 ```kotlin
 @RunWith(AndroidJUnit4::class)
-class WorkoutsScreenSearchVisibilityUiTest {
+class ExercisesLiveUpdateTest {
     @get:Rule
-    val composeTestRule = createAndroidComposeRule<MainActivity>()
+    val composeTestRule = createComposeRule()
 
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
-    private lateinit var dao: WorkoutDao
 
-    private val searchDescription: String
-        get() = context.getString(R.string.search)
+    private lateinit var database: WorkoutDatabase
+    private lateinit var repository: RoomWorkoutDataRepository
 
     @Before
     fun setUp() {
-        runBlocking {
-            dao = MyWorkoutsDatabase.getDatabase(context.applicationContext).workoutDao()
-            dao.deleteAllWorkouts()
-        }
+        database =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    WorkoutDatabase::class.java
+                ).allowMainThreadQueries()
+                .build()
+        repository =
+            RoomWorkoutDataRepository(
+                database = database,
+                standardExercises = listOf(
+                    StandardExercise(name = "Подтягивания", category = ExerciseCategory.PULL)
+                )
+            )
     }
 
     @After
     fun tearDown() {
-        runBlocking {
-            dao.deleteAllWorkouts()
+        database.close()
+    }
+
+    @Test
+    fun exercisesScreen_whenReturnedQuickly_afterInsert_thenShowsNewExercise() {
+        // Given — NavHost с реальной VM/Room и заглушкой
+        lateinit var navController: NavHostController
+        composeTestRule.setContent {
+            navController = rememberNavController()
+            JetpackMyWorkoutsTheme {
+                NavHost(
+                    navController = navController,
+                    startDestination = Screen.Exercises.route
+                ) {
+                    composable(Screen.Exercises.route) {
+                        ExercisesScreen(
+                            viewModel = viewModel(
+                                factory = ExercisesViewModel.factory(repository)
+                            ),
+                            onAddExerciseClick = { navController.navigate("stub") }
+                        )
+                    }
+                    composable("stub") { /* Заглушка другого экрана */ }
+                }
+            }
         }
-    }
-
-    @Test
-    fun when_items_count_4_then_search_field_not_displayed() {
-        // Given
-        runBlocking { insertItems(4) }
         composeTestRule.waitForIdle()
-
-        // Then: поле поиска скрыто
         composeTestRule
-            .onNodeWithContentDescription(searchDescription)
-            .assertDoesNotExist()
-    }
-
-    @Test
-    fun when_user_typed_query_with_3_items_then_search_field_stays_visible() {
-        // Given
-        runBlocking { insertItems(5) }
-        composeTestRule.waitForIdle()
-
-        // When
-        composeTestRule
-            .onNodeWithContentDescription(searchDescription)
-            .performTextInput("Workout")
-
-        // And: удаляем элементы, пока введён запрос
-        runBlocking { deleteFirstWorkout() }
-        runBlocking { deleteFirstWorkout() }
-        composeTestRule.waitForIdle()
-
-        // Then: поле поиска остаётся видимым
-        composeTestRule
-            .onNodeWithContentDescription(searchDescription)
+            .onNodeWithText(context.getString(R.string.exercises_title))
             .assertIsDisplayed()
-    }
 
-    @Test
-    fun when_device_rotates_then_search_field_remains_displayed() {
-        // Given
-        runBlocking { insertItems(5) }
+        // When — уход на заглушку, вставка в БД, возврат назад
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.exercises_add_exercise))
+            .performClick()
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithContentDescription(searchDescription).assertIsDisplayed()
-
-        // When: поворот устройства
-        val activity = composeTestRule.activity
-        val originalOrientation = activity.requestedOrientation
-        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        runBlocking {
+            repository.addExercise(
+                Exercise(
+                    id = 0L,
+                    name = "Жим",
+                    category = ExerciseCategory.PUSH,
+                    isCustom = true,
+                    comment = null,
+                    createdAt = 1L,
+                    measuredBy = ExerciseMeasuredBy.REPS
+                )
+            )
+        }
+        composeTestRule.runOnIdle {
+            navController.popBackStack()
+        }
         composeTestRule.waitForIdle()
 
-        // Then: поле поиска осталось
-        composeTestRule.onNodeWithContentDescription(searchDescription).assertIsDisplayed()
-
-        // Cleanup
-        composeTestRule.onNodeWithContentDescription(searchDescription).performClick()
-        activity.requestedOrientation = originalOrientation
+        // Then — каталог показывает новое упражнение
+        composeTestRule.onNodeWithText("Жим").assertIsDisplayed()
     }
 }
 ```
 
 ## DAO-тест (Room in-memory)
 
-`data/database/dao/WorkoutDaoTest.kt`:
+`data/db/ExerciseDaoTest.kt` — реальный DAO каталога упражнений.
+Покрывает поиск по подстроке, сортировку `is_custom DESC,
+created_at DESC, name COLLATE NOCASE`, tie-break по имени:
 
 ```kotlin
 @RunWith(AndroidJUnit4::class)
-class WorkoutDaoTest {
-    private lateinit var database: MyWorkoutsDatabase
-    private lateinit var workoutDao: WorkoutDao
-
-    @Before
-    fun setup() {
-        database = Room
-            .inMemoryDatabaseBuilder(
-                ApplicationProvider.getApplicationContext(),
-                MyWorkoutsDatabase::class.java
-            )
-            .allowMainThreadQueries()
-            .build()
-        workoutDao = database.workoutDao()
-    }
-
-    @After
-    fun tearDown() {
-        database.close()
-    }
-
-    @Test
-    fun insertItem_thenRetrieveIt() =
-        runBlocking {
-            // Given
-            val workout = WorkoutEntity(title = "Тестовое событие", ...)
-
-            // When
-            val insertedId = workoutDao.insertWorkout(workout)
-            val retrieved = workoutDao.getWorkoutById(insertedId)
-
-            // Then
-            assertNotNull(retrieved)
-            assertEquals("Тестовое событие", retrieved?.title)
-        }
-
-    @Test
-    fun getAllItems_whenSameTimestamp_thenSortedByIdDesc() =
-        runBlocking {
-            // Given
-            workoutDao.insertWorkout(workoutA.copy(timestamp = 1000L))
-            workoutDao.insertWorkout(workoutB.copy(timestamp = 1000L))
-
-            // When
-            val all = workoutDao.getAllWorkouts().first()
-
-            // Then
-            assertEquals(2, all.size)
-            assertTrue(
-                "При равном timestamp первым должен быть больший id",
-                all[0].id > all[1].id
-            )
-        }
-}
-```
-
-## ViewModel-интеграция (Turbine)
-
-`ui/viewmodel/WorkoutDetailsScreenViewModelIntegrationTest.kt`:
-
-```kotlin
-@RunWith(AndroidJUnit4::class)
-@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-class WorkoutDetailsScreenViewModelIntegrationTest {
-    @get:Rule
-    val mainDispatcherRule = MainDispatcherRule()
-
-    private lateinit var database: MyWorkoutsDatabase
-    private lateinit var repository: WorkoutRepositoryImpl
-    private lateinit var viewModel: WorkoutDetailsScreenViewModel
+class ExerciseDaoTest {
+    private lateinit var database: WorkoutDatabase
+    private lateinit var dao: ExerciseDao
 
     @Before
     fun setUp() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        database = Room.inMemoryDatabaseBuilder(context, MyWorkoutsDatabase::class.java)
-            .allowMainThreadQueries()
-            .build()
-        repository = WorkoutRepositoryImpl(database.workoutDao())
-        database.clearAllTables()
+        database =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    WorkoutDatabase::class.java
+                ).allowMainThreadQueries()
+                .build()
+        dao = database.exerciseDao()
+
+        runBlocking {
+            listOf(
+                ExerciseEntity(name = "Подтягивания", category = "PULL", isCustom = false, createdAt = 0L),
+                ExerciseEntity(name = "Подъёмы ног в висе", category = "CORE", isCustom = false, createdAt = 0L),
+                ExerciseEntity(name = "Отжимания", category = "PUSH", isCustom = false, createdAt = 0L),
+                ExerciseEntity(name = "Приседания", category = "LEGS", isCustom = false, createdAt = 0L)
+            ).forEach { dao.insert(it) }
+        }
     }
 
     @After
@@ -310,73 +243,176 @@ class WorkoutDetailsScreenViewModelIntegrationTest {
     }
 
     @Test
-    fun whenItemExistsInDatabase_thenLoadsSuccessfully() =
-        runTest {
-            // Given
-            val insertedId = repository.insertWorkout(testWorkout)
-            val savedStateHandle = SavedStateHandle(mapOf("workoutId" to insertedId))
-
+    fun search_substring_matchesCaseInsensitive() =
+        runBlocking {
             // When
-            viewModel = WorkoutDetailsScreenViewModel(repository, savedStateHandle)
+            val result = dao.observeExercises("под").first()
 
             // Then
-            viewModel.uiState.test {
-                val loadingState = awaitItem()
-                assertTrue(
-                    "Начальное состояние должно быть Loading",
-                    loadingState is WorkoutDetailsState.Loading
-                )
-                val successState = awaitItem()
-                assertTrue(
-                    "После загрузки — Success",
-                    successState is WorkoutDetailsState.Success
-                )
-                assertEquals(
-                    "Тестовое событие",
-                    (successState as WorkoutDetailsState.Success).workout.title
-                )
-            }
+            val names = result.map { it.name }
+            assertEquals(2, result.size)
+            assertTrue(
+                "Expected 'Подтягивания' and 'Подъёмы ног в висе', got $names",
+                names.containsAll(listOf("Подтягивания", "Подъёмы ног в висе"))
+            )
         }
 }
 ```
 
-## Alarm-тест (PendingIntent + пермишены)
+## Репозиторий-интеграция (Room in-memory)
 
-`reminder/WorkoutReminderAlarmSchedulerInstrumentedTest.kt`:
+`data/repository/RoomWorkoutDataRepositoryTest.kt` — реальный
+`RoomWorkoutDataRepository(database, standardExercises)`,
+проверяет CRUD, маппинг Entity ↔ Domain, Flow invalidation:
 
 ```kotlin
 @RunWith(AndroidJUnit4::class)
-class WorkoutReminderAlarmSchedulerInstrumentedTest {
-    private val context = InstrumentationRegistry.getInstrumentation().targetContext
+class RoomWorkoutDataRepositoryTest {
+    private lateinit var database: WorkoutDatabase
+    private lateinit var repository: RoomWorkoutDataRepository
 
-    @Test
-    fun cancel_whenScheduled_thenPendingIntentIsRemoved() {
-        // Given
-        val scheduler = WorkoutReminderAlarmScheduler(context)
-        val workoutId = 777L
-        val reminder = WorkoutReminder(workoutId = workoutId, ...)
-
-        // When
-        scheduler.schedule(reminder, "title")
-
-        // Then
-        assertNotNull(findWorkoutReminderPendingIntent(workoutId))
-
-        // When
-        scheduler.cancel(workoutId)
-
-        // Then
-        assertNull(findWorkoutReminderPendingIntent(workoutId))
+    @Before
+    fun setUp() {
+        database =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    WorkoutDatabase::class.java
+                ).allowMainThreadQueries()
+                .build()
+        repository =
+            RoomWorkoutDataRepository(
+                database = database,
+                standardExercises = listOf(
+                    StandardExercise(name = "Подтягивания", category = ExerciseCategory.PULL),
+                    StandardExercise(
+                        name = "Планка",
+                        category = ExerciseCategory.CORE,
+                        measuredBy = ExerciseMeasuredBy.TIME
+                    )
+                )
+            )
+        runBlocking {
+            database.exerciseDao().insert(
+                ExerciseEntity(
+                    name = "Подтягивания",
+                    category = "PULL",
+                    isCustom = false,
+                    createdAt = 0L
+                )
+            )
+            database.exerciseDao().insert(
+                ExerciseEntity(
+                    name = "Планка",
+                    category = "CORE",
+                    isCustom = false,
+                    createdAt = 0L,
+                    measuredBy = "TIME"
+                )
+            )
+        }
     }
 
-    private fun findWorkoutReminderPendingIntent(workoutId: Long): PendingIntent? =
-        PendingIntent.getBroadcast(
-            context,
-            WorkoutReminderIntentContract.requestCodeForWorkout(workoutId),
-            Intent(context, WorkoutReminderReceiver::class.java).apply {
-                action = WorkoutReminderIntentContract.ACTION_FIRE_REMINDER
-            },
-            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
-        )
+    @After
+    fun tearDown() {
+        database.close()
+    }
+
+    @Test
+    fun addEntry_whenExerciseIdMissing_thenReturnsFailureAndTableStaysEmpty() =
+        runBlocking {
+            // Given — несуществующий exerciseId
+            val bogusEntry = ExerciseEntry(
+                id = 0L,
+                exerciseId = 9_999L,
+                date = 1_700_000_000_000L,
+                sets = 4,
+                reps = 10,
+                durationSec = null,
+                weightKg = null,
+                comment = null
+            )
+
+            // When
+            val result = repository.addEntry(bogusEntry)
+
+            // Then — Result.isFailure, таблица записей пустая
+            assertTrue(result.isFailure)
+            val allEntries = repository.getAllEntries().getOrThrow()
+            assertTrue(allEntries.isEmpty())
+        }
 }
 ```
+
+## Тест с реальной MainActivity (живое обновление через WhileSubscribed)
+
+`ExerciseCreateLiveUpdateIntegrationTest.kt` — единственный тест
+с реальной `MainActivity` и **production-БД** (не in-memory):
+проверяет, что `WhileSubscribed(5000)` корректно доставляет
+invalidation после паузы > 5 с. Сокращённый скелет (тело хелпера
+`insertExerciseIntoAppDatabase()` + проверка включённой вкладки
+«Каталог» — полная версия):
+
+```kotlin
+@RunWith(AndroidJUnit4::class)
+class ExerciseCreateLiveUpdateIntegrationTest {
+    @get:Rule
+    val composeTestRule = createAndroidComposeRule<MainActivity>()
+
+    private val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+    // Уникальное имя на прогон — вставки предыдущих прогонов не
+    // маскируют замороженный список, если `WhileSubscribed` не доставил
+    // invalidation.
+    private val exerciseName = "Отжимания Int-${System.currentTimeMillis() % 100_000L}"
+
+    @Test
+    fun app_whenReturnedToCatalogAfterInsert_thenShowsNewExercise() {
+        composeTestRule.waitForIdle()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.more_title))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Каталог открыт
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercises_title))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Уходим на форму создания, ждём > таймаута подписки (5 с),
+        // вставляем упражнение напрямую в БД приложения, возвращаемся
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.exercises_add_exercise))
+            .performClick()
+        composeTestRule.waitForIdle()
+        runBlocking { delay(5_300L) }
+        insertExerciseIntoAppDatabase()
+
+        composeTestRule.runOnIdle {
+            composeTestRule.activityRule.scenario.onActivity { activity ->
+                activity.onBackPressedDispatcher.onBackPressed()
+            }
+        }
+
+        // Каталог показывает новое упражнение без перезапуска
+        // exerciseName — уникальное на прогон имя из `insertExerciseIntoAppDatabase()`
+        composeTestRule
+            .onNode(hasScrollAction())
+            .performScrollToNode(hasText(exerciseName))
+        composeTestRule.onNodeWithText(exerciseName).assertIsDisplayed()
+    }
+}
+```
+
+> Это исключение из правила «in-memory». Реальная БД нужна
+> потому, что `MainActivity` поднимает DI с собственным
+> `WorkoutDatabase.create(context, ...)` — подменить его на
+> in-memory в этом тесте нельзя без переписывания DI. Для
+> всех остальных интеграционных тестов — in-memory обязателен.
+>
+> Канонический разбор (полный `insertExerciseIntoAppDatabase()`
+> с `Room.databaseBuilder(... DATABASE_NAME)` и guard
+> «включена ли вкладка Каталог») — в
+> `references/activity-integration.md` → «Тест с реальной
+> MainActivity (живое обновление через WhileSubscribed)».

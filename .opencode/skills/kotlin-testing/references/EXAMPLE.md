@@ -3,136 +3,372 @@
 Полные образцы тестов из реального кода Jetpack-MyWorkouts. Используй как
 референс при написании новых.
 
+> Источник правды — сами тесты в `app/src/test/`. Здесь — характерные
+> фрагменты, которые удобно скопировать. Имена классов, импорты и
+> паттерны соответствуют тому, что реально есть в проекте.
+
 ---
 
-## 1. Use Case без зависимостей + `Result<T>` + Clock
+## 1. Pure-валидатор (object + sealed-error)
 
-`BuildWorkoutReminderUseCaseTest` — clock-зависимый use case с валидацией.
+`EntryValidatorTest` — pure-функция с `Result<Unit>`-ошибками, без
+корутин и без зависимостей.
 
 ```kotlin
-package com.myworkouts.domain.usecase
+package com.myworkouts.data.repository
 
-import com.myworkouts.domain.model.WorkoutReminderIntervalUnit
-import com.myworkouts.domain.model.WorkoutReminderMode
+import com.myworkouts.domain.model.ExerciseMeasuredBy
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import java.time.Clock
-import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalTime
-import java.time.ZoneId
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
-class BuildWorkoutReminderUseCaseTest {
-    private val fixedInstant = Instant.parse("2026-04-27T10:15:30Z")
-    private val zoneId = ZoneId.of("Europe/Moscow")
-    private val clock: Clock = Clock.fixed(fixedInstant, zoneId)
-
-    @Test
-    fun invoke_whenAfterIntervalDays_thenKeepsCurrentTimeOfDayAndAddsDays() {
-        // Given
-        val useCase = BuildWorkoutReminderUseCase(clock = clock)
-        val request = WorkoutReminderRequest(
-            workoutId = 42L,
-            mode = WorkoutReminderMode.AFTER_INTERVAL,
-            afterAmount = 3,
-            afterUnit = WorkoutReminderIntervalUnit.DAY
+class EntryValidatorTest {
+    private fun baseEntry(
+        sets: Int = 1,
+        reps: Int? = 10,
+        weightKg: Double? = null,
+        workoutId: Long? = null,
+        durationSec: Int? = null
+    ): ExerciseEntry =
+        ExerciseEntry(
+            id = 0L,
+            exerciseId = 1L,
+            workoutId = workoutId,
+            date = 1_700_000_000_000L,
+            sets = sets,
+            reps = reps,
+            weightKg = weightKg,
+            durationSec = durationSec,
+            comment = null,
+            createdAt = 1L,
+            modifiedAt = 1L
         )
 
+    @Test
+    fun valid_entry_returns_success() {
+        // Given
+        val entry = baseEntry()
+
         // When
-        val result = useCase(request)
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
 
         // Then
-        assertTrue(result.isSuccess, "Результат должен быть успешным")
-        val reminder = result.getOrThrow()
-        val expected = ZonedDateTime.ofInstant(fixedInstant, zoneId).plusDays(3)
-        assertEquals(expected.toInstant().toEpochMilli(), reminder.targetEpochMillis)
-        assertEquals(3, reminder.intervalAmount)
-        assertEquals(WorkoutReminderIntervalUnit.DAY, reminder.intervalUnit)
+        assertTrue(result.isSuccess, "Корректная REPS-запись валидна")
     }
 
-    @Test
-    fun invoke_whenAfterIntervalAmountIsZero_thenReturnsFailure() {
+    @ParameterizedTest
+    @ValueSource(ints = [0, -1, -100])
+    fun sets_below_one_rejected(invalidSets: Int) {
         // Given
-        val useCase = BuildWorkoutReminderUseCase(clock = clock)
-        val request = WorkoutReminderRequest(
-            workoutId = 42L,
-            mode = WorkoutReminderMode.AFTER_INTERVAL,
-            afterAmount = 0,
-            afterUnit = WorkoutReminderIntervalUnit.WEEK
-        )
+        val entry = baseEntry(sets = invalidSets)
 
         // When
-        val result = useCase(request)
+        val result = EntryValidator.validate(entry, ExerciseMeasuredBy.REPS)
 
         // Then
-        assertTrue(result.isFailure, "Должна быть ошибка валидации")
+        assertTrue(result.isFailure)
+        assertEquals(
+            EntryValidationError.INVALID_SETS,
+            (result.exceptionOrNull() as? EntryValidationException)?.error
+        )
     }
 }
 ```
 
+Особенности:
+- `EntryValidator` — `object`, не требует DI.
+- Ошибка типизирована через `EntryValidationException(error: EntryValidationError)`.
+- `@ParameterizedTest` + `@ValueSource(ints = [...])` для повторяющихся
+  граничных значений (см. `kotlin-testing` → `project-conventions.md`
+  → «ParameterizedTest»).
+
 ---
 
-## 2. ViewModel с FakeWorkoutRepository + DataStore
+## 2. Mapper (entity ↔ domain)
 
-`WorkoutsScreenViewModelTest` (фрагмент). Полный файл — в
-`app/src/test/java/com/myworkouts/ui/viewmodel/WorkoutsScreenViewModelTest.kt`.
+`MappersTest` — round-trip для enum-строк в entity.
+
+```kotlin
+package com.myworkouts.data.db
+
+import com.myworkouts.domain.model.ExerciseCategory
+import com.myworkouts.domain.model.ExerciseMeasuredBy
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+
+class MappersTest {
+    private fun sampleExercise(measuredBy: ExerciseMeasuredBy) =
+        Exercise(
+            id = 1L,
+            name = "Планка",
+            category = ExerciseCategory.CORE,
+            isCustom = false,
+            comment = null,
+            createdAt = 100L,
+            measuredBy = measuredBy
+        )
+
+    @Test
+    fun exercise_measuredBy_time_roundtrip_preserved() {
+        // Given
+        val exercise = sampleExercise(measuredBy = ExerciseMeasuredBy.TIME)
+
+        // When
+        val entity = exercise.toEntity()
+        val restored = entity.toDomain()
+
+        // Then — TIME сохраняется в обе стороны, entity хранит имя значения
+        assertEquals("TIME", entity.measuredBy)
+        assertEquals(ExerciseMeasuredBy.TIME, restored.measuredBy)
+    }
+
+    @Test
+    fun toListItem_when_weightKg_zero_then_keeps_zero() {
+        // Given — 0.0 в БД: это данные, а не «нет веса» (design Decision 5)
+
+        // When
+        val item = EntryListItemEntity(
+            id = 1L,
+            exerciseName = "Подтягивания",
+            sets = 4,
+            reps = 10,
+            durationSec = null,
+            date = 1_700_000_000_000L,
+            weightKg = 0.0
+        ).toListItem()
+
+        // Then — 0 проходит без искажений, решение о скрытии — на стороне UI
+        assertEquals(0.0, item.weightKg)
+    }
+}
+```
+
+Особенности:
+- `toDomain`/`toEntity` — `internal` extension-функции в `data/db/Mappers.kt`.
+- enum `category`/`measuredBy` хранится строкой `name` (design Decision 2):
+  `ExerciseCategory.valueOf(category)`, `category.name` в обратную сторону.
+- Разные «нулевые» значения (`null` vs `0.0`) сохраняются раздельно — это
+  семантика данных, не округление.
+
+---
+
+## 3. Domain enum с контрактом на полноту набора
+
+`ExerciseCategoryTest` — `@ParameterizedTest` + `@EnumSource` для проверки
+полного набора enum-значений.
+
+```kotlin
+package com.myworkouts.domain.model
+
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
+
+class ExerciseCategoryTest {
+    @Test
+    fun all_categories_contain_exactly_five_values() {
+        // Given — enum ExerciseCategory
+        // When
+        val values = ExerciseCategory.values()
+
+        // Then
+        assertEquals(5, values.size)
+    }
+
+    @ParameterizedTest
+    @EnumSource(ExerciseCategory::class)
+    fun valueOf_roundtrips_for_known_name(category: ExerciseCategory) {
+        // Given
+        val name = category.name
+
+        // When
+        val parsed = ExerciseCategory.valueOf(name)
+
+        // Then
+        assertEquals(category, parsed)
+    }
+
+    @Test
+    fun all_expected_categories_present() {
+        // Given — ожидаемый контрактный набор
+        val expected = setOf("PUSH", "PULL", "LEGS", "CORE", "CARDIO")
+
+        // When
+        val actual = ExerciseCategory.values().map { it.name }.toSet()
+
+        // Then
+        assertEquals(expected, actual)
+    }
+
+    @Test
+    fun valueOf_throws_for_unknown_name() {
+        // Given
+        val unknown = "MADE_UP"
+
+        // When + Then
+        // enum.valueOf бросает IllegalArgumentException — это документированное
+        // поведение, на которое опирается Mappers.kt.
+        assertTrue(
+            runCatching { ExerciseCategory.valueOf(unknown) }.isFailure
+        )
+    }
+}
+```
+
+Особенности:
+- Контракт «ровно N значений, набор фиксирован» — `prepopulate`
+  стандартных упражнений в БД опирается на эти 5 значений.
+- `@EnumSource` — основной источник для перебора enum-значений.
+
+---
+
+## 4. Use Case с `Result<T>` и I/O (mockk на ContentResolver)
+
+`ExportBackupUseCaseTest` — I/O через `Context` + `ContentResolver`,
+репозиторий мокается. Канонический пример — `app/src/test/.../ExportBackupUseCaseTest.kt`.
+
+Полный файл длинный (тесты формата JSON и репозиторных ошибок), здесь
+характерные куски.
+
+### 4.1. Чистая функция `buildBackupJson` (без I/O)
+
+```kotlin
+@Test
+fun buildBackupJson_when_data_present_then_version_and_arrays() {
+    // Given
+    val exercises = listOf(pullUps, plank)
+    val entries = listOf(repsEntry, timeEntry)
+
+    // When
+    val json = JSONObject(buildBackupJson(exercises, entries))
+
+    // Then
+    assertEquals(1, json.getInt("version"), "Версия формата — всегда 1")
+    assertEquals(2, json.getJSONArray("exercises").length(), "Все упражнения каталога в файле")
+    assertEquals(2, json.getJSONArray("entries").length(), "Все записи в файле")
+}
+```
+
+### 4.2. `invoke` — ошибка репозитория, поток не открывается
+
+```kotlin
+@Test
+fun invoke_when_repository_fails_then_failure_and_no_stream() =
+    runTest {
+        // Given
+        val dbError = RuntimeException("Сбой базы")
+        val repository = mockk<WorkoutDataRepository>(relaxed = true)
+        coEvery { repository.getAllExercises() } returns Result.failure(dbError)
+        coEvery { repository.getAllEntries() } returns Result.failure(dbError)
+        val contentResolver = mockk<ContentResolver>(relaxed = true)
+        val context = mockk<Context>(relaxed = true)
+        every { context.contentResolver } returns contentResolver
+        val uri = mockk<Uri>()
+        val useCase = ExportBackupUseCase(repository, context)
+
+        // When
+        val result = useCase(uri)
+
+        // Then
+        assertTrue(result.isFailure, "Ошибка репозитория — Result.failure")
+        assertTrue(
+            result.exceptionOrNull() === dbError,
+            "Ошибка БД проходит в Result как есть, не оборачивается"
+        )
+        verify(exactly = 0) { contentResolver.openOutputStream(any()) }
+    }
+```
+
+Особенности:
+- `runTest { … }` без `viewModelScope` — для use-case'ов без диспетчеризации.
+- `mockk<…>(relaxed = true)` для всего, что не влияет на тест.
+- `coEvery` — только для `suspend`-методов (`getAllExercises()`, `getAllEntries()`).
+- `every` — для `ContentResolver.openOutputStream()` и для геттеров.
+- `verify(exactly = 0) { … }` — негативная проверка: поток НЕ открыт при провале снимка.
+
+---
+
+## 5. ViewModel + `FakeWorkoutDataRepository` (MutableStateFlow)
+
+`MainViewModelTest` — реактивный список из `WorkoutDataRepository.entries()`,
+удаление через `confirmDelete()`. Полный файл — в
+`app/src/test/java/com/myworkouts/ui/viewmodel/MainViewModelTest.kt`.
 
 ```kotlin
 package com.myworkouts.ui.viewmodel
 
-import com.myworkouts.data.preferences.UserPreferencesDataStore
-import com.myworkouts.domain.model.DisplayOption
-import com.myworkouts.domain.model.Workout
-import com.myworkouts.domain.model.SortOrder
-import com.myworkouts.domain.repository.WorkoutRepository
-import com.myworkouts.util.Logger
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
+import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.domain.model.Exercise
+import com.myworkouts.domain.model.ExerciseEntry
+import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.ui.state.MainUiState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
-@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-class WorkoutsScreenViewModelTest {
-    private lateinit var repository: FakeWorkoutRepository
-    private lateinit var sortOrderFlow: MutableStateFlow<SortOrder>
-    private lateinit var dataStore: UserPreferencesDataStore
-    private lateinit var logger: Logger
-    private lateinit var viewModel: WorkoutsScreenViewModel
+private class MainViewModelFakeRepository(
+    initialEntries: List<EntryListItem> = emptyList()
+) : WorkoutDataRepository {
+    private val entriesFlow = MutableStateFlow(initialEntries)
+
+    val deletedIds: MutableList<Long> = mutableListOf()
+
+    override fun entries(): Flow<List<EntryListItem>> = entriesFlow
+
+    override fun exercises(query: String): Flow<List<Exercise>> = MutableStateFlow(emptyList())
+
+    override suspend fun deleteEntry(id: Long): Result<Unit> {
+        deletedIds += id
+        entriesFlow.value = entriesFlow.value.filterNot { it.id == id }
+        return Result.success(Unit)
+    }
+
+    // ... остальные методы WorkoutDataRepository — заглушки
+    // (addEntry, updateEntry, getEntry, deleteExercise, getExercise,
+    // exerciseIdsWithLinkedEntries, getAllExercises, getAllEntries,
+    // importData, deleteAllData, addExercise, updateExercise).
+    // Для них `override suspend fun … = Result.success(… / Unit)` —
+    // достаточно для большинства тестов; тонкая настройка — на use site.
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class MainViewModelTest {
     private lateinit var testDispatcher: TestDispatcher
-    private val sortOrderSlot = slot<SortOrder>()
+    private lateinit var repository: MainViewModelFakeRepository
+
+    private val item1 = EntryListItem(
+        id = 1L,
+        exerciseName = "Подтягивания",
+        sets = 4,
+        reps = 10,
+        durationSec = null,
+        date = 1_721_000_000_000L
+    )
 
     @BeforeEach
     fun setUp() {
         testDispatcher = StandardTestDispatcher()
         Dispatchers.setMain(testDispatcher)
-
-        repository = FakeWorkoutRepository()
-        sortOrderFlow = MutableStateFlow(SortOrder.DESCENDING)
-        dataStore = mockk(relaxed = true)
-        logger = mockk(relaxed = true)
-
-        every { dataStore.sortOrder } returns sortOrderFlow
-        coEvery { dataStore.setSortOrder(capture(sortOrderSlot)) } answers {
-            sortOrderFlow.value = sortOrderSlot.captured
-        }
-
-        viewModel = WorkoutsScreenViewModel(repository, dataStore, logger)
+        repository = MainViewModelFakeRepository(initialEntries = listOf(item1))
     }
 
     @AfterEach
@@ -141,160 +377,200 @@ class WorkoutsScreenViewModelTest {
     }
 
     @Test
-    fun when_sort_order_changed_then_sorts_workouts() = runTest {
-        // Given
-        val items = listOf(
-            Workout(id = 1L, title = "Событие 1", details = "Детали 1",
-                 timestamp = System.currentTimeMillis() - 86400000,
-                 colorTag = null, displayOption = DisplayOption.DAY),
-            Workout(id = 2L, title = "Событие 2", details = "Детали 2",
-                 timestamp = System.currentTimeMillis(),
-                 colorTag = null, displayOption = DisplayOption.DAY)
-        )
-        repository.setWorkouts(items)
+    fun state_when_subscribed_then_success_with_entries() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = MainViewModel(repository)
 
-        // When
-        viewModel.updateSortOrder(SortOrder.ASCENDING)
-        testDispatcher.scheduler.advanceUntilIdle()
+            // When — подписка активирует WhileSubscribed, список доезжает
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
 
-        // Then
-        val uiState = viewModel.uiState.value
-        assertTrue(uiState is WorkoutsScreenState.Success, "Должно быть состояние Success")
-        val successState = uiState as WorkoutsScreenState.Success
-        assertEquals(2, successState.items.size)
-        assertEquals(1L, successState.items[0].id, "Первый элемент должен быть старым")
-        assertEquals(SortOrder.ASCENDING, viewModel.sortOrder.value)
-        coVerify { dataStore.setSortOrder(SortOrder.ASCENDING) }
-    }
-
-    private class FakeWorkoutRepository : WorkoutRepository {
-        private val _items = MutableStateFlow<List<Workout>>(emptyList())
-
-        fun setWorkouts(items: List<Workout>) { _items.value = items }
-
-        override fun getAllWorkouts(): Flow<List<Workout>> = _items
-
-        override fun getAllWorkouts(sortOrder: SortOrder): Flow<List<Workout>> =
-            _items.map { items ->
-                when (sortOrder) {
-                    SortOrder.ASCENDING -> items.sortedWith(compareBy({ it.timestamp }, { it.id }))
-                    SortOrder.DESCENDING ->
-                        items.sortedWith(compareByDescending<Workout> { it.timestamp }.thenByDescending { it.id })
-                }
-            }
-
-        override suspend fun getWorkoutById(id: Long): Workout? = _items.value.find { it.id == id }
-        override fun getWorkoutFlow(id: Long): Flow<Workout?> = _items.map { it.find { workout -> workout.id == id } }
-        override fun searchWorkouts(query: String): Flow<List<Workout>> = _items
-
-        override suspend fun insertWorkout(workout: Workout): Long {
-            val newId = (_items.value.maxOfOrNull { it.id } ?: 0) + 1
-            _items.value = _items.value + workout.copy(id = newId)
-            return newId
+            // Then
+            val state = viewModel.uiState.value
+            assertTrue(state is MainUiState.Success, "После эмиссии — Success")
+            val success = state as MainUiState.Success
+            assertEquals(listOf(item1), success.entries, "Записи приходят из реактивного источника")
+            assertNull(success.pendingDeleteId, "Без действия pendingDeleteId = null")
         }
-        override suspend fun updateWorkout(workout: Workout) {
-            _items.value = _items.value.map { if (it.id == workout.id) item else it }
+
+    @Test
+    fun confirmDelete_calls_repository_and_clears_pending() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = MainViewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestDelete(item1)
+            advanceUntilIdle()
+
+            // When
+            viewModel.confirmDelete()
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(listOf(1L), repository.deletedIds, "deleteEntry вызван с id item1")
+            assertNull(viewModel.uiState.value.pendingDeleteId, "pending сброшен после удаления")
         }
-        override suspend fun deleteWorkout(workout: Workout) {
-            _items.value = _items.value.filterNot { it.id == workout.id }
-        }
-        override suspend fun deleteAllWorkouts() { _items.value = emptyList() }
-        override suspend fun getWorkoutsCount(): Int = _items.value.size
-    }
 }
 ```
+
+Особенности:
+- Fake делает минимум: реактивный `entries()` + записывает `deleteEntry`.
+- `MutableStateFlow.value = …` сразу триггерит эмиссию — list обновляется
+  реактивно без `delay`/корутин.
+- Подписка через `backgroundScope.launch { viewModel.uiState.collect { } }` —
+  для запуска `WhileSubscribed` (stateIn) перед чтением `.value`.
+- `advanceUntilIdle()` — после каждого действия ViewModel.
+
+> Если нужен ещё один fake для той же ViewModel в другом тест-классе —
+  именуй `MyViewModelFakeRepository` (см. комментарий в исходнике:
+  test source set — одна единица компиляции, `private` на top-level
+  изолирует только в пределах модуля).
 
 ---
 
-## 3. Mapper (entity ↔ domain)
+## 6. ViewModel с use-case'ами (`AppDataViewModelTest`)
+
+`AppDataViewModel` — комбинация репозитория (Fake) и use-case'ов (mockk).
+Use-case'ы замоканы, репозиторий — Fake для `entries()`/`exercises()`.
 
 ```kotlin
-package com.myworkouts.data.database
+package com.myworkouts.ui.viewmodel
 
-import com.myworkouts.data.database.entity.WorkoutEntity
-import com.myworkouts.domain.model.DisplayOption
-import com.myworkouts.domain.model.Workout
+import android.net.Uri
+import android.util.Log
+import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.domain.model.Exercise
+import com.myworkouts.domain.model.ExerciseEntry
+import com.myworkouts.domain.usecase.BackupError
+import com.myworkouts.domain.usecase.BackupException
+import com.myworkouts.domain.usecase.ExportBackupUseCase
+import com.myworkouts.domain.usecase.ImportBackupUseCase
+import com.myworkouts.ui.state.AppDataResult
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
-class WorkoutMapperTest {
-    @Test
-    fun roundTripConversion_thenPreservesAllFields() {
-        // Given
-        val original = Workout(
-            id = 5L,
-            title = "Оригинальное событие",
-            details = "Детали",
-            timestamp = 9876543210000L,
-            colorTag = 0xFF00FF00.toInt(),
-            displayOption = DisplayOption.YEAR_MONTH_DAY
-        )
+private class AppDataViewModelFakeRepository(
+    entries: List<EntryListItem> = emptyList(),
+    private val exercises: List<Exercise> = emptyList()
+) : WorkoutDataRepository {
+    private val entriesFlow = MutableStateFlow(entries)
+    private val catalogFlow = MutableStateFlow(exercises)
 
-        // When
-        val entity = original.toEntity()
-        val converted = entity.toDomain()
+    var deleteAllDataResult: Result<Unit> = Result.success(Unit)
 
-        // Then
-        assertEquals(original.id, converted.id)
-        assertEquals(original.title, converted.title)
-        assertEquals(original.details, converted.details)
-        assertEquals(original.timestamp, converted.timestamp)
-        assertEquals(original.colorTag, converted.colorTag)
-        assertEquals(original.displayOption, converted.displayOption)
+    override fun entries(): Flow<List<EntryListItem>> = entriesFlow
+    override fun exercises(query: String): Flow<List<Exercise>> = catalogFlow
+
+    override suspend fun getAllExercises(): Result<List<Exercise>> = Result.success(catalogFlow.value)
+    override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = Result.success(emptyList())
+    override suspend fun importData(
+        exercises: List<Exercise>,
+        entries: List<BackupEntry>
+    ): Result<Unit> = Result.success(Unit)
+    override suspend fun deleteAllData(): Result<Unit> = deleteAllDataResult
+
+    // ... остальные методы — заглушки Result.success
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class AppDataViewModelTest {
+    private lateinit var testDispatcher: TestDispatcher
+    private lateinit var uri: Uri
+    private lateinit var exportUseCase: ExportBackupUseCase
+    private lateinit var importUseCase: ImportBackupUseCase
+
+    @BeforeEach
+    fun setUp() {
+        testDispatcher = StandardTestDispatcher()
+        Dispatchers.setMain(testDispatcher)
+        // android.util.Log в JVM — stub, роняет короутину; мокаем статически
+        mockkStatic(Log::class)
+        every { Log.e(any(), any<String>()) } returns 0
+        uri = mockk()
+        exportUseCase = mockk()
+        importUseCase = mockk()
+        coEvery { exportUseCase.invoke(any()) } returns Result.success(Unit)
+        coEvery { importUseCase.invoke(any()) } returns Result.success(Unit)
     }
+
+    @AfterEach
+    fun tearDown() {
+        unmockkStatic(Log::class)
+        Dispatchers.resetMain()
+    }
+
+    private fun viewModel(repository: AppDataViewModelFakeRepository) =
+        AppDataViewModel(repository, exportUseCase, importUseCase)
+
+    @Test
+    fun exportBackup_whenUseCaseFails_thenErrorExport() =
+        runTest(testDispatcher) {
+            // Given
+            coEvery { exportUseCase.invoke(any()) } returns
+                Result.failure(BackupException("SAF не отдал поток", BackupError.EXPORT))
+            val viewModel = viewModel(AppDataViewModelFakeRepository())
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // When
+            viewModel.exportBackup(uri)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(AppDataResult.ERROR_EXPORT, viewModel.uiState.value.result)
+            assertFalse(viewModel.uiState.value.isBusy)
+        }
 }
 ```
 
----
-
-## 4. JSON-парсинг с реальными файлами
-
-`BackupImportRealFilesTest` (фрагмент):
-
-```kotlin
-package com.myworkouts.domain.usecase
-
-import kotlinx.serialization.json.Json
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Test
-import java.io.InputStream
-
-class BackupImportRealFilesTest {
-    private val json = Json { ignoreUnknownKeys = true }
-
-    @Test
-    fun parse_old_backup_sample_json_as_list_of_backupitem() {
-        // Given
-        val jsonString = loadResource("/old-backup-sample.json")
-
-        // When
-        val items = json.decodeFromString<List<WorkoutBackupItem>>(jsonString)
-
-        // Then
-        assertEquals(8, items.size)
-
-        val firstBackupWorkout = items[0]
-        assertEquals("День рождения", firstBackupWorkout.title)
-        assertEquals("#FF5722", firstBackupWorkout.colorTag)
-    }
-
-    private fun loadResource(path: String): String {
-        val stream: InputStream? = javaClass.getResourceAsStream(path)
-        assertNotNull(stream, "Resource not found: $path")
-        return checkNotNull(stream, "Resource stream is null").bufferedReader().use { it.readText() }
-    }
-}
-```
+Особенности:
+- `mockkStatic(Log::class)` + `unmockkStatic` в `@AfterEach` — стандартный
+  приём для ViewModel, которые логируют ошибки (`AppDataViewModel`,
+  `ExercisesViewModel`).
+- `runTest(testDispatcher) { … }` — передаём тот же dispatcher, что в
+  `setMain`, иначе корутины не подхватят тестовый планировщик.
 
 ---
 
 ## Где искать ещё
 
-- `app/src/test/java/com/myworkouts/ui/viewmodel/EntryCreateViewModelTest.kt` — Fake-репозиторий на MutableStateFlow, таблица кейсов санитайзинга, фиксированный nowProvider.
-- `app/src/test/java/com/myworkouts/ui/viewmodel/AppearanceViewModelTest.kt` — ViewModel с зависимостью настроек (DataStore).
-- `app/src/test/java/com/myworkouts/data/db/MappersTest.kt` — мапперы entity↔domain.
-- `app/src/test/java/com/myworkouts/data/repository/EntryValidatorTest.kt` — валидация записи.
-- `app/src/test/java/com/myworkouts/domain/model/ExerciseCategoryTest.kt` — `@ParameterizedTest` + `@EnumSource`.
-- `app/src/test/java/com/myworkouts/ui/state/WorkoutDetailsStateTest.kt` — sealed-state equality.
+- `app/src/test/java/com/myworkouts/ui/viewmodel/MainViewModelTest.kt` — Fake-репозиторий на MutableStateFlow, реактивный список, удаление через `confirmDelete`.
+- `app/src/test/java/com/myworkouts/ui/viewmodel/EntryCreateViewModelTest.kt` — Fake-репозиторий с настраиваемым результатом `addEntry`, санитайзинг, фиксированный `nowProvider`, `nowProvider`-параметр.
+- `app/src/test/java/com/myworkouts/ui/viewmodel/AppearanceViewModelTest.kt` — `mockk<AppSettingsDataStore>(relaxed = true)`, `@ParameterizedTest` + `@EnumSource(AppTheme::class)`, `@MethodSource` для пар.
+- `app/src/test/java/com/myworkouts/ui/viewmodel/ExerciseCreateViewModelTest.kt` — Fake с `addedExercises` (отслеживание аргументов).
+- `app/src/test/java/com/myworkouts/ui/viewmodel/ExercisesViewModelTest.kt` — Fake с настраиваемыми `deleteExerciseResult`/`linkedEntries`, маппинг `DeleteExerciseError`.
+- `app/src/test/java/com/myworkouts/ui/viewmodel/AppDataViewModelTest.kt` — Fake + замоканные use-case'ы, `mockkStatic(Log::class)`, маппинг `BackupError` → `AppDataResult`.
+- `app/src/test/java/com/myworkouts/data/db/MappersTest.kt` — `toDomain`/`toEntity`, round-trip enum ↔ string.
+- `app/src/test/java/com/myworkouts/data/repository/EntryValidatorTest.kt` — `@ParameterizedTest` + `@ValueSource(ints/doubles)` для граничных значений.
+- `app/src/test/java/com/myworkouts/domain/model/ExerciseCategoryTest.kt` — `@ParameterizedTest` + `@EnumSource` для enum-контракта.
+- `app/src/test/java/com/myworkouts/domain/usecase/ExportBackupUseCaseTest.kt` — `mockk<Context>` + `coEvery`/`every` для suspend-Flow-методов, верификация `openOutputStream` НЕ вызван при ошибке.
+- `app/src/test/java/com/myworkouts/domain/usecase/ImportBackupUseCaseTest.kt` — `ByteArrayInputStream` для подачи JSON-строки, `slot` для захвата аргументов `importData`, `@ParameterizedTest` + `@MethodSource` для негативных кейсов.
+- `app/src/test/java/com/myworkouts/ui/state/EntryCreateUiStateTest.kt` — sealed-state равенство через конструктор (без `is` + cast).
+- `app/src/test/java/com/myworkouts/ui/util/DurationFormatterTest.kt` — чистая функция-форматтер.
+- `app/src/test/java/com/myworkouts/ui/screens/entry/EntryCreateFormattersTest.kt` — `LocalDate` ↔ epoch millis с фиксированной зоной.
+- `app/src/test/java/com/myworkouts/navigation/VisibleTabsTest.kt` — pure-функция с `Screen.*.route`, проверка обеих веток.

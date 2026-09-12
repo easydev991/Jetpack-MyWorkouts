@@ -15,12 +15,18 @@ val composeTestRule = createComposeRule()
 val composeTestRule = createAndroidComposeRule<MainActivity>()
 ```
 
-Контент задаётся в `setContent { }`, компонент оборачивается в тему:
+Контент задаётся в `setContent { }`, компонент при необходимости
+оборачивается в тему:
 
 ```kotlin
 composeTestRule.setContent {
-    MyWorkoutsTheme {
-        WorkoutDurationText(formattedText = testText)
+    JetpackMyWorkoutsTheme {
+        ExercisesScreenContent(
+            state = ExercisesScreenState(
+                uiState = ExercisesUiState.Success(exercises = listOf(pullups, plank)),
+                onAddExerciseClick = {}
+            )
+        )
     }
 }
 ```
@@ -39,8 +45,15 @@ composeTestRule.onAllNodesWithText(text)                      // все ноды
 ```kotlin
 .performClick()                // клик
 .performTextInput("text")      // ввод текста
-.fetchSemanticsNode("name")    // получение семантики ноды (для bounds и т.п.)
+.performScrollToNode(hasText("..."))  // скролл до ноды с заданным текстом
+.fetchSemanticsNode()          // получение семантики ноды (для bounds и т.п.)
+.performTouchInput { longClick() }  // long-press через touch injection
 ```
+
+> `click`/`longClick`/`doubleClick` — extension-функции
+> `TouchInjectionScope`, каждой нужен свой импорт:
+> `import androidx.compose.ui.test.click`,
+> `import androidx.compose.ui.test.longClick`.
 
 ## Assertions
 
@@ -75,40 +88,51 @@ composeTestRule.waitUntil(timeoutMillis = 1000) {
         .isEmpty()
 }
 
-// Действие на idle (например, обновить состояние):
+// Действие на idle (например, обновить состояние или навигация):
 composeTestRule.runOnIdle {
-    reminderState.value = reminderState.value.copy(isEnabled = true)
+    navController.popBackStack()
 }
 ```
 
-`Thread.sleep` в проекте не используется — только `waitForIdle()`,
-`waitUntil(...)` и `runOnIdle { }`.
+`Thread.sleep` в проекте не используется для ожидания UI — только
+`waitForIdle()`, `waitUntil(...)` и `runOnIdle { }`. Единственное
+исключение — `kotlinx.coroutines.delay(...)` для воспроизведения
+реального таймаута сценария (например, `WhileSubscribed(5000)` в
+`ExerciseCreateLiveUpdateIntegrationTest`).
 
 ## Проверка позиции нод (boundsInRoot)
 
-Для проверки взаимного расположения элементов (сортировка, порядок):
+Канонический паттерн проверки взаимного расположения элементов
+(сортировка, sticky-заголовки, порядок секций):
 
 ```kotlin
-val nodeA = composeTestRule.onNodeWithText(titleA)
-val nodeB = composeTestRule.onNodeWithText(titleB)
-nodeA.assertIsDisplayed()
-nodeB.assertIsDisplayed()
-
-val topA = nodeA.fetchSemanticsNode("nodeA").boundsInRoot.top
-val topB = nodeB.fetchSemanticsNode("nodeB").boundsInRoot.top
+val headerTop =
+    composeTestRule
+        .onNodeWithText(dateFormatter.format(today.minusDays(5)))
+        .assertIsDisplayed()
+        .fetchSemanticsNode()
+        .boundsInRoot.top
+val rowTop =
+    composeTestRule
+        .onNodeWithText("Планка")
+        .assertIsDisplayed()
+        .fetchSemanticsNode()
+        .boundsInRoot.top
 assertTrue(
-    "A (09:00) должен быть выше B (18:00) при сортировке «сначала старые», " +
-        "но topA=$topA, topB=$topB",
-    topA < topB
+    "Sticky-заголовок должен остаться у верхнего края над строкой секции",
+    headerTop < rowTop
 )
 ```
+
+Полный контекст использования — `MainScreenSectionsTest`
+(`app/src/androidTest/.../ui/screens/main/MainScreenSectionsTest.kt`).
 
 ## Работа с несколькими нодами
 
 Списки элементов с одинаковым contentDescription:
 
 ```kotlin
-// 6 preset-цветов + 1 кастомный:
+// Несколько кастомных цветов:
 composeTestRule
     .onAllNodesWithContentDescription(colorDescription)
     .assertCountEquals(7)
@@ -119,28 +143,29 @@ composeTestRule.onAllNodesWithContentDescription(colorDescription)[0].performCli
 
 ## Проверка колбэков
 
-Полный пример — `references/EXAMPLE.md` (раздел «Компонентный тест
-с колбэками (диалог)»). Паттерн: флаг `var onApplyCalled = false`
-в `setContent`, клик по кнопке, проверка флага на idle:
+Паттерн: флаг `var onAddExerciseClickCalled = false` в `setContent`,
+клик по кнопке, проверка флага на idle:
 
 ```kotlin
-var onApplyCalled = false
+var onAddExerciseClickCalled = false
 
 composeTestRule.setContent {
-    WorkoutTagFilterDialog(
-        availableColors = availableColors,
-        currentFilter = currentFilter,
-        onApply = { onApplyCalled = true },
-        onDismiss = {}
+    ExercisesScreenContent(
+        state = ExercisesScreenState(
+            uiState = ExercisesUiState.Success(exercises = listOf(pullups)),
+            onAddExerciseClick = { onAddExerciseClickCalled = true }
+        )
     )
 }
 
-composeTestRule.onNodeWithText(resetText).performClick()
+composeTestRule
+    .onNodeWithContentDescription(context.getString(R.string.exercises_add_exercise))
+    .performClick()
 
 composeTestRule.runOnIdle {
-    org.junit.Assert.assertFalse(
-        "При сбросе черновика без фильтра onApply не должен вызываться",
-        onApplyCalled
+    org.junit.Assert.assertTrue(
+        "Клик по FAB должен вызвать колбэк onAddExerciseClick",
+        onAddExerciseClickCalled
     )
 }
 ```
@@ -188,13 +213,11 @@ composeTestRule
     .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Disabled))
     .onFirst()
     .performTouchInput { click(center) }
-
-// Доступная прошлым дням механика проверяется end-to-end: «ОК» без
-// выбора дня не меняет поле (текст поля — через DateTimeFormatter,
-// не хардкод локали).
 ```
 
-Если нужна точная логика границы дат (какие millis доступны) — вынеси её
+Точная логика границы доступных дат (какие millis доступны) выносится
 в pure-функцию без Compose-рантайма (internal top-level рядом с
-форматтерами пикера) и покрывай JVM-тестами; UI-тест оставь для факта
-«недоступные дни в пикере есть».
+форматтерами пикера) и покрывается JVM-тестами; UI-тест оставляет
+только проверку факта «недоступные дни в пикере есть» — кнопка
+«ОК» без выбора дня не меняет поле ввода, его текст проверяется
+через `DateTimeFormatter` без хардкода локали.

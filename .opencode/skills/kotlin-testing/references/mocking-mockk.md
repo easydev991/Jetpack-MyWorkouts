@@ -7,55 +7,63 @@ Mockito / Mockito-Kotlin не используется.
 
 ```kotlin
 // Строгий — все вызовы без стаба бросают MockKException
-private val logger: Logger = mockk()
+private val dataStore: AppSettingsDataStore = mockk()
 
 // Relaxed — для не-stub-нутых методов возвращает дефолт (null/0/false)
-private val logger: Logger = mockk(relaxed = true)
+private val dataStore: AppSettingsDataStore = mockk(relaxed = true)
+
+// Relaxed для всего, что не влияет на тест
+private val contentResolver: ContentResolver = mockk(relaxed = true)
 ```
 
-`relaxed = true` удобен для `Logger`, `DataStore`, простых интерфейсов,
-где методов много и они не центральные. **Не используй `relaxed` для
-репозиториев с Flow** — там нужны Fake (см. `references/fakes.md`).
+`relaxed = true` удобен для `AppSettingsDataStore`, `Context`,
+`ContentResolver` — простых stateless интерфейсов, где методов много
+и они не центральные. **Не используй `relaxed` для репозиториев с
+Flow** — там нужны Fake (см. `references/fakes.md`).
 
 ## `every` / `coEvery`
 
 ```kotlin
 // Синхронный вызов
-every { mockResourceProvider.getString(R.string.today) } returns "Сегодня"
-
-// С аргументами-свойствами (named args в блоке every тоже допустимы)
-every {
-    daysFormatter.formatComposite(
-        period = period,
-        displayOption = DisplayOption.DAY,
-        resourceProvider = resourceProvider,
-        totalDays = 10,
-        showMinus = true
-    )
-} returns "10 дней"
+every { mockContext.contentResolver } returns contentResolver
 
 // Suspend-функция — ТОЛЬКО coEvery
-coEvery { mockRepository.deleteWorkout(testWorkout) } returns Unit
+coEvery { mockRepository.getAllExercises() } returns Result.success(exercises)
 
 // Бросить исключение
 every { mockProvider.getName() } throws IllegalStateException("not set")
 
 // Suspend, бросить
-coEvery { mockRepository.insertWorkout(any()) } throws SQLException("db error")
+coEvery { mockRepository.importData(any(), any()) } throws SQLException("db error")
+
+// Flow-возвращающий метод — обычный every, НЕ coEvery
+every { mockDataStore.theme } returns flowOf(AppTheme.DARK)
 ```
+
+**`coEvery` ≠ `every` для Flow-методов.** Правило:
+- `coEvery` / `coVerify` — только для `suspend fun`.
+- `every` / `verify` — для обычных fun и для Flow-возвращающих fun
+  (даже если реализация содержит `suspend` upstream).
+
+`mockk + flowOf`: `flowOf(...)` — холодный Flow с риском race-condition
+на TestDispatcher (см. «Типичные ошибки → Mock Flow не эмитится в StateFlow»
+ниже; для `WorkoutDataRepository` — пиши Fake, см. `references/fakes.md`).
 
 ## `verify` / `coVerify`
 
 ```kotlin
 // Был вызван хотя бы раз
-verify { mockLogger.d("Tag", "msg") }
+verify { mockContext.contentResolver }
 
 // Suspend
-coVerify { mockRepository.deleteWorkout(testWorkout) }
+coVerify { mockRepository.deleteEntry(itemId) }
 
 // Ровно N раз
-coVerify(exactly = 1) { mockRepository.insertWorkout(any()) }
-coVerify(exactly = 0) { mockRepository.insertWorkout(any()) } // не было
+coVerify(exactly = 1) { mockRepository.importData(any(), any()) }
+coVerify(exactly = 0) { contentResolver.openOutputStream(any()) } // не было
+
+// Для Flow-методов
+verify { mockDataStore.theme }
 ```
 
 ## `slot` + `capture` (для перехвата аргументов)
@@ -63,22 +71,24 @@ coVerify(exactly = 0) { mockRepository.insertWorkout(any()) } // не было
 Когда нужно проверить, **с чем** вызвали мок:
 
 ```kotlin
-private val sortOrderSlot = slot<SortOrder>()
-
-@BeforeEach
-fun setUp() {
-    coEvery { dataStore.setSortOrder(capture(sortOrderSlot)) } answers {
-        sortOrderFlow.value = sortOrderSlot.captured
-    }
-}
-
 @Test
-fun when_sort_order_changed_then_sorts_workouts() = runTest {
-    viewModel.updateSortOrder(SortOrder.ASCENDING)
-    testDispatcher.scheduler.advanceUntilIdle()
-    // ...
-    assertEquals(SortOrder.ASCENDING, sortOrderSlot.captured)
-}
+fun import_when_new_exercise_then_inserted_with_isCustom_true_and_zero_id() =
+    runTest {
+        // Given
+        val repository = repository()
+        val useCase = useCase(repository, plankFile)
+
+        // When
+        val result = useCase(uri)
+
+        // Then
+        assertTrue(result.isSuccess, "Новое упражнение и запись добавлены")
+        val exercisesSlot = slot<List<Exercise>>()
+        val entriesSlot = slot<List<BackupEntry>>()
+        coVerify { repository.importData(capture(exercisesSlot), capture(entriesSlot)) }
+        val inserted = exercisesSlot.captured.single()
+        assertTrue(inserted.isCustom, "Вставленному из файла всегда isCustom = true")
+    }
 ```
 
 `capture(slot)` — захватывает первый аргумент. `slot.captured` —
@@ -90,12 +100,45 @@ fun when_sort_order_changed_then_sorts_workouts() = runTest {
 `MutableStateFlow`):
 
 ```kotlin
-coEvery { dataStore.setWorkoutsScreenColorTagFilter(any()) } answers {
-    colorTagFilterFlow.value = firstArg()
+every { mockProvider.getName() } answers { firstArg<String>() + "-suffix" }
+
+coEvery { mockDataStore.setTheme(any()) } coAnswers {
+    themeFlow.value = firstArg()
 }
 ```
 
 `firstArg()`, `secondArg()` — доступ к аргументам по позиции.
+`coAnswers` — вариант для `coEvery`.
+
+## `mockkStatic` + `unmockkStatic` (для `android.util.Log`)
+
+`AppDataViewModel` и `ExercisesViewModel` логируют ошибки через
+`android.util.Log.e(...)`. На JVM `android.util.Log` — stub и роняет
+короутину операции. Лечится моком статического метода:
+
+```kotlin
+import android.util.Log
+import io.mockk.every
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+
+@BeforeEach
+fun setUp() {
+    // ...
+    mockkStatic(Log::class)
+    every { Log.e(any(), any<String>()) } returns 0
+    every { Log.e(any(), any<String>(), any<Throwable>()) } returns 0
+}
+
+@AfterEach
+fun tearDown() {
+    unmockkStatic(Log::class)
+    // ...
+}
+```
+
+`AppearanceViewModel` и `MainViewModel` логов не делают — мокать там
+нечего.
 
 ## Типичные ошибки
 
@@ -103,73 +146,58 @@ coEvery { dataStore.setWorkoutsScreenColorTagFilter(any()) } answers {
 
 ```kotlin
 // НЕПРАВИЛЬНО — без coEvery не сработает для suspend
-every { mockRepo.insertWorkout(workout) } returns 1L
+every { mockRepo.getAllExercises() } returns Result.success(emptyList())
 
 // ПРАВИЛЬНО
-coEvery { mockRepo.insertWorkout(workout) } returns 1L
+coEvery { mockRepo.getAllExercises() } returns Result.success(emptyList())
 ```
 
 ### `verify` для suspend-функции
 
 ```kotlin
 // НЕПРАВИЛЬНО
-verify { mockRepo.insertWorkout(workout) }
+verify { mockRepo.deleteEntry(itemId) }
 
 // ПРАВИЛЬНО
-coVerify { mockRepo.insertWorkout(workout) }
+coVerify { mockRepo.deleteEntry(itemId) }
 ```
 
-### Мок Flow не эмитится в `StateFlow`
+### `coEvery` для Flow-возвращающего метода
 
-`every { mockRepo.getAllWorkouts() } returns flowOf(items)` создаёт
+```kotlin
+// НЕПРАВИЛЬНО — flowOf не suspend, метод тоже не suspend
+coEvery { mockRepo.exercises("") } returns flowOf(listOf())
+
+// ПРАВИЛЬНО
+every { mockRepo.exercises("") } returns flowOf(listOf())
+```
+
+### Mock Flow не эмитится в `StateFlow`
+
+`every { mockRepo.getAllExercises() } returns flowOf(items)` создаёт
 **холодный** Flow, который запускается только при `collect`. Если
 ViewModel слушает через `combine` / `flatMapLatest` на TestDispatcher,
 эмиссия может произойти, а может и нет — race-condition.
 
-**Решение**: для `WorkoutRepository`, `WorkoutReminderRepository` — пиши Fake
-на `MutableStateFlow` (см. `references/fakes.md`). MockK — только
-для `Logger`, `DataStore`, `ResourceProvider` и подобных stateless
-интерфейсов.
+**Решение**: для `WorkoutDataRepository` — пиши Fake на
+`MutableStateFlow` (см. `references/fakes.md`). MockK — только для
+`AppSettingsDataStore`, `Context`, `ContentResolver` и подобных
+stateless интерфейсов.
 
-## Полный пример: `FormatWorkoutDurationUseCaseTest`
+### Мок Flow + `WhileSubscribed`-подписка — `.value` возвращает `initialValue`
 
-```kotlin
-class FormatWorkoutDurationUseCaseTest {
-    private val daysFormatter: WorkoutDurationFormatter = mockk()
-    private val resourceProvider: ResourceProvider = mockk(relaxed = true)
+ViewModel'и проекта используют `stateIn(WhileSubscribed(5000))`. Пока
+на `uiState` никто не подписан — `.value` содержит `initialValue`,
+даже если мок-Flow уже эмитнул. Лечится явной подпиской через
+`backgroundScope.launch { uiState.collect {} }` (см.
+`references/viewmodel-testing.md`).
 
-    private val useCase = FormatWorkoutDurationUseCase(daysFormatter = daysFormatter)
+## Итоговое правило выбора
 
-    @Test
-    fun invoke_when_calculated_negative_days_and_showminus_true_then_shows_negative_number() {
-        // Given
-        val period = WorkoutPeriod(years = 0, months = 0, days = 7)
-        val difference = WorkoutDuration.Calculated(
-            period = period, totalDays = -7, timestamp = 1234567890000L
-        )
-        every {
-            daysFormatter.formatComposite(
-                period = period,
-                displayOption = DisplayOption.DAY,
-                resourceProvider = resourceProvider,
-                totalDays = -7,
-                showMinus = true
-            )
-        } returns "-7 дней"
-
-        // When
-        val result = useCase.invoke(
-            difference = difference,
-            displayOption = DisplayOption.DAY,
-            resourceProvider = resourceProvider,
-            showMinus = true
-        )
-
-        // Then
-        assertEquals("-7 дней", result)
-    }
-}
-```
-
-Здесь `mockk()` без `relaxed`, потому что единственный метод форматтера
-стабится в каждом тесте.
+| Зависимость | Подход |
+|---|---|
+| `WorkoutDataRepository` (с `Flow`) | Fake на `MutableStateFlow` (`references/fakes.md`) |
+| `AppSettingsDataStore` | `mockk<AppSettingsDataStore>(relaxed = true)` + `coEvery { setX(...) }` |
+| `Context` / `ContentResolver` / `Uri` | `mockk<…>(relaxed = true)` + `every { … }` для нужных методов |
+| use-case (suspend `Result<T>`) | `mockk<UseCase>(relaxed = true)` + `coEvery { invoke(...) }` |
+| `android.util.Log` (статический) | `mockkStatic(Log::class)` в `@BeforeEach` |

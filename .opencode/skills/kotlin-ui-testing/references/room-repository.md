@@ -4,77 +4,118 @@
 DAO, база, репозиторий. Используют реальную Room in-memory базу —
 быстро, без устройства хранения, с полным SQL-движком.
 
-Примеры:
-- `data/database/dao/WorkoutDaoTest.kt` — 14 тестов DAO
-- `data/database/MyWorkoutsDatabaseTest.kt` — создание базы
-- `data/repository/WorkoutRepositoryIntegrationTest.kt` — CRUD + маппинг
+Примеры (список не исчерпывающий — добавьте новый DAO/репозиторий,
+когда появится):
+- `data/db/ExerciseDaoTest.kt` — DAO каталога упражнений: поиск по
+  подстроке, сортировка `is_custom DESC, created_at DESC, name COLLATE NOCASE`,
+  tie-break по имени.
+- `data/db/ExerciseEntryDaoTest.kt` — DAO записей о выполнении.
+- `data/db/ExerciseEntryUpdateTest.kt` — обновление существующих
+  записей (edge-cases обновления).
+- `data/db/WorkoutDatabaseTest.kt` — создание БД, prepopulate
+  13 стандартных упражнений.
+- `data/db/StandardExercisesLocalizationTest.kt` — состав
+  стандартного набора в разных локалях.
+- `data/repository/RoomWorkoutDataRepositoryTest.kt` — CRUD +
+  маппинг Entity ↔ Domain + Flow invalidation.
+- `data/repository/RoomWorkoutDataRepositoryDataManagementTest.kt` —
+  методы `getAllExercises` / `getAllEntries` / `importData` /
+  `deleteAllData`.
 
 ## Скелет DAO-теста
 
 Полный код — `references/EXAMPLE.md` (раздел «DAO-тест (Room in-memory)»).
 Ключевое:
 
-- `Room.inMemoryDatabaseBuilder(context, MyWorkoutsDatabase::class.java)`
+- `Room.inMemoryDatabaseBuilder(context, WorkoutDatabase::class.java)`
   `.allowMainThreadQueries().build()` — свежая БД на каждый тест
 - `.allowMainThreadQueries()` — обязателен: запросы идут из `runBlocking`
   на main thread
 - `@After` — `database.close()`, пересоздание в `@Before` каждого теста
-  (в DAO-тестах `clearAllTables()` не нужен — база и так свежая)
+  (`clearAllTables()` не нужен — база и так свежая)
 - Flow-запросы тестируются через `.first()`:
 
 ```kotlin
-val all = workoutDao.getAllWorkouts().first()
+val all = exerciseDao.observeExercises("").first()
 assertEquals(expectedCount, all.size)
 ```
 
 ## Репозиторий-интеграция
 
-`WorkoutRepositoryIntegrationTest` — реальный `WorkoutRepositoryImpl(workoutDao)`:
+`RoomWorkoutDataRepositoryTest` — реальный
+`RoomWorkoutDataRepository(database, standardExercises)` поверх
+in-memory `WorkoutDatabase` + `allowMainThreadQueries()`. Полный
+`@Before setUp` (in-memory DB + два `StandardExercise` REPS/TIME +
+вставка двух `ExerciseEntity` для покрытия обоих `measuredBy`) —
+в `references/EXAMPLE.md` → «Интеграционный тест
+RoomWorkoutDataRepository (runBlocking, fullCycle)».
+
+Ключевое (без кода):
+
+- `Room.inMemoryDatabaseBuilder(...).allowMainThreadQueries().build()`
+  в `@Before`, `database.close()` в `@After` — `clearAllTables()`
+  не используется (правило 9)
+- Два стандартных упражнения в `standardExercises` (REPS и TIME) —
+  покрывают оба `ExerciseMeasuredBy`
+- `runBlocking { repository.addExercise(...).getOrThrow() }` +
+  `runBlocking { repository.entries().first() }` — `.first()` для
+  получения текущего значения `Flow`
 
 ```kotlin
-@Before
-fun setup() {
-    database = Room.inMemoryDatabaseBuilder(...).allowMainThreadQueries().build()
-    workoutDao = database.workoutDao()
-    repository = WorkoutRepositoryImpl(workoutDao)
-}
-
 @Test
 fun fullCycle_createReadUpdateDelete_thenWorksCorrectly() =
     runBlocking {
         // Given
-        val workout = Workout(title = "Тестовое событие", ...)
+        val entry = ExerciseEntry(
+            id = 0L,
+            exerciseId = 1L,
+            date = 1_700_000_000_000L,
+            sets = 4,
+            reps = 10,
+            durationSec = null,
+            weightKg = null,
+            comment = null
+        )
 
         // When
-        val insertedId = repository.insertWorkout(workout)
-        val retrieved = repository.getWorkoutById(insertedId)
-        repository.updateWorkout(retrieved?.copy(title = "Обновлённое событие") ?: workout)
-        val updated = repository.getWorkoutById(insertedId)
+        val insertedId = repository.addEntry(entry).getOrThrow()
+        val retrieved = repository.getEntry(insertedId).getOrThrow()
 
         // Then
         assertNotNull(retrieved)
-        assertEquals("Тестовое событие", retrieved?.title)
-        assertEquals("Обновлённое событие", updated?.title)
+        assertEquals(4, retrieved?.sets)
 
         // When
-        repository.deleteWorkout(updated ?: workout)
+        val updated = retrieved?.copy(sets = 5) ?: entry
+        repository.updateEntry(updated)
 
         // Then
-        assertNull(repository.getWorkoutById(insertedId))
+        val updatedEntry = repository.getEntry(insertedId).getOrThrow()
+        assertEquals(5, updatedEntry?.sets)
+
+        // When
+        repository.deleteEntry(insertedId)
+
+        // Then
+        assertNull(repository.getEntry(insertedId).getOrNull())
     }
 ```
 
 Тестируется:
 - CRUD-цикл (create → read → update → delete)
-- Поиск по title (`searchWorkouts("День").first()`)
-- Сортировка DESC, tiebreaker id DESC
-- Маппинг Entity ↔ Domain (проверяются доменные `Workout`, не `WorkoutEntity`)
-- null-safe поля (`conversionWithNullColorTag_preservesNull`)
+- Поиск по подстроке (`exercises("под").first()`)
+- Сортировка `is_custom DESC, created_at DESC, name COLLATE NOCASE`,
+  tie-break по имени
+- Маппинг Entity ↔ Domain (проверяются доменные `Exercise` /
+  `ExerciseEntry`, не `*Entity`)
+- null-safe поля (`comment = null`)
+- `Result<...>` контракт — ошибки возвращаются как `isFailure`,
+  не бросаются
 
 Правила:
-- Репозиторий создаётся вручную: `WorkoutRepositoryImpl(workoutDao)` — без DI
-- Доменные модели в assertions — `Workout`, а не `WorkoutEntity`
-- Turbine не используется — обычные `assertEquals` / `assertNotNull`
-- `runBlocking` для синхронных проверок
-- Сортировка: `getAllWorkouts_whenSameTimestamp_thenSortedByIdDesc` —
-  сначала по timestamp DESC, при равенстве — по id DESC
+- Репозиторий создаётся вручную: `RoomWorkoutDataRepository(database,
+  standardExercises)` — без DI
+- Доменные модели в assertions — `Exercise` / `ExerciseEntry`,
+  а не `*Entity`
+- `runBlocking` для синхронных проверок; Flow — через `.first()` или
+  `withTimeout(...)` для активной подписки (invalidation)

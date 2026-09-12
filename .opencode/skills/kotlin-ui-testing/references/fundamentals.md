@@ -1,22 +1,28 @@
 # Fundamentals — анатомия instrumented-теста
 
 Базовые правила для всех тестов в `app/src/androidTest/`.
-Конвенции проектные: snake_case, без `!!`, русские сообщения,
-зеркалирование структуры `app/src/main/`.
+Конвенции проектные: без обратных кавычек и `!!`, русские
+сообщения, обязательные `when_` / `then_` в имени теста, регистр
+сегментов не нормируется (подробнее — ниже), зеркалирование
+структуры `app/src/main/`.
 
 ## Стек и аннотации
 
-Инструментированные тесты — JUnit 4. Интеграционные тесты
-(Activity, data/, reminder/) и большинство компонентных Compose-тестов
-(7 из 10) аннотированы `@RunWith(AndroidJUnit4::class)`. Без него —
-WorkoutDurationTextTest, ColorSelectorUiTest, WorkoutTagFilterDialogTest
-(v2 API не требует):
+Инструментированные тесты — JUnit 4. **Все** классы в `androidTest/`
+аннотированы `@RunWith(...)` — `@RunWith(AndroidJUnit4::class)` для
+обычных, `@RunWith(Parameterized::class)` для параметризованных
+(`AppearanceScreenTest`, `ExercisesDeleteFlowTest`). v2 API
+(`androidx.compose.ui.test.junit4.v2`) `createComposeRule()` это
+допускает, но в проекте ни один компонентный тест не пишется без
+`@RunWith` — единообразие важнее минимализма аннотации.
 
 ```kotlin
-// Компонентный Compose-тест — вариант без @RunWith
-// (WorkoutDurationTextTest, ColorSelectorUiTest, WorkoutTagFilterDialogTest):
+// Компонентный Compose-тест (без Activity):
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
 
+@RunWith(AndroidJUnit4::class)
 class SomeComponentUiTest {
     @get:Rule
     val composeTestRule = createComposeRule()
@@ -31,7 +37,7 @@ class SomeComponentUiTest {
 ```
 
 ```kotlin
-// Интеграционный тест (с MainActivity или слоем данных):
+// Интеграционный тест (с MainActivity):
 @RunWith(AndroidJUnit4::class)
 class SomeIntegrationTest {
     @get:Rule
@@ -55,40 +61,46 @@ class SomeIntegrationTest {
 
 ## Именование тестов
 
-snake_case без обратных кавычек. В проекте встречаются три формата:
+Без обратных кавычек, обязательные маркеры `when_` / `then_`.
+Префикс-subject опционален, регистр сегментов не нормируется
+(в проекте встречается и snake_case, и смешанный camelCase —
+конвенция мягкая). Примеры из реальных тестов:
 
 ```kotlin
-// Формат 1: subject_whenCondition_thenResult
-fun dialog_whenDraftSelectedAndNoCurrentFilter_thenResetButtonEnabled()
-fun dialog_whenSameColorClicked_thenDeselects()
-fun workoutDurationText_whenDisplayed_thenShowsCorrectText()
+// snake_case:
+fun exercises_screen_when_empty_then_shows_empty_state()
+fun sections_when_scrolled_then_date_header_sticks_above_rows()
 
-// Формат 2: when_condition_then_result (без префикса subject)
-fun when_items_count_4_then_search_field_not_displayed()
-fun when_user_typed_query_with_3_items_then_search_field_stays_visible()
-
-// Формат 3: составной — subject_verb_suffix_thenResult (ThemeIconScreenTest)
-fun themeIconScreen_displaysAppBarWithBackButton()
-fun themeIconScreen_clicksLightTheme_callsOnThemeChange()
+// Префикс-subject с camelCase-сегментами:
+fun app_whenReturnedToCatalogAfterInsert_thenShowsNewExercise()
+fun row_long_press_when_standard_then_no_context_menu()
+fun sections_when_long_press_in_section_then_context_menu_with_edit_and_delete()
 ```
 
+Главное — смысловые маркеры `when_<условие>_then_<результат>`.
+Префикс-subject (`exercises_screen`, `row_long_press`,
+`sections_when_long_press…`) ставится, когда без него тест
+неоднозначен (двусмысленно, что «subject» — экран, строка, секция).
 Обратные кавычки в существующих тестах не используются — пиши без них.
 
 ## Given / When / Then
 
-Каждый тест разделяется тремя комментариями-маркерами:
+В тестах со сценарием (insert / navigate / perform action) тело
+разделяется тремя комментариями-маркерами `// Given`, `// When`,
+`// Then`. В чисто рендер-тестах (готовый `*ScreenState`, нет
+действий) маркер `// When` опускается — остаются `// Given` и
+`// Then` (см. SKILL.md правило 4 и Verification checklist):
 
 ```kotlin
 @Test
-fun workoutDurationText_whenDisplayed_thenShowsCorrectText() {
+fun exercises_screen_when_empty_then_shows_empty_state() {
     // Given
-    val testText = "5 дней"
-
-    // When
-    composeTestRule.setContent { WorkoutDurationText(formattedText = testText) }
+    setContentWith(ExercisesUiState.Success(exercises = emptyList()))
 
     // Then
-    composeTestRule.onNodeWithText(testText).assertExists()
+    composeTestRule
+        .onNodeWithText(context.getString(R.string.exercises_list_empty))
+        .assertIsDisplayed()
 }
 ```
 
@@ -112,31 +124,31 @@ val context = ApplicationProvider.getApplicationContext<Context>()
 
 ```kotlin
 assertTrue(
-    "A (09:00) должен быть выше B (18:00) при сортировке «сначала старые», " +
-        "но topA=$topA, topB=$topB",
-    topA < topB
+    "Sticky-заголовок должен остаться у верхнего края над строкой секции",
+    headerTop < rowTop
 )
 ```
 
 - **Строки UI — через ресурсы**, не хардкод:
 
 ```kotlin
-composeTestRule.onNodeWithText(context.getString(R.string.save)).assertIsNotEnabled()
+composeTestRule
+    .onNodeWithText(context.getString(R.string.save))
+    .assertIsNotEnabled()
 ```
 
-- **Файлы зеркалят структуру `app/src/main/`**: `ui/screens/createedit/`,
-  `ui/ds/`, `data/database/dao/`, `reminder/`, `ui/viewmodel/` и т.д.
+- **Файлы зеркалят структуру `app/src/main/`**:
+  `ui/screens/exercises/`, `ui/screens/main/`, `data/db/`,
+  `data/repository/` и т.д.
 - **Имя класса** оканчивается на `Test`, `UiTest`, `IntegrationTest`
-  или `InstrumentedTest` (`ColorSelectorUiTest`, `WorkoutDaoTest`,
-  `WorkoutDetailsScreenViewModelIntegrationTest`,
-  `WorkoutReminderAlarmSchedulerInstrumentedTest`).
+  или `InstrumentedTest` (`ExerciseDaoTest`, `MainScreenTest`,
+  `RoomWorkoutDataRepositoryTest`, `ExerciseCreateLiveUpdateIntegrationTest`).
 
 ## Два типа тестов — когда что использовать
 
 | Ситуация | Тип теста | Правило |
 |---|---|---|
-| Отдельный Compose-компонент (WorkoutDurationText, ColorSelector, диалог, кнопка) | Компонентный | `createComposeRule()`, изоляция фейками, `MyWorkoutsTheme` (по необходимости) |
-| Реальный экран / ротация / навигация | Интеграционный | `createAndroidComposeRule<MainActivity>()`, реальный Room |
-| DAO / база | Интеграционный | Room in-memory, `runBlocking` |
-| ViewModel с БД | Интеграционный | `MainDispatcherRule` + Turbine |
-| AlarmManager / Receiver | Интеграционный | `InstrumentationRegistry`, shell-пермишены |
+| Отдельный Compose-компонент (экран с готовым `*ScreenState`, диалог, кнопка) | Компонентный | `createComposeRule()`, готовый `*ScreenState`, `JetpackMyWorkoutsTheme` (по необходимости) |
+| Экран с реальной ViewModel поверх Room in-memory | Компонентный | `createComposeRule()` + реальная VM + Room in-memory + `NavHost`-harness |
+| DAO / база / репозиторий | Интеграционный | Room in-memory, `runBlocking`, `.first()` |
+| Сквозной сценарий с реальной Activity | Интеграционный | `createAndroidComposeRule<MainActivity>()` — единственный реальный случай в проекте (`ExerciseCreateLiveUpdateIntegrationTest`) |
