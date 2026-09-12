@@ -27,9 +27,14 @@ android {
 
     buildTypes {
         release {
-            optimization {
-                enable = false
-            }
+            // R8: вырезает неиспользуемый код (иначе material-icons-extended
+            // добавляет ~4 МБ неиспользуемых иконок в APK).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     compileOptions {
