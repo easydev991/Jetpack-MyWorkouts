@@ -131,7 +131,20 @@ class EntryCreateViewModelTest {
             measuredBy = ExerciseMeasuredBy.TIME
         )
 
-    private val repository = FakeWorkoutDataRepository(listOf(repsExercise, timeExercise))
+    /** Второе REPS-упражнение — для проверки same-type смены упражнения. */
+    private val repsExercise2 =
+        Exercise(
+            id = 3L,
+            name = "Отжимания",
+            category = ExerciseCategory.PUSH,
+            isCustom = false,
+            comment = null,
+            createdAt = 0L,
+            measuredBy = ExerciseMeasuredBy.REPS
+        )
+
+    private val repository =
+        FakeWorkoutDataRepository(listOf(repsExercise, timeExercise, repsExercise2))
 
     /** 2024-07-15T12:30 UTC — фиксированный «сейчас» для тестов. */
     private val fixedNowMillis = 1_721_046_600_000L
@@ -198,7 +211,7 @@ class EntryCreateViewModelTest {
             // Then
             val state = viewModel.uiState.value
             assertEquals(
-                listOf(repsExercise, timeExercise),
+                listOf(repsExercise, timeExercise, repsExercise2),
                 state.exercises,
                 "Каталог должен быть загружен из репозитория"
             )
@@ -323,6 +336,28 @@ class EntryCreateViewModelTest {
             assertEquals("", state.repsText, "Повторы сброшены при смене упражнения")
             assertNull(state.durationSec, "Длительность сброшена при смене упражнения")
             assertFalse(state.canSave, "После сброса типозависимого поля canSave = false")
+        }
+
+    @Test
+    fun on_exercise_change_same_type_then_keeps_entered_reps() =
+        runTest(testDispatcher) {
+            // Given — REPS-упражнение с заполненными повторами
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onExerciseChange(repsExercise)
+            viewModel.onRepsChange("10")
+            advanceUntilIdle()
+
+            // When — смена на другое упражнение того же типа REPS
+            viewModel.onExerciseChange(repsExercise2)
+            advanceUntilIdle()
+
+            // Then — введённое значение сохранено, форма валидна
+            val state = viewModel.uiState.value
+            assertEquals(repsExercise2, state.selectedExercise, "Выбрано новое упражнение")
+            assertEquals("10", state.repsText, "Повторы не стираются при смене упражнения того же типа")
+            assertTrue(state.canSave, "Форма остаётся валидной — canSave = true")
         }
 
     @Test
@@ -658,6 +693,60 @@ class EntryCreateViewModelTest {
                 viewModel.uiState.value.canSave,
                 "Невалидная форма блокирует кнопку независимо от изменений"
             )
+        }
+
+    @Test
+    fun edit_mode_when_same_type_exercise_changed_then_save_enabled() =
+        runTest(testDispatcher) {
+            // Given — загруженная REPS-запись без изменений
+            repository.entryById = originalEntry
+            val viewModel = createViewModel(entryId = originalEntry.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            assertFalse(
+                viewModel.uiState.value.canSave,
+                "Пре-условие: без изменений кнопка заблокирована"
+            )
+            assertEquals("10", viewModel.uiState.value.repsText, "Пре-условие: повторы предзаполнены")
+
+            // When — смена упражнения на другое того же типа REPS
+            viewModel.onExerciseChange(repsExercise2)
+            advanceUntilIdle()
+
+            // Then — типозависимое поле сохранено, кнопка активна
+            val state = viewModel.uiState.value
+            assertEquals(repsExercise2, state.selectedExercise, "Выбрано новое упражнение")
+            assertEquals("10", state.repsText, "Повторы не стираются при смене упражнения того же типа")
+            assertTrue(state.hasChanges, "Смена упражнения — hasChanges = true")
+            assertTrue(state.canSave, "Валидная форма с изменениями — canSave = true")
+        }
+
+    @Test
+    fun edit_mode_when_type_switched_then_field_cleared_until_duration_picked() =
+        runTest(testDispatcher) {
+            // Given — загруженная REPS-запись без изменений
+            repository.entryById = originalEntry
+            val viewModel = createViewModel(entryId = originalEntry.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — смена на упражнение другого типа (TIME)
+            viewModel.onExerciseChange(timeExercise)
+            advanceUntilIdle()
+
+            // Then — типозависимое поле стёрто, кнопка ждёт длительность
+            val state = viewModel.uiState.value
+            assertEquals("", state.repsText, "Повторы стёрты при смене типа измерения")
+            assertNull(state.durationSec, "Длительность не выбрана")
+            assertTrue(state.hasChanges, "Смена упражнения — hasChanges = true")
+            assertFalse(state.canSave, "Без длительности кнопка заблокирована")
+
+            // When — выбрана длительность
+            viewModel.onDurationChange(60)
+            advanceUntilIdle()
+
+            // Then — форма валидна, кнопка активна
+            assertTrue(viewModel.uiState.value.canSave, "С длительностью canSave = true")
         }
 
     @Test

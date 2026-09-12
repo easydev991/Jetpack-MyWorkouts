@@ -33,8 +33,8 @@ private const val MINUTES_PER_HOUR: Int = 60
  * ViewModel экрана записи о выполнении: создание (FAB, `entryId == -1`) и
  * редактирование существующей записи (`entryId != -1`, entry-edit-mode).
  *
- * Логика ввода (санитайзинг, сброс типозависимого поля при смене
- * упражнения, сборка [ExerciseEntry]) — здесь; UI — «глупый» рендер
+ * Логика ввода (санитайзинг, сброс типозависимого поля при смене типа
+ * измерения упражнения, сборка [ExerciseEntry]) — здесь; UI — «глупый» рендер
  * [EntryCreateUiState]. Дата/время при открытии — «сейчас» из
  * [nowProvider]; `createdAt`/`modifiedAt` — «сейчас» в момент сохранения
  * (в режиме редактирования `createdAt` берётся из записи).
@@ -107,13 +107,18 @@ class EntryCreateViewModel(
             initialValue = mutableUiState.value
         )
 
-    /** Выбирает упражнение и сбрасывает типозависимое поле (spec-сценарий «Смена упражнения переключает поле»). */
+    /**
+     * Выбирает упражнение; типозависимое поле стирается только при смене
+     * типа измерения (spec-сценарий «Смена упражнения переключает поле»),
+     * при смене в пределах одного типа введённое значение сохраняется.
+     */
     fun onExerciseChange(exercise: Exercise) =
         mutableUiState.update {
             it.copy(
                 selectedExercise = exercise,
-                repsText = "",
-                durationSec = null,
+                repsText = if (exercise.measuredBy == ExerciseMeasuredBy.REPS) it.repsText else "",
+                durationSec =
+                    if (exercise.measuredBy == ExerciseMeasuredBy.TIME) it.durationSec else null,
                 isSaveError = false
             )
         }
