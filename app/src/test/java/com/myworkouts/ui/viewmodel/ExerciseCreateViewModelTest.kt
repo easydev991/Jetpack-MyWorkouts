@@ -7,6 +7,7 @@ import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.navigation.Screen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -29,9 +30,10 @@ import org.junit.jupiter.api.Test
 import kotlin.math.abs
 
 /**
- * Fake [WorkoutDataRepository] на `MutableStateFlow` для JVM-тестов
- * [ExerciseCreateViewModel]: `addExercise` записывает переданное упражнение
- * и возвращает настраиваемый результат, остальные операции — заглушки.
+ * Fake [WorkoutDataRepository] для JVM-тестов [ExerciseCreateViewModel]:
+ * `addExercise`/`updateExercise` записывают переданное упражнение и
+ * возвращают настраиваемый результат, `getExercise` отвечает настраиваемым
+ * упражнением (`null` — «не найдено»), остальные операции — заглушки.
  */
 private class FakeExerciseRepository : WorkoutDataRepository {
     private val catalog = MutableStateFlow<List<Exercise>>(emptyList())
@@ -39,8 +41,20 @@ private class FakeExerciseRepository : WorkoutDataRepository {
     /** Упражнения, переданные в `addExercise`, в порядке вызовов. */
     val addedExercises = mutableListOf<Exercise>()
 
+    /** Упражнения, переданные в `updateExercise`, в порядке вызовов. */
+    val updatedExercises = mutableListOf<Exercise>()
+
     /** Настраиваемый результат `addExercise`. */
     var addExerciseResult: Result<Long> = Result.success(1L)
+
+    /** Настраиваемый результат `updateExercise`. */
+    var updateExerciseResult: Result<Unit> = Result.success(Unit)
+
+    /** Ответ `getExercise`; `null` — упражнение не найдено (design Decision 5). */
+    var exerciseById: Exercise? = null
+
+    /** Настраиваемый провал `getExercise` (`null` — успех с [exerciseById]). */
+    var getExerciseError: Throwable? = null
 
     override fun exercises(query: String): Flow<List<Exercise>> = catalog
 
@@ -51,7 +65,10 @@ private class FakeExerciseRepository : WorkoutDataRepository {
 
     override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow<List<EntryListItem>>(emptyList())
 
-    override suspend fun updateExercise(exercise: Exercise): Result<Unit> = Result.success(Unit)
+    override suspend fun updateExercise(exercise: Exercise): Result<Unit> {
+        updatedExercises.add(exercise)
+        return updateExerciseResult
+    }
 
     override suspend fun addEntry(entry: ExerciseEntry): Result<Long> = Result.success(1L)
 
@@ -62,6 +79,13 @@ private class FakeExerciseRepository : WorkoutDataRepository {
     override suspend fun deleteEntry(id: Long): Result<Unit> = Result.success(Unit)
 
     override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
+
+    override suspend fun getExercise(id: Long): Result<Exercise?> {
+        getExerciseError?.let { return Result.failure(it) }
+        return Result.success(exerciseById)
+    }
+
+    override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = MutableStateFlow(emptySet())
 
     override suspend fun getAllExercises(): Result<List<Exercise>> = Result.success(catalog.value)
 
@@ -99,7 +123,20 @@ class ExerciseCreateViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(): ExerciseCreateViewModel = ExerciseCreateViewModel(repository)
+    private fun createViewModel(exerciseId: Long = Screen.ExerciseCreate.NO_EXERCISE_ID): ExerciseCreateViewModel =
+        ExerciseCreateViewModel(repository, exerciseId)
+
+    /** Кастомное упражнение, отдаваемое fake-репозиторием в edit-тестах. */
+    private val editExercise =
+        Exercise(
+            id = 5L,
+            name = "Жим лёжа",
+            category = ExerciseCategory.PUSH,
+            isCustom = true,
+            comment = "узкий хват",
+            createdAt = 1_234_567_890L,
+            measuredBy = ExerciseMeasuredBy.TIME
+        )
 
     @Test
     fun initial_state_when_created_then_measured_by_is_reps() =
@@ -562,5 +599,225 @@ class ExerciseCreateViewModelTest {
             assertEquals(1, onSavedCalls, "onSaved вызван ровно раз")
             assertFalse(viewModel.uiState.value.isSaveError, "isSaveError остаётся false")
             assertNotNull(repository.addedExercises.single(), "addExercise вызван")
+        }
+
+    /* ===== edit-режим (edit-delete-exercise, раздел 7): загрузка,
+     * hasChanges, save через updateExercise, отсутствующее упражнение. ===== */
+
+    @Test
+    fun edit_mode_when_opened_then_loads_exercise_and_prefills_state() =
+        runTest(testDispatcher) {
+            // Given — репозиторий отдаёт упражнение по id
+            repository.exerciseById = editExercise
+            val viewModel = createViewModel(exerciseId = editExercise.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+
+            // When
+            advanceUntilIdle()
+
+            // Then — UiState предзаполнен из БД, режим редактирования
+            val state = viewModel.uiState.value
+            assertTrue(state.isEditMode, "Экран открыт с exerciseId — isEditMode = true")
+            assertEquals(editExercise.name, state.name, "name предзаполнен из БД")
+            assertEquals(editExercise.category, state.category, "category предзаполнена из БД")
+            assertEquals(editExercise.measuredBy, state.measuredBy, "measuredBy предзаполнен из БД")
+            assertEquals(editExercise.comment, state.comment, "comment предзаполнен из БД")
+            assertFalse(state.isExerciseMissing, "Упражнение найдено — isExerciseMissing = false")
+        }
+
+    @Test
+    fun edit_mode_when_form_untouched_then_has_changes_false() =
+        runTest(testDispatcher) {
+            // Given — edit-режим с загруженным упражнением
+            repository.exerciseById = editExercise
+            val viewModel = createViewModel(exerciseId = editExercise.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+
+            // When — форма не тронута
+            advanceUntilIdle()
+
+            // Then
+            assertFalse(
+                viewModel.uiState.value.hasChanges,
+                "Предзаполненные поля сами по себе — hasChanges = false"
+            )
+        }
+
+    @Test
+    fun edit_mode_when_name_changed_then_has_changes_true() =
+        runTest(testDispatcher) {
+            // Given — edit-режим с загруженным упражнением
+            repository.exerciseById = editExercise
+            val viewModel = createViewModel(exerciseId = editExercise.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.onNameChange("Тяга")
+            advanceUntilIdle()
+
+            // Then
+            assertTrue(
+                viewModel.uiState.value.hasChanges,
+                "Изменение name относительно оригинала — hasChanges = true"
+            )
+        }
+
+    @Test
+    fun edit_mode_when_name_changed_back_to_original_then_has_changes_false() =
+        runTest(testDispatcher) {
+            // Given — edit-режим, имя изменено
+            repository.exerciseById = editExercise
+            val viewModel = createViewModel(exerciseId = editExercise.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onNameChange("Тяга")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.hasChanges, "Пре-условие: имя изменено")
+
+            // When — возврат к исходному значению
+            viewModel.onNameChange(editExercise.name)
+            advanceUntilIdle()
+
+            // Then
+            assertFalse(
+                viewModel.uiState.value.hasChanges,
+                "Возврат к исходному значению — hasChanges = false"
+            )
+        }
+
+    @Test
+    fun edit_mode_when_only_measured_by_changed_then_has_changes_true() =
+        runTest(testDispatcher) {
+            // Given — edit-режим с загруженным упражнением (measuredBy = TIME)
+            repository.exerciseById = editExercise
+            val viewModel = createViewModel(exerciseId = editExercise.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — изменён только measuredBy
+            viewModel.onMeasuredByChange(ExerciseMeasuredBy.REPS)
+            advanceUntilIdle()
+
+            // Then — measuredBy входит в формулу hasChanges (в отличие от
+            // create-формулы hasUnsavedChanges)
+            assertTrue(
+                viewModel.uiState.value.hasChanges,
+                "Изменение только measuredBy — hasChanges = true"
+            )
+        }
+
+    @Test
+    fun save_in_edit_mode_then_updates_with_original_id_created_at_and_is_custom() =
+        runTest(testDispatcher) {
+            // Given — edit-режим, изменено имя
+            repository.exerciseById = editExercise
+            val viewModel = createViewModel(exerciseId = editExercise.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onNameChange("Тяга")
+            advanceUntilIdle()
+            var onSavedCalls = 0
+
+            // When
+            viewModel.save { onSavedCalls++ }
+            advanceUntilIdle()
+
+            // Then — updateExercise с неизменяемыми полями оригинала
+            assertTrue(
+                repository.addedExercises.isEmpty(),
+                "addExercise НЕ вызывается в edit-режиме"
+            )
+            val updated = repository.updatedExercises.single()
+            assertEquals(editExercise.id, updated.id, "id из оригинала")
+            assertEquals(editExercise.createdAt, updated.createdAt, "createdAt из оригинала")
+            assertTrue(updated.isCustom, "isCustom из оригинала (design Decision 2)")
+            assertEquals("Тяга", updated.name, "name из формы")
+            assertEquals(
+                editExercise.measuredBy,
+                updated.measuredBy,
+                "measuredBy из формы (не изменялся)"
+            )
+            assertEquals(1, onSavedCalls, "onSaved вызван ровно раз после успеха")
+        }
+
+    @Test
+    fun save_in_create_mode_then_adds_and_does_not_update() =
+        runTest(testDispatcher) {
+            // Given — режим создания с заполненной формой
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            viewModel.onNameChange("Жим")
+            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            advanceUntilIdle()
+
+            // When
+            viewModel.save { }
+            advanceUntilIdle()
+
+            // Then — регрессия: create идёт в addExercise, updateExercise не трогается
+            assertEquals(1, repository.addedExercises.size, "addExercise вызван ровно раз")
+            assertTrue(
+                repository.updatedExercises.isEmpty(),
+                "updateExercise НЕ вызывается в режиме создания"
+            )
+        }
+
+    @Test
+    fun edit_mode_when_exercise_missing_then_hint_and_save_is_no_op() =
+        runTest(testDispatcher) {
+            // Given — getExercise → success(null)
+            val viewModel = createViewModel(exerciseId = 404L)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            assertTrue(
+                viewModel.uiState.value.isExerciseMissing,
+                "success(null) — isExerciseMissing = true"
+            )
+
+            // When — форма заполнена, нажато «Сохранить»
+            viewModel.onNameChange("Жим")
+            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            advanceUntilIdle()
+            var onSavedCalls = 0
+            viewModel.save { onSavedCalls++ }
+            advanceUntilIdle()
+
+            // Then — canSave заблокирован guard-ом, save no-op
+            assertFalse(
+                viewModel.uiState.value.canSave,
+                "isExerciseMissing — canSave = false независимо от полей формы"
+            )
+            assertTrue(repository.addedExercises.isEmpty(), "addExercise НЕ вызван")
+            assertTrue(repository.updatedExercises.isEmpty(), "updateExercise НЕ вызван")
+            assertEquals(0, onSavedCalls, "onSaved НЕ вызван")
+        }
+
+    @Test
+    fun edit_mode_when_get_exercise_fails_then_hint_and_save_is_no_op() =
+        runTest(testDispatcher) {
+            // Given — getExercise → failure
+            repository.getExerciseError = IllegalStateException("БД недоступна")
+            val viewModel = createViewModel(exerciseId = editExercise.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            assertTrue(
+                viewModel.uiState.value.isExerciseMissing,
+                "failure — isExerciseMissing = true (ошибка загрузки приравнена к отсутствию)"
+            )
+
+            // When — форма заполнена, нажато «Сохранить»
+            viewModel.onNameChange("Жим")
+            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            advanceUntilIdle()
+            var onSavedCalls = 0
+            viewModel.save { onSavedCalls++ }
+            advanceUntilIdle()
+
+            // Then — save no-op
+            assertFalse(viewModel.uiState.value.canSave, "canSave = false при isExerciseMissing")
+            assertTrue(repository.addedExercises.isEmpty(), "addExercise НЕ вызван")
+            assertTrue(repository.updatedExercises.isEmpty(), "updateExercise НЕ вызван")
+            assertEquals(0, onSavedCalls, "onSaved НЕ вызван")
         }
 }

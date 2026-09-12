@@ -75,21 +75,25 @@ data class из плоских полей. В `UiState` попадает тол�
 - `LinkedEntriesDeletionException` — на упражнение ссылаются записи
   (pre-check через `exerciseEntryDao.countByExerciseId(id) > 0` ПЕРЕД
   `exerciseDao.delete(...)`, чтобы не парсить текст SQLite FK
-  exception);
+  exception); реактивный safety net — `deleteById` обёрнут в
+  `recoverCatching`: `SQLiteConstraintException` (запись добавлена в
+  параллельной сессии между pre-check и delete) перебрасывается как
+  тот же `LinkedEntriesDeletionException` — тот же sealed-вариант и
+  текст снекбара, без парсинга текста;
 - не найдено — `getById(id) == null` (race между сбором списка и
   подтверждением алерта; rare в офлайн-приложении) →
   `Result.failure(IllegalStateException("Упражнение не найдено"))`,
-  маппится в `DeleteExerciseError.Other(message)`. Конкретный текст
+  маппится в `DeleteExerciseError.Other`. Конкретный текст
   исключения сохраняется в `Log.e`, пользователь видит generic снекбар
   «Не удалось удалить упражнение»;
 - прочие — generic `IllegalStateException(message)`.
 
 VM `ExercisesViewModel.confirmDelete` маппит исключение в
 `DeleteExerciseError` (sealed-тип в `domain/model/`): `HasLinkedEntries`,
-`StandardExercise`, `Other(message)`. Текст оригинального исключения
+`StandardExercise`, `Other`. Текст оригинального исключения
 SHALL логироваться через `Log.e` для диагностики.
 
-UI `ExercisesScreen` (`LaunchedEffect(deleteError)`) маппит тип в строку
+UI `ExercisesScreen` (`LaunchedEffect(uiState)`) маппит тип в строку
 через `when`. Канон маппинга `DeleteExerciseError →
 R.string.exercise_delete_error_*` — норматив в спек-е
 `exercises-screen`, requirement «Ошибка удаления — типизированные
@@ -147,7 +151,7 @@ Decision 8 для исходного обоснования. Паттерн `isE
 решает «целевая строка отсутствует при открытии edit-режима»: подсказка
 объясняет, disabled-кнопка делает сохранение невозможным без навигационных
 эффектов. Автозакрытие экрана — side-effect из композиции (`LaunchedEffect`
-+ навигация), мерцает и уводит пользователя без объяснений. Запрос задачи
+- навигация), мерцает и уводит пользователя без объяснений. Запрос задачи
 формулировал «закрыть экран» — сознательно отклоняем в пользу консистентности
 с реализованным паттерном.
 
@@ -155,17 +159,21 @@ Decision 8 для исходного обоснования. Паттерн `isE
 
 **Выбор:** `ExercisesUiState.Success` получает `deleteError: DeleteExerciseError? = null`
 (sealed-тип из `domain/model/DeleteExerciseError.kt` с вариантами
-`HasLinkedEntries` / `StandardExercise` / `Other(message: String)` —
+`HasLinkedEntries` / `StandardExercise` / `Other` —
 см. Decision 3; one-shot-семантика: экран вызывает `onErrorShown()`
 после показа снекбара) — в духе конвенции AGENTS.md «одноразовые
 события типом enum/sealed-kind». Длительность показа — дефолтная
 Material3 (`SnackbarDuration.Short`, без явного параметра `duration =`):
 в проекте пока нет ни одного использования Snackbar, и явно выставлять
 `Long`/`Indefinite` без пользовательского запроса преждевременно.
-Обёртка `ExercisesScreen` содержит `Scaffold(snackbarHost = { SnackbarHost(
-snackbarHostState) })`, `val snackbarHostState = remember {
-SnackbarHostState() }` в state; показ через `LaunchedEffect(deleteError)`
-+ `snackbarHostState.showSnackbar(message)` + `viewModel.onErrorShown()`,
+`val snackbarHostState = remember { SnackbarHostState() }` — в обёртке
+`ExercisesScreen`, дальше передаётся параметром в
+`ExercisesScreenContent`, где живёт `Scaffold(snackbarHost = {
+SnackbarHost(snackbarHostState) })` — как на `MainScreen` и
+`EntryCreateScreen`; показ через `LaunchedEffect(uiState)` (перезапуск
+при любой эмиссии UiState; перед повторным показом текущий снекбар
+закрывается `currentSnackbarData?.dismiss()`) —
+`snackbarHostState.showSnackbar(message)` + `viewModel.onErrorShown()`,
 маппинг `DeleteExerciseError → R.string.exercise_delete_error_*` — на
 стороне UI (Decision 3). Upgrade path: если позже понадобится другая
 длительность — добавляется одним параметром в `showSnackbar`.
@@ -216,6 +224,12 @@ Repository `deleteExercise` всё равно возвращает
 **Обоснование:** UX — лишний шаг подтверждения для заведомо невозможного
 удаления раздражает («Почему я подтвердил, а потом мне сказали нет?»).
 Pre-check синхронный (`StateFlow.value`), без async-задержки на тапе.
+Подписка — `SharingStarted.Eagerly`, осознанное отклонение от
+проектного `WhileSubscribed(5000)`: pre-check читает `.value`
+синхронно на тапе, а при `WhileSubscribed` первая эмиссия приходит
+только после подписки `uiState` — до этого кеш пуст и первый тап
+ложно прошёл бы pre-check (подробнее KDoc
+`ExercisesViewModel.exerciseIdsWithLinkedEntries`).
 Раса возможна только при внешнем добавлении записи (EntryCreateScreen на
 другой вкладке/сессии) — этот случай ловится repository typed error
 (Decision 3) и Snackbar всё равно показывается с конкретным текстом.

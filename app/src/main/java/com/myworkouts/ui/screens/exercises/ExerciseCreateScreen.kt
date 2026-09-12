@@ -123,7 +123,19 @@ internal fun ExerciseCreateScreenContent(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.exercise_create_title)) },
+                // Режим редактирования — «Изменить упражнение», создание —
+                // «Новое упражнение» (edit-delete-exercise, §8.4)
+                title = {
+                    Text(
+                        stringResource(
+                            if (state.uiState.isEditMode) {
+                                R.string.exercise_edit_title
+                            } else {
+                                R.string.exercise_create_title
+                            }
+                        )
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = attemptClose) {
                         Icon(
@@ -322,6 +334,16 @@ internal fun ExerciseCreateSaveBottomBar(state: ExerciseCreateScreenState) {
             enabled = state.uiState.canSave
         ) {
             Text(stringResource(R.string.entry_save))
+        }
+
+        // Decision 5 (edit-delete-exercise): упражнение не найдено — кнопка
+        // недостижимо неактивна (guard `!isExerciseMissing` в canSave),
+        // подсказка объясняет почему (паттерн `isEntryMissing`)
+        if (state.uiState.isExerciseMissing) {
+            Text(
+                text = stringResource(R.string.exercise_hint_exercise_missing),
+                style = MaterialTheme.typography.bodySmall
+            )
         }
 
         if (state.uiState.isSaveError) {

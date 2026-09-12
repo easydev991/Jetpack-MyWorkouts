@@ -84,6 +84,10 @@ private class AppDataViewModelFakeRepository(
     override suspend fun deleteEntry(id: Long): Result<Unit> = Result.success(Unit)
 
     override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
+
+    override suspend fun getExercise(id: Long): Result<Exercise?> = Result.success(null)
+
+    override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = MutableStateFlow(emptySet())
 }
 
 /**

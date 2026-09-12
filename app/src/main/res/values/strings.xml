@@ -103,6 +103,19 @@
     <string name="entry_list_weight_value">%1$s кг</string>
     <string name="entry_section_yesterday">Вчера</string>
 
+    <!-- Exercise edit / delete (заголовок edit-режима, меню, алерт, снекбары) -->
+    <string name="exercise_edit_title">Изменить упражнение</string>
+    <string name="exercise_list_menu_edit">Изменить</string>
+    <string name="exercise_list_menu_delete">Удалить</string>
+    <string name="exercise_delete_dialog_title">Удалить упражнение?</string>
+    <string name="exercise_delete_dialog_text">Упражнение \"%1$s\" будет удалено</string>
+    <string name="exercise_delete_dialog_confirm">Удалить</string>
+    <string name="exercise_delete_dialog_cancel">Отмена</string>
+    <string name="exercise_delete_error_used_in_workouts">Это упражнение уже используется в тренировках</string>
+    <string name="exercise_delete_error_standard">Нельзя удалить стандартное упражнение</string>
+    <string name="exercise_delete_error_generic">Не удалось удалить упражнение</string>
+    <string name="exercise_hint_exercise_missing">Упражнение не найдено</string>
+
     <!-- App data screen (экспорт, восстановление, удаление данных) -->
     <string name="app_data">Данные приложения</string>
     <string name="create_backup">Создать резервную копию</string>

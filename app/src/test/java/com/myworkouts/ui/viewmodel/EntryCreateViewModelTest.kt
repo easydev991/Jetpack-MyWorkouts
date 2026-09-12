@@ -77,6 +77,10 @@ private class FakeWorkoutDataRepository(
 
     override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
 
+    override suspend fun getExercise(id: Long): Result<Exercise?> = Result.success(null)
+
+    override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = MutableStateFlow(emptySet())
+
     // Новые методы контракта (app-data-screen, задача 1.4): заглушки на
     // состоянии Flow для компиляции — EntryCreateViewModel их не вызывает.
 

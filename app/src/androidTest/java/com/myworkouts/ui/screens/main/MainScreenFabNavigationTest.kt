@@ -68,6 +68,10 @@ class MainScreenFabNavigationTest {
 
             override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
 
+            override suspend fun getExercise(id: Long): Result<Exercise?> = Result.success(null)
+
+            override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = MutableStateFlow(emptySet())
+
             override suspend fun getAllExercises(): Result<List<Exercise>> = error("Не используется в этом тесте")
 
             override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = error("Не используется в этом тесте")

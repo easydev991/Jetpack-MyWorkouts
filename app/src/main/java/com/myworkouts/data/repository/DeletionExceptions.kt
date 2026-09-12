@@ -1,0 +1,26 @@
+package com.myworkouts.data.repository
+
+// ponytail: файловый комментарий — `//`, а не KDoc, чтобы избежать
+// `no-consecutive-comments` (ktlint: KDoc не может идти под KDoc).
+// Типизированные исключения для [WorkoutDataRepository.deleteExercise]
+// (edit-delete-exercise, tasks §1.5, design Decision 3). Заменяют
+// generic `IllegalStateException` + парсинг текста
+// `SQLiteConstraintException`: VM маппит подклассы в
+// [com.myworkouts.domain.model.DeleteExerciseError], UI — в конкретный
+// снекбар.
+//
+// Все наследуются от `IllegalStateException` — обратная совместимость с
+// существующими вызывающими сторонами и unit-тестами репозитория
+// (`result.isFailure` остаётся `true`); `instanceof`-проверки различают
+// конкретный кейс.
+
+/** Удаление отклонено дизайном: упражнение входит в стандартный набор. */
+class StandardExerciseDeletionException : IllegalStateException("Стандартное упражнение нельзя удалить")
+
+/**
+ * Удаление отклонено: на упражнение ссылаются записи (FK). Pre-check
+ * через [com.myworkouts.data.db.ExerciseEntryDao.countByExerciseId]
+ * ПЕРЕД `exerciseDao.delete(...)` ловит race до попытки писать в БД
+ * (design Decision 8).
+ */
+class LinkedEntriesDeletionException : IllegalStateException("У этого упражнения есть записи, удалите их сначала")

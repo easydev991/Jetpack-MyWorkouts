@@ -6,6 +6,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.myworkouts.data.db.ExerciseEntity
 import com.myworkouts.data.db.StandardExercise
 import com.myworkouts.data.db.WorkoutDatabase
+import com.myworkouts.data.repository.LinkedEntriesDeletionException
+import com.myworkouts.data.repository.StandardExerciseDeletionException
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
@@ -21,6 +23,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -890,10 +893,14 @@ class RoomWorkoutDataRepositoryTest {
             // When
             val result = repository.deleteExercise(standardId)
 
-            // Then — отказ, упражнение остаётся в каталоге
+            // Then — отказ типизированным исключением, упражнение остаётся
             assertTrue(
                 "Удаление стандартного упражнения должно быть отклонено",
                 result.isFailure
+            )
+            assertTrue(
+                "Ожидается StandardExerciseDeletionException для маппинга в sealed-тип",
+                result.exceptionOrNull() is StandardExerciseDeletionException
             )
             assertEquals(standardId, database.exerciseDao().getById(standardId)?.id)
         }
@@ -935,13 +942,60 @@ class RoomWorkoutDataRepositoryTest {
             // When
             val result = repository.deleteExercise(customId)
 
-            // Then — отказ; упражнение и записи остаются
+            // Then — отказ типизированным FK-исключением; упражнение и записи
             assertTrue(
                 "FK-нарушение должно превращаться в Result.failure",
                 result.isFailure
             )
+            assertTrue(
+                "Ожидается LinkedEntriesDeletionException для маппинга в sealed-тип",
+                result.exceptionOrNull() is LinkedEntriesDeletionException
+            )
             assertEquals(customId, database.exerciseDao().getById(customId)?.id)
             assertEquals(entryId, database.exerciseEntryDao().getById(entryId)?.id)
+        }
+
+    /**
+     * `getExercise` существующего id возвращает доменную модель с теми же
+     * полями, что в БД (edit-delete-exercise, tasks §1.1; prefill
+     * `ExerciseCreateScreen` в edit-режиме).
+     */
+    @Test
+    fun getExercise_withExistingId_returnsDomainExercise() =
+        runBlocking<Unit> {
+            // Given — стандартное упражнение «Подтягивания» из setUp (id = 1)
+            val expectedId = 1L
+
+            // When
+            val result = repository.getExercise(expectedId)
+
+            // Then — success с полной доменной моделью
+            assertTrue(result.isSuccess)
+            val exercise = result.getOrThrow()
+            assertNotNull(exercise)
+            assertEquals(expectedId, exercise!!.id)
+            assertEquals("Подтягивания", exercise.name)
+            assertEquals(ExerciseCategory.PULL, exercise.category)
+            assertFalse("Стандартное упражнение из setUp — isCustom=false", exercise.isCustom)
+            assertEquals(ExerciseMeasuredBy.REPS, exercise.measuredBy)
+        }
+
+    /**
+     * `getExercise` для несуществующего id возвращает
+     * `Result.success(null)` (не failure): VM различает «ошибка слоя
+     * данных» и «запись отсутствует при открытии edit-режима»
+     * (edit-delete-exercise, tasks §1.2; design Decision 3 ветка
+     * «не найдено»).
+     */
+    @Test
+    fun getExercise_withNonExistingId_returnsSuccessNull() =
+        runBlocking<Unit> {
+            // When
+            val result = repository.getExercise(9_999L)
+
+            // Then — success(null), не failure
+            assertTrue("Ожидается success, не failure", result.isSuccess)
+            assertNull(result.getOrThrow())
         }
 
     @Test

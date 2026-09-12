@@ -70,6 +70,10 @@ private class MainViewModelFakeRepository(
 
     override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
 
+    override suspend fun getExercise(id: Long): Result<Exercise?> = Result.success(null)
+
+    override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = MutableStateFlow(emptySet())
+
     // Новые методы контракта (app-data-screen, задача 1.4): реализованы на
     // состоянии Flow только для компиляции существующих тестов — MainViewModel
     // их не вызывает; запись-Entity фейк не хранит, снимок записей пуст.

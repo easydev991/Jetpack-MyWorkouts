@@ -1,13 +1,16 @@
 package com.myworkouts.ui.screens.exercises
 
 import android.content.res.Configuration
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
@@ -20,7 +23,8 @@ import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
  * тёмная темы, `showBackground`, `locale = "ru"`, обёртка в
  * `JetpackMyWorkoutsTheme`). Ключевые состояния: список с комментарием
  * и без, пустое состояние, Loading — FAB виден на каждом полноэкранном
- * превью (он часть [ExercisesScreenContent]).
+ * превью (он часть [ExercisesScreenContent]). Отдельно — long-press меню,
+ * алерт удаления и подсветка строки (edit-delete-exercise §9.1).
  */
 
 private val previewPullups =
@@ -111,10 +115,42 @@ internal fun ExercisesScreenContentLoadingPreview() {
 internal fun ExerciseListItemRowPreview() {
     JetpackMyWorkoutsTheme {
         Column(modifier = Modifier.padding(16.dp)) {
-            // С комментарием и лейблом «повторы»
+            // Обычная строка: с комментарием и лейблом «повторы»
             ExerciseListItemRow(exercise = previewPullups)
-            // Без комментария, лейбл «длительность»
-            ExerciseListItemRow(exercise = previewPlank)
+            // Подсвеченная — как при открытом long-press меню
+            ExerciseListItemRow(exercise = previewPlank, isSelected = true)
         }
+    }
+}
+
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun ExerciseContextMenuPreview() {
+    JetpackMyWorkoutsTheme {
+        // Раскрытое меню «Изменить»/«Удалить» у строки-якоря
+        Box(modifier = Modifier.padding(16.dp)) {
+            Text(text = previewRunning.name)
+            ExerciseContextMenu(
+                offset = DpOffset.Zero,
+                onMenuDismiss = {},
+                onEditClick = {},
+                onDeleteClick = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun ExerciseDeleteDialogPreview() {
+    JetpackMyWorkoutsTheme {
+        // Алерт подтверждения: confirm «Удалить» в error-цвете
+        ExerciseDeleteDialog(
+            itemName = previewRunning.name,
+            onConfirm = {},
+            onCancel = {}
+        )
     }
 }

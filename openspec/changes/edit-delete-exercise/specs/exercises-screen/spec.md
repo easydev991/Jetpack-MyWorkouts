@@ -142,21 +142,21 @@ deleted", подставляется `name` упражнения), кнопко�
 `ExercisesUiState.Success` SHALL содержать `deleteError:
 DeleteExerciseError? = null` (sealed-тип из `domain/model/` с
 вариантами `HasLinkedEntries`, `StandardExercise`,
-`Other(message: String)`). При `confirmDelete()` репозиторий может
+`Other`). При `confirmDelete()` репозиторий может
 вернуть:
 
 - `Result.failure(IllegalStateException("Упражнение не найдено"))`
   (`getById(id) == null`, race между сбором списка и подтверждением
-  алерта) → `deleteError = DeleteExerciseError.Other(
-  exception.message ?: "")` плюс `Log.e` для диагностики. Конкретный
+  алерта) → `deleteError = DeleteExerciseError.Other` плюс `Log.e`
+  для диагностики. Конкретный
   текст «Упражнение не найдено» сохраняется в логе, пользователь
   видит generic снекбар «Не удалось удалить упражнение»;
 - `Result.failure(LinkedEntriesDeletionException)` →
   `deleteError = DeleteExerciseError.HasLinkedEntries`;
 - `Result.failure(StandardExerciseDeletionException)` →
   `deleteError = DeleteExerciseError.StandardExercise`;
-- `Result.failure(прочее)` → `deleteError = DeleteExerciseError.Other(
-  exception.message ?: "")` плюс `Log.e` для диагностики.
+- `Result.failure(прочее)` → `deleteError = DeleteExerciseError.Other`
+  плюс `Log.e` для диагностики.
 
 UI SHALL маппить `deleteError` в `Snackbar`-сообщение через `when`:
 - `HasLinkedEntries` → `R.string.exercise_delete_error_used_in_workouts`
@@ -231,7 +231,8 @@ unit-тестами).
 
 UI `ExercisesScreen` SHALL при `state.uiState.pendingDeleteId == null`
 AND `state.uiState.deleteError != null` отображать снекбар (через
-`LaunchedEffect(deleteError)`) с текстом по `deleteError` (маппинг —
+`LaunchedEffect(uiState)`, перед показом закрывая текущий снекбар) с
+текстом по `deleteError` (маппинг —
 требование «Ошибка удаления — типизированные причины в снекбаре»).
 
 Защита от race: между pre-check и реальным `confirmDelete → repository

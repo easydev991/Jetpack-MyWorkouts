@@ -93,7 +93,7 @@
   IllegalStateException(...)`.
 - `app/src/main/java/com/myworkouts/domain/model/DeleteExerciseError.kt`
   (новый) — sealed-тип `DeleteExerciseError { HasLinkedEntries;
-  StandardExercise; Other(message) }`.
+  StandardExercise; Other }`.
 - `app/src/main/res/values/strings.xml` (ru, default) и
   `values-en/strings.xml` (en override) — 11 новых ключей; среди них
   `exercise_delete_error_used_in_workouts` и

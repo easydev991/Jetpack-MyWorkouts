@@ -1,12 +1,18 @@
 package com.myworkouts.ui.viewmodel
 
+import android.util.Log
+import com.myworkouts.data.repository.LinkedEntriesDeletionException
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.DeleteExerciseError
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.ui.state.ExercisesUiState
+import io.mockk.every
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +26,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -38,6 +45,23 @@ private class ExercisesViewModelFakeRepository(
 ) : WorkoutDataRepository {
     val catalog = MutableStateFlow(initialCatalog)
 
+    /**
+     * Управляемый из тестов набор id упражнений с записями (для
+     * pre-check в [ExercisesViewModel.requestDelete], tasks §2).
+     * Публичное поле — тесты §2.1/§2.4 устанавливают значение через
+     * `linkedEntries.value = setOf(...)`.
+     */
+    val linkedEntries: MutableStateFlow<Set<Long>> = MutableStateFlow(emptySet())
+
+    /**
+     * Сценарий `deleteExercise` для тестов §2.2/§2.3. По умолчанию —
+     * успех; для теста ошибки FK (`LinkedEntriesDeletionException`)
+     * тест устанавливает `deleteExerciseResult`.
+     */
+    var deleteExerciseResult: Result<Unit> = Result.success(Unit)
+
+    var lastDeletedExerciseId: Long? = null
+
     override fun exercises(query: String): Flow<List<Exercise>> = catalog
 
     override fun entries(): Flow<List<com.myworkouts.domain.model.EntryListItem>> = MutableStateFlow(emptyList())
@@ -54,7 +78,14 @@ private class ExercisesViewModelFakeRepository(
 
     override suspend fun deleteEntry(id: Long): Result<Unit> = Result.success(Unit)
 
-    override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
+    override suspend fun deleteExercise(id: Long): Result<Unit> {
+        lastDeletedExerciseId = id
+        return deleteExerciseResult
+    }
+
+    override suspend fun getExercise(id: Long): Result<Exercise?> = Result.success(null)
+
+    override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = linkedEntries
 
     override suspend fun getAllExercises(): Result<List<Exercise>> = Result.success(catalog.value)
 
@@ -107,11 +138,18 @@ class ExercisesViewModelTest {
     fun setUp() {
         testDispatcher = StandardTestDispatcher()
         Dispatchers.setMain(testDispatcher)
+        // ExercisesViewModel.confirmDelete логирует через android.util.Log в
+        // failure-ветках: на JVM android.util.Log — stub, роняет
+        // короутину операции (аналогично AppDataViewModelTest).
+        mockkStatic(Log::class)
+        every { Log.e(any(), any<String>()) } returns 0
+        every { Log.e(any(), any<String>(), any<Throwable>()) } returns 0
         repository = ExercisesViewModelFakeRepository(initialCatalog = listOf(pullups, plank))
     }
 
     @AfterEach
     fun tearDown() {
+        unmockkStatic(Log::class)
         Dispatchers.resetMain()
     }
 
@@ -191,6 +229,146 @@ class ExercisesViewModelTest {
                 listOf(plank, squats),
                 (viewModel.uiState.value as ExercisesUiState.Success).exercises,
                 "Удаление упражнения тоже доезжает реактивно"
+            )
+        }
+
+    // ---------- §2. TDD: pendingDeleteId + deleteError ----------
+
+    /**
+     * `requestDelete` для упражнения БЕЗ связанных записей открывает
+     * алерт: `pendingDeleteId == item.id` в `Success`. `cancelDelete`
+     * сбрасывает обратно в `null`. Pre-check (design Decision 8) даёт
+     * снекбар `HasLinkedEntries` только когда id в
+     * `exerciseIdsWithLinkedEntries` — здесь пусто.
+     *
+     * (edit-delete-exercise, tasks §2.1.)
+     */
+    @Test
+    fun requestDelete_whenNoLinkedEntries_setsPendingDeleteId_and_cancelDeleteResetsIt() =
+        runTest(testDispatcher) {
+            // Given — пустой `linkedEntries` (setUp)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.requestDelete(pullups)
+            advanceUntilIdle()
+
+            // Then — pendingDeleteId установлен, deleteError не тронут
+            val afterRequest = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                pullups.id,
+                afterRequest.pendingDeleteId,
+                "requestDelete упражнения без записей — pendingDeleteId = id"
+            )
+            assertNull(afterRequest.deleteError, "Ошибки нет")
+
+            // When — отмена
+            viewModel.cancelDelete()
+            advanceUntilIdle()
+
+            // Then — pending сброшен
+            val afterCancel = viewModel.uiState.value as ExercisesUiState.Success
+            assertNull(afterCancel.pendingDeleteId, "cancelDelete сбрасывает pendingDeleteId")
+        }
+
+    /**
+     * `confirmDelete()` вызывает `repository.deleteExercise(id)`;
+     * при `Result.success` pending сбрасывается, `deleteError == null`
+     * (one-shot не сработал).
+     *
+     * (edit-delete-exercise, tasks §2.2.)
+     */
+    @Test
+    fun confirmDelete_onSuccess_clearsPending_andNoError() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestDelete(pullups)
+            advanceUntilIdle()
+            assertEquals(pullups.id, (viewModel.uiState.value as ExercisesUiState.Success).pendingDeleteId)
+
+            // When — подтверждение, по умолчанию `deleteExercise` возвращает success
+            viewModel.confirmDelete()
+            advanceUntilIdle()
+
+            // Then
+            val state = viewModel.uiState.value as ExercisesUiState.Success
+            assertNull(state.pendingDeleteId, "pending сброшен после успешного удаления")
+            assertNull(state.deleteError, "deleteError == null при success")
+            assertEquals(
+                pullups.id,
+                repository.lastDeletedExerciseId,
+                "confirmDelete вызвал deleteExercise(id)"
+            )
+        }
+
+    /**
+     * `confirmDelete()` при `Result.failure(LinkedEntriesDeletionException)`:
+     * pending сброшен, `deleteError == HasLinkedEntries`; повторный
+     * `requestDelete` возможен (т.е. requestDelete не блокируется
+     * ошибкой).
+     *
+     * (edit-delete-exercise, tasks §2.3.)
+     */
+    @Test
+    fun confirmDelete_onLinkedEntriesFailure_setsHasLinkedEntriesError_andAllowsRetry() =
+        runTest(testDispatcher) {
+            // Given
+            repository.deleteExerciseResult =
+                Result.failure(LinkedEntriesDeletionException())
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestDelete(pullups)
+            advanceUntilIdle()
+
+            // When — подтверждение
+            viewModel.confirmDelete()
+            advanceUntilIdle()
+
+            // Then
+            val afterConfirm = viewModel.uiState.value as ExercisesUiState.Success
+            assertNull(afterConfirm.pendingDeleteId, "pending сброшен и при ошибке FK")
+            assertEquals(
+                DeleteExerciseError.HasLinkedEntries,
+                afterConfirm.deleteError,
+                "FK → DeleteExerciseError.HasLinkedEntries"
+            )
+
+            // When — повторный requestDelete после ошибки (т.е. ошибка не
+            // «блокирует» дальнейшие действия; design Decision 3 — pending
+            // не остаётся открытым на ошибке)
+            viewModel.requestDelete(plank)
+            advanceUntilIdle()
+
+            // Then — повторный requestDelete ставит pendingDeleteId;
+            // deleteError остаётся (one-shot — отдельный onErrorShown)
+            val retryState = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                plank.id,
+                retryState.pendingDeleteId,
+                "Повторный requestDelete открывает новый pending"
+            )
+            assertEquals(
+                DeleteExerciseError.HasLinkedEntries,
+                retryState.deleteError,
+                "deleteError не сбрасывается повторным requestDelete " +
+                    "(one-shot через onErrorShown)"
+            )
+
+            // When — onErrorShown() сбрасывает deleteError
+            viewModel.onErrorShown()
+            advanceUntilIdle()
+
+            // Then
+            val afterShown = viewModel.uiState.value as ExercisesUiState.Success
+            assertNull(
+                afterShown.deleteError,
+                "onErrorShown() сбрасывает deleteError"
             )
         }
 }

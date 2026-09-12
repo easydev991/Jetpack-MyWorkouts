@@ -70,13 +70,39 @@ sealed class Screen(
     }
 
     /**
-     * Экран создания упражнения (не в нижней навигации): форма из
-     * имени, категории, типа измерения и комментария. Без аргументов —
-     * экран всегда в режиме «создать новое» (create-exercise, design
-     * Decision 3): аргументы добавляются только при реальной
-     * потребности (ср. [EntryCreate] с его `entryId`).
+     * Экран создания упражнения (не в нижней навигации): создание и
+     * редактирование на одном composable (edit-delete-exercise, design
+     * Decision 1). Опциональный query-аргумент `exerciseId` выбирает
+     * режим: отсутствует/[NO_EXERCISE_ID] — создание (FAB), иначе —
+     * редактирование упражнения с этим id (edit-режим из long-press
+     * меню каталога). [arguments] передаётся в каждое место регистрации
+     * `composable(route, arguments)` — без navArgument query-параметр
+     * считается обязательным и `navigate("exercise_create")` не
+     * сматчится.
      */
-    object ExerciseCreate : Screen(route = "exercise_create")
+    object ExerciseCreate : Screen(route = "exercise_create?exerciseId={exerciseId}") {
+        /** Ключ query-аргумента маршрута. */
+        const val ARG_EXERCISE_ID: String = "exerciseId"
+
+        /** Id «упражнение не передано» — режим создания. */
+        const val NO_EXERCISE_ID: Long = -1L
+
+        /** Аргументы маршрута для регистрации в `composable(...)`. */
+        val arguments =
+            listOf(
+                navArgument(ARG_EXERCISE_ID) {
+                    type = NavType.LongType
+                    defaultValue = NO_EXERCISE_ID
+                }
+            )
+
+        /**
+         * Route для навигации: всегда `exercise_create?exerciseId={id}` —
+         * `defaultValue` в `navArgument` подставит [NO_EXERCISE_ID] для
+         * create-режима, явный id — режим редактирования.
+         */
+        fun createRoute(exerciseId: Long = NO_EXERCISE_ID): String = "exercise_create?$ARG_EXERCISE_ID=$exerciseId"
+    }
 }
 
 /**

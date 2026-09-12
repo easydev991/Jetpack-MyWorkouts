@@ -1,5 +1,6 @@
 package com.myworkouts.ui.screens.exercises
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -17,12 +18,28 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
+import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
+import com.myworkouts.domain.model.ExerciseEntry
+import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.state.ExerciseCreateUiState
+import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
+import com.myworkouts.ui.viewmodel.ExerciseCreateViewModel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -299,4 +316,246 @@ class ExerciseCreateScreenTest {
         // Then — тот же диалог подтверждения, что и для стрелки TopAppBar
         composeTestRule.onNodeWithText(context.getString(R.string.entry_confirm_close_dialog_title)).assertIsDisplayed()
     }
+
+    // region edit-delete-exercise §8 (edit-режим UI через реальную VM)
+
+    /** Кастомное упражнение в fake-репозитории для edit-тестов (§8). */
+    private val editableExercise =
+        Exercise(
+            id = 100L,
+            name = "Жим лёжа",
+            category = ExerciseCategory.PUSH,
+            isCustom = true,
+            comment = "3 подхода",
+            createdAt = 1_721_200_000_000L,
+            measuredBy = ExerciseMeasuredBy.REPS
+        )
+
+    /**
+     * Fake [WorkoutDataRepository] для VM-тестов edit-режима: каталог на
+     * `MutableStateFlow`, `getExercise`/`updateExercise` работают по каталогу
+     * (образец — `ExercisesDeleteFlowTest.FakeRepository`).
+     */
+    private class EditFakeRepository(
+        initialCatalog: List<Exercise>
+    ) : WorkoutDataRepository {
+        val catalog = MutableStateFlow(initialCatalog)
+
+        override fun exercises(query: String): Flow<List<Exercise>> = catalog
+
+        override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(emptyList())
+
+        override suspend fun addEntry(entry: ExerciseEntry): Result<Long> = Result.success(1L)
+
+        override suspend fun addExercise(exercise: Exercise): Result<Long> = Result.success(1L)
+
+        override suspend fun updateExercise(exercise: Exercise): Result<Unit> =
+            Result.success(Unit).also {
+                catalog.value = catalog.value.map { current -> if (current.id == exercise.id) exercise else current }
+            }
+
+        override suspend fun updateEntry(entry: ExerciseEntry): Result<Unit> = Result.success(Unit)
+
+        override suspend fun getEntry(id: Long): Result<ExerciseEntry?> = Result.success(null)
+
+        override suspend fun deleteEntry(id: Long): Result<Unit> = Result.success(Unit)
+
+        override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
+
+        override suspend fun getExercise(id: Long): Result<Exercise?> = Result.success(catalog.value.firstOrNull { it.id == id })
+
+        override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = MutableStateFlow(emptySet())
+
+        override suspend fun getAllExercises(): Result<List<Exercise>> = Result.success(catalog.value)
+
+        override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = Result.success(emptyList())
+
+        override suspend fun importData(
+            exercises: List<Exercise>,
+            entries: List<BackupEntry>
+        ): Result<Unit> = Result.success(Unit)
+
+        override suspend fun deleteAllData(): Result<Unit> = Result.success(Unit)
+    }
+
+    /**
+     * Test-Harness: `NavHost` со стартовым `Screen.Exercises.route`
+     * (заглушка каталога) и destination `Screen.ExerciseCreate.route` с
+     * реальной [ExerciseCreateScreen] на VM над [repository] — как в
+     * `RootScreen` (edit-delete-exercise §5.2). `onBackClick` ведёт
+     * `popBackStack()`, как `navigateUp` в проде.
+     */
+    @Composable
+    private fun ExerciseCreateScreenWithNavHost(
+        repository: EditFakeRepository,
+        onControllerReady: (NavHostController) -> Unit
+    ) {
+        val navController = rememberNavController()
+        onControllerReady(navController)
+        NavHost(navController = navController, startDestination = Screen.Exercises.route) {
+            composable(Screen.Exercises.route) {
+                // Заглушка каталога: сценарии проверяют только возврат маршрута.
+            }
+            composable(Screen.ExerciseCreate.route, arguments = Screen.ExerciseCreate.arguments) { entry ->
+                val exerciseId =
+                    entry.arguments
+                        ?.getLong(Screen.ExerciseCreate.ARG_EXERCISE_ID, Screen.ExerciseCreate.NO_EXERCISE_ID)
+                        ?: Screen.ExerciseCreate.NO_EXERCISE_ID
+                ExerciseCreateScreen(
+                    viewModel = viewModel(factory = ExerciseCreateViewModel.factory(repository, exerciseId)),
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+        }
+    }
+
+    /** Открывает edit-режим с [exerciseId] через harness и ждёт загрузки. */
+    private fun openEdit(
+        repository: EditFakeRepository,
+        exerciseId: Long
+    ): NavHostController {
+        lateinit var navController: NavHostController
+        composeTestRule.setContent {
+            JetpackMyWorkoutsTheme {
+                ExerciseCreateScreenWithNavHost(repository) { navController = it }
+            }
+        }
+        composeTestRule.runOnIdle {
+            navController.navigate(Screen.ExerciseCreate.createRoute(exerciseId))
+        }
+        composeTestRule.waitForIdle()
+        return navController
+    }
+
+    /**
+     * §8.1: открытие формы с `exerciseId` — заголовок «Изменить
+     * упражнение», поля предзаполнены из БД, «Сохранить» disabled
+     * (`isEditMode && !hasChanges`).
+     */
+    @Test
+    fun edit_when_opened_with_exercise_id_then_title_prefilled_and_save_disabled() {
+        // Given — кастомное упражнение в fake-репозитории
+        val fake = EditFakeRepository(listOf(editableExercise))
+
+        // When — открытие edit-режима
+        openEdit(fake, editableExercise.id)
+
+        // Then — заголовок редактирования, не создания
+        composeTestRule.onNodeWithText(context.getString(R.string.exercise_edit_title)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(context.getString(R.string.exercise_create_title)).assertDoesNotExist()
+
+        // Then — поля предзаполнены из упражнения
+        composeTestRule.onNodeWithText("Жим лёжа").assertIsDisplayed()
+        composeTestRule.onNodeWithText(context.getString(R.string.exercise_category_push)).assertIsDisplayed()
+        composeTestRule.onNodeWithText("3 подхода").assertIsDisplayed()
+
+        // Then — без изменений «Сохранить» неактивна
+        composeTestRule.onNodeWithText(context.getString(R.string.entry_save)).assertIsNotEnabled()
+    }
+
+    /**
+     * §8.2: изменение name включает «Сохранить» (`hasChanges == true`);
+     * возврат к исходному значению снова выключает.
+     */
+    @Test
+    fun edit_when_name_changed_then_save_enabled_and_reverting_disables() {
+        // Given — edit-режим без изменений
+        val fake = EditFakeRepository(listOf(editableExercise))
+        openEdit(fake, editableExercise.id)
+        composeTestRule.onNodeWithText(context.getString(R.string.entry_save)).assertIsNotEnabled()
+
+        // When — изменили название
+        composeTestRule
+            .onNode(hasText(context.getString(R.string.exercise_field_name)))
+            .performTextReplacement("Жим стоя")
+
+        // Then — «Сохранить» активна
+        composeTestRule.onNodeWithText("Жим стоя").assertIsDisplayed()
+        composeTestRule.onNodeWithText(context.getString(R.string.entry_save)).assertIsEnabled()
+
+        // When — вернули исходное название
+        composeTestRule
+            .onNode(hasText(context.getString(R.string.exercise_field_name)))
+            .performTextReplacement("Жим лёжа")
+
+        // Then — «Сохранить» снова неактивна (draft == original)
+        composeTestRule.onNodeWithText(context.getString(R.string.entry_save)).assertIsNotEnabled()
+    }
+
+    /**
+     * §8.3: тап «Сохранить» после изменения — обновление в fake-репозитории
+     * и навигация назад (маршрут вернулся на `exercises`).
+     */
+    @Test
+    fun edit_when_save_clicked_then_repository_updated_and_navigates_back() {
+        // Given — edit-режим с изменённым названием
+        val fake = EditFakeRepository(listOf(editableExercise))
+        val navController = openEdit(fake, editableExercise.id)
+        composeTestRule
+            .onNode(hasText(context.getString(R.string.exercise_field_name)))
+            .performTextReplacement("Жим стоя")
+
+        // When — тап «Сохранить»
+        composeTestRule.onNodeWithText(context.getString(R.string.entry_save)).performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — маршрут вернулся на каталог
+        composeTestRule.runOnIdle {
+            assertEquals(
+                "После сохранения должен произойти возврат на exercises",
+                Screen.Exercises.route,
+                navController.currentDestination?.route
+            )
+        }
+
+        // Then — fake-репозиторий содержит упражнение с новым названием
+        assertEquals(
+            "Жим стоя",
+            fake.catalog.value
+                .single()
+                .name
+        )
+    }
+
+    /** §8.3: системный back без изменений закрывает экран без диалога. */
+    @Test
+    fun edit_when_no_changes_and_system_back_then_closed_without_dialog() {
+        // Given — edit-режим без изменений
+        val fake = EditFakeRepository(listOf(editableExercise))
+        val navController = openEdit(fake, editableExercise.id)
+
+        // When — системный back
+        Espresso.pressBack()
+
+        // Then — вернулись на каталог, диалог подтверждения не появлялся
+        composeTestRule.runOnIdle {
+            assertEquals(
+                "Без изменений системный back должен закрывать экран",
+                Screen.Exercises.route,
+                navController.currentDestination?.route
+            )
+        }
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_confirm_close_dialog_title))
+            .assertCountEquals(0)
+    }
+
+    /**
+     * §8.5: `exerciseId` упражнения, которого нет в репозитории, —
+     * подсказка «Упражнение не найдено» под формой, «Сохранить» disabled
+     * (design Decision 5).
+     */
+    @Test
+    fun edit_when_exercise_missing_then_hint_shown_and_save_disabled() {
+        // Given — пустой каталог: getExercise вернёт success(null)
+        val fake = EditFakeRepository(initialCatalog = emptyList())
+
+        // When — открытие edit-режима с несуществующим id
+        openEdit(fake, exerciseId = 999L)
+
+        // Then — подсказка видна, «Сохранить» неактивна
+        composeTestRule.onNodeWithText(context.getString(R.string.exercise_hint_exercise_missing)).assertIsDisplayed()
+        composeTestRule.onNodeWithText(context.getString(R.string.entry_save)).assertIsNotEnabled()
+    }
+    // endregion
 }

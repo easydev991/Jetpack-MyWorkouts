@@ -75,4 +75,22 @@ interface ExerciseEntryDao {
      */
     @Query("DELETE FROM exercise_entries")
     suspend fun deleteAll()
+
+    /**
+     * Количество записей, ссылающихся на упражнение с `id`
+     * (edit-delete-exercise, tasks §1.5, design Decision 8): pre-check
+     * FK перед `deleteExercise`, чтобы не зависеть от парсинга текста
+     * SQLite-исключения. `0` — можно удалять, `>0` — есть записи.
+     */
+    @Query("SELECT COUNT(*) FROM exercise_entries WHERE exercise_id = :id")
+    suspend fun countByExerciseId(id: Long): Int
+
+    /**
+     * Реактивный список id упражнений с ненулевым числом записей
+     * (edit-delete-exercise, tasks §1.5, design Decision 8). Источник
+     * для `WorkoutDataRepository.exerciseIdsWithLinkedEntries()` —
+     * pre-check FK на тапе «Удалить» в каталоге.
+     */
+    @Query("SELECT exercise_id FROM exercise_entries GROUP BY exercise_id")
+    fun observeExerciseIdsWithLinkedEntries(): Flow<List<Long>>
 }

@@ -101,6 +101,19 @@
     <string name="entry_list_weight_value">%1$s kg</string>
     <string name="entry_section_yesterday">Yesterday</string>
 
+    <!-- Exercise edit / delete (edit-mode title, menu, dialog, snackbars) -->
+    <string name="exercise_edit_title">Edit exercise</string>
+    <string name="exercise_list_menu_edit">Edit</string>
+    <string name="exercise_list_menu_delete">Delete</string>
+    <string name="exercise_delete_dialog_title">Delete exercise?</string>
+    <string name="exercise_delete_dialog_text">Exercise \"%1$s\" will be deleted</string>
+    <string name="exercise_delete_dialog_confirm">Delete</string>
+    <string name="exercise_delete_dialog_cancel">Cancel</string>
+    <string name="exercise_delete_error_used_in_workouts">This exercise is used in workouts</string>
+    <string name="exercise_delete_error_standard">Cannot delete a standard exercise</string>
+    <string name="exercise_delete_error_generic">Failed to delete exercise</string>
+    <string name="exercise_hint_exercise_missing">Exercise not found</string>
+
     <!-- App data screen (export, restore, delete data) -->
     <string name="app_data">App data</string>
     <string name="create_backup">Create backup</string>

@@ -73,6 +73,27 @@ class RoomWorkoutDataRepository(
     }
 
     /**
+     * Возвращает упражнение по идентификатору или `null`, если не найдено
+     * (edit-delete-exercise, tasks §1.3). `null` — `Result.success(null)`,
+     * не failure: VM различает «ошибка слоя данных» и «запись отсутствует
+     * при открытии edit-режима» через сам факт null.
+     */
+    override suspend fun getExercise(id: Long): Result<Exercise?> =
+        runCatching {
+            exerciseDao.getById(id)?.toDomain()
+        }
+
+    /**
+     * Реактивный список id упражнений с ненулевым числом записей
+     * (edit-delete-exercise, tasks §1.5, design Decision 8). Префикс FK
+     * для pre-check перед удалением.
+     */
+    override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> =
+        exerciseEntryDao
+            .observeExerciseIdsWithLinkedEntries()
+            .map { it.toSet() }
+
+    /**
      * Вставляет новую запись о выполнении. Перед записью прогоняет
      * [EntryValidator]; ошибки валидации и несуществующее `exerciseId`
      * возвращаются в `Result.failure` без записи в БД.
@@ -148,33 +169,49 @@ class RoomWorkoutDataRepository(
     override suspend fun deleteEntry(id: Long): Result<Unit> = runCatching { exerciseEntryDao.deleteById(id) }
 
     /**
-     * Удаляет упражнение из каталога по идентификатору (design.md
-     * Decision 2):
-     * - отсутствующий id → `Result.failure` («упражнение не найдено») —
-     *   операция не идемпотентна, в отличие от [deleteEntry];
-     * - стандартное упражнение (`isCustom = false`) → `Result.failure`
-     *   («стандартное упражнение нельзя удалить»);
-     * - FK-нарушение (у упражнения есть записи) → `Result.failure`
-     *   («у этого упражнения есть записи, удалите их сначала»);
-     *   прочие исключения — generic `Result.failure`.
+     * Удаляет упражнение из каталога по идентификатору (edit-delete-exercise,
+     * tasks §1.5, design Decision 3, 8):
+     * - отсутствующий id → `Result.failure(IllegalStateException(
+     *   "Упражнение не найдено"))` (race между сбором списка и
+     *   подтверждением алерта — редкий случай в офлайн-приложении);
+     *   попадает в `DeleteExerciseError.Other(message)` через VM-маппинг
+     *   Decision 3. Операция не идемпотентна, в отличие от [deleteEntry].
+     * - стандартное упражнение (`isCustom = false`) →
+     *   `Result.failure(StandardExerciseDeletionException())` —
+     *   маппится в `DeleteExerciseError.StandardExercise`.
+     * - FK-нарушение (у упражнения есть записи) — pre-check через
+     *   [ExerciseEntryDao.countByExerciseId] ДО `exerciseDao.delete(...)`,
+     *   чтобы не зависеть от парсинга текста SQLite-исключения
+     *   (design Decision 8): `Result.failure(
+     *   LinkedEntriesDeletionException())` →
+     *   `DeleteExerciseError.HasLinkedEntries`.
+     *   `SQLiteConstraintException` остаётся как safety net для race
+     *   между pre-check и `deleteById` (запись добавлена в другой
+     *   сессии) — маппится в тот же `HasLinkedEntries`.
+     * - прочие исключения — generic `Result.failure`.
      */
     @Suppress("ReturnCount")
     override suspend fun deleteExercise(id: Long): Result<Unit> {
-        // 2 ранних return — сами бизнес-правила (нет id / стандартное);
-        // разворачивать их во вложенные условия хуже (ponytail).
+        // 3 ранних return — сами бизнес-правила (нет id / стандартное /
+        // есть записи); разворачивать их во вложенные условия хуже
+        // (ponytail).
         val exercise =
             exerciseDao.getById(id)?.toDomain()
                 ?: return Result.failure(
                     IllegalStateException("Упражнение не найдено")
                 )
         if (!exercise.isCustom) {
-            return Result.failure(
-                IllegalStateException("Стандартное упражнение нельзя удалить")
-            )
+            return Result.failure(StandardExerciseDeletionException())
+        }
+        if (exerciseEntryDao.countByExerciseId(id) > 0) {
+            return Result.failure(LinkedEntriesDeletionException())
         }
         return runCatching { exerciseDao.deleteById(id) }.recoverCatching { e ->
+            // Safety net для race между pre-check и deleteById:
+            // запись добавлена в параллельной сессии — то же сообщение
+            // и тот же sealed-вариант, что у pre-check.
             if (e is SQLiteConstraintException) {
-                error("У этого упражнения есть записи, удалите их сначала")
+                throw LinkedEntriesDeletionException()
             }
             throw e
         }

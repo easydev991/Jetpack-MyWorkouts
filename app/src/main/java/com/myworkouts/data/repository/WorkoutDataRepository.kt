@@ -38,6 +38,26 @@ interface WorkoutDataRepository {
     suspend fun updateExercise(exercise: Exercise): Result<Unit>
 
     /**
+     * Возвращает упражнение по идентификатору или `null`, если не найдено
+     * (edit-delete-exercise, tasks §1.3). Используется для prefill-а формы
+     * `ExerciseCreateScreen` в edit-режиме; семантика «не найдено» —
+     * `Result.success(null)` (не failure), чтобы VM различала «ошибка
+     * слоя данных» и «запись отсутствует» (race при открытии).
+     */
+    suspend fun getExercise(id: Long): Result<Exercise?>
+
+    /**
+     * Реактивный список id упражнений, на которые ссылаются записи
+     * (edit-delete-exercise, tasks §1.5, design Decision 8). Префикс FK
+     * для pre-check перед удалением: `requestDelete` смотрит `value`
+     * синхронно, без async-обвязки на тапе. Реактивность обновляет
+     * снекбар при добавлении/удалении записи в другой табе — но текущая
+     * навигация скрывает bottom-bar на дочерних экранах, так что
+     * визуальный эффект только при возврате.
+     */
+    fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>>
+
+    /**
      * Вставляет новую запись о выполнении с валидацией [EntryValidator].
      */
     suspend fun addEntry(entry: ExerciseEntry): Result<Long>

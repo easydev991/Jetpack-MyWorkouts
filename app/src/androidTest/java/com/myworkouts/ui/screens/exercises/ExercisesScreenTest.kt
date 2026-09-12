@@ -1,11 +1,19 @@
 package com.myworkouts.ui.screens.exercises
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -64,6 +72,18 @@ class ExercisesScreenTest {
             measuredBy = ExerciseMeasuredBy.TIME
         )
 
+    /** Кастомное упражнение для long-press тестов (edit-delete-exercise, §4). */
+    private val bench =
+        Exercise(
+            id = 100L,
+            name = "Жим",
+            category = ExerciseCategory.PUSH,
+            isCustom = true,
+            comment = null,
+            createdAt = 1_721_200_000_000L,
+            measuredBy = ExerciseMeasuredBy.REPS
+        )
+
     /** Рендер [ExercisesScreenContent] с готовым состоянием. */
     private fun setContentWith(uiState: ExercisesUiState) {
         composeTestRule.setContent {
@@ -98,11 +118,11 @@ class ExercisesScreenTest {
                     state =
                         ExercisesScreenState(
                             uiState = ExercisesUiState.Success(exercises = listOf(pullups, plank)),
-                            onAddExerciseClick = { navController.navigate(Screen.ExerciseCreate.route) }
+                            onAddExerciseClick = { navController.navigate(Screen.ExerciseCreate.createRoute()) }
                         )
                 )
             }
-            composable(Screen.ExerciseCreate.route) {
+            composable(Screen.ExerciseCreate.route, arguments = Screen.ExerciseCreate.arguments) {
                 // Заглушка destination-маршрута: сценарий проверяет
                 // только навигацию FAB → route (fill-flow формы — в
                 // `ExerciseCreateScreenTest`, на пустой заглушке полей нет).
@@ -236,4 +256,233 @@ class ExercisesScreenTest {
             )
         }
     }
+
+    // region edit-delete-exercise §4 (long-press, menu, alert)
+
+    /**
+     * §4.1: long-press на строке стандартного упражнения — меню НЕ
+     * появляется (нет пунктов «Изменить»/«Удалить»), поведение
+     * `isCustom == false` по design Decision 4 edit-delete-exercise.
+     */
+    @Test
+    fun row_long_press_when_standard_then_no_context_menu() {
+        // Given — только стандартные упражнения
+        setContentWith(ExercisesUiState.Success(exercises = listOf(pullups, plank)))
+
+        // When — long-press на строке стандартного упражнения
+        composeTestRule
+            .onNodeWithText("Подтягивания")
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+
+        // Then — пунктов «Изменить»/«Удалить» нет в дереве
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_list_menu_edit))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_list_menu_delete))
+            .assertCountEquals(0)
+    }
+
+    /**
+     * §4.2: long-press на строке кастомного упражнения — открывается
+     * меню из двух пунктов «Изменить» / «Удалить» у точки нажатия
+     * (спека edit-delete-exercise, requirement «Контекстное меню по
+     * долгому нажатию»). Пункт «Изменить» выше пункта «Удалить»
+     * (как на MainScreen — порядок edit/delete).
+     *
+     * Тест через state-машину (как в §4.3): `setContentWith` использует
+     * `ExercisesScreenContent` с дефолтными no-op callbacks —
+     * long-press в этом случае не открывает меню, т.к. callback не
+     * сохраняет `contextMenu`. Здесь собираем state-машину как в
+     * VM-обёртке.
+     */
+    @Test
+    fun row_long_press_when_custom_then_menu_with_edit_and_delete_opens() {
+        // Given — кастомное упражнение + локальная state-машина
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState = ExercisesUiState.Success(exercises = listOf(bench)),
+                        contextMenu = menu,
+                        onAddExerciseClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestEdit = {},
+                        onRequestDelete = {}
+                    )
+            )
+        }
+
+        // When — long-press на строке кастомного упражнения
+        composeTestRule
+            .onNodeWithText("Жим")
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+
+        // Then — оба пункта видны
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_edit))
+            .assertExists()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_delete))
+            .assertExists()
+
+        // Then — «Изменить» выше «Удалить» (порядок как на MainScreen)
+        assertDisplayedAbove(
+            higher = context.getString(R.string.exercise_list_menu_edit),
+            lower = context.getString(R.string.exercise_list_menu_delete)
+        )
+    }
+
+    /**
+     * §4.3: long-press на кастомном → тап «Удалить» в меню → алерт
+     * «Удалить упражнение?» с именем упражнения; тап «Отмена» —
+     * алерт закрыт, упражнение остаётся в списке.
+     *
+     * Тест через ExercisesScreenContent + локальное состояние
+     * contextMenu/pendingDeleteId (как в MainScreenTest —
+     * `MainScreenContent` со своей state-машиной): это упражнение
+     * проверяет UI-механику (появление алерта и реакция на «Отмена»).
+     */
+    @Test
+    fun row_long_press_when_custom_tap_delete_then_alert_with_name_then_cancel_keeps() {
+        // Given — экран с локальной state-машиной (как в MainScreenTest)
+        val cancelled = mutableListOf<Unit>()
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+            var pendingId by remember { mutableStateOf<Long?>(null) }
+            val current =
+                ExercisesUiState.Success(
+                    exercises = listOf(bench),
+                    pendingDeleteId = pendingId
+                )
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState = current,
+                        contextMenu = menu,
+                        onAddExerciseClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestEdit = {},
+                        onRequestDelete = { item ->
+                            menu = null
+                            pendingId = item.id
+                        },
+                        onConfirmDelete = { pendingId = null },
+                        onCancelDelete = {
+                            cancelled += Unit
+                            pendingId = null
+                        }
+                    )
+            )
+        }
+
+        // When — long-press на кастомном, тап «Удалить»
+        composeTestRule
+            .onNodeWithText("Жим")
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_delete))
+            .assertExists()
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — алерт с именем упражнения
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_delete_dialog_title))
+            .assertExists()
+        composeTestRule
+            .onNodeWithText(
+                context.getString(R.string.exercise_delete_dialog_text, "Жим")
+            ).assertExists()
+
+        // When — тап «Отмена»
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_delete_dialog_cancel))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — алерт закрыт, упражнение в списке
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_delete_dialog_title))
+            .assertCountEquals(0)
+        composeTestRule
+            .onNodeWithText("Жим")
+            .assertIsDisplayed()
+        assertEquals("cancelDelete должен быть вызван один раз", 1, cancelled.size)
+    }
+
+    /**
+     * §4.5: long-press на кастомном → тап «Изменить» в меню — VM-обёртка
+     * закрывает меню и вызывает `onEditExercise(item.id)`.
+     *
+     * Тест через ExercisesScreenContent с локальным контекстом-меню
+     * (как VM-обёртка в реальном `ExercisesScreen`).
+     */
+    @Test
+    fun row_long_press_when_custom_tap_edit_then_onEditExercise_callback_fires() {
+        // Given — захват callback для Edit
+        var capturedId: Long? = null
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState = ExercisesUiState.Success(exercises = listOf(bench)),
+                        contextMenu = menu,
+                        onAddExerciseClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestEdit = { item ->
+                            menu = null
+                            capturedId = item.id
+                        },
+                        onRequestDelete = {},
+                        onConfirmDelete = {},
+                        onCancelDelete = {}
+                    )
+            )
+        }
+
+        // When — long-press → тап «Изменить»
+        composeTestRule
+            .onNodeWithText("Жим")
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_edit))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — колбэк вызван с id кастомного упражнения
+        assertEquals(
+            "onEditExercise должен быть вызван с id кастомного упражнения",
+            bench.id,
+            capturedId
+        )
+    }
+
+    /** Вспомогательный метод: проверяет, что текст [higher] визуально выше [lower]. */
+    private fun assertDisplayedAbove(
+        higher: String,
+        lower: String
+    ) {
+        val higherTop =
+            composeTestRule
+                .onNodeWithText(higher)
+                .fetchSemanticsNode()
+                .boundsInRoot.top
+        val lowerTop =
+            composeTestRule
+                .onNodeWithText(lower)
+                .fetchSemanticsNode()
+                .boundsInRoot.top
+        org.junit.Assert.assertTrue(
+            "«$higher» должен быть визуально выше «$lower»",
+            higherTop < lowerTop
+        )
+    }
+    // endregion
 }

@@ -140,7 +140,10 @@ private fun AppNavHost(
         composable(Screen.Exercises.route) {
             ExercisesScreen(
                 viewModel = viewModel(factory = ExercisesViewModel.factory(repository)),
-                onAddExerciseClick = { navController.navigate(Screen.ExerciseCreate.route) }
+                onAddExerciseClick = { navController.navigate(Screen.ExerciseCreate.createRoute()) },
+                onEditExercise = { exerciseId ->
+                    navController.navigate(Screen.ExerciseCreate.createRoute(exerciseId))
+                }
             )
         }
         composable(Screen.More.route) {
@@ -174,11 +177,18 @@ private fun AppNavHost(
                 onBackClick = { navController.popBackStack() }
             )
         }
-        // ExerciseCreate: фабрика строится в composable-блоке (design
-        // Decision 4), FAB «Упражнений» ведёт на этот маршрут.
-        composable(Screen.ExerciseCreate.route) {
+        // ExerciseCreate: фабрика строится в composable-блоке; query-аргумент
+        // exerciseId выбирает режим create/edit (edit-delete-exercise,
+        // design Decision 1), FAB «Упражнений» ведёт на createRoute().
+        composable(Screen.ExerciseCreate.route, arguments = Screen.ExerciseCreate.arguments) { backStackEntry ->
+            val exerciseId =
+                backStackEntry.arguments?.getLong(
+                    Screen.ExerciseCreate.ARG_EXERCISE_ID,
+                    Screen.ExerciseCreate.NO_EXERCISE_ID
+                )
+                    ?: Screen.ExerciseCreate.NO_EXERCISE_ID
             ExerciseCreateScreen(
-                viewModel = viewModel(factory = ExerciseCreateViewModel.factory(repository)),
+                viewModel = viewModel(factory = ExerciseCreateViewModel.factory(repository, exerciseId)),
                 onBackClick = { navController.popBackStack() }
             )
         }

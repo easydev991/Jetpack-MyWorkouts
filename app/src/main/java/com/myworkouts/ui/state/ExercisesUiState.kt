@@ -1,5 +1,6 @@
 package com.myworkouts.ui.state
 
+import com.myworkouts.domain.model.DeleteExerciseError
 import com.myworkouts.domain.model.Exercise
 
 /**
@@ -20,11 +21,24 @@ sealed class ExercisesUiState {
     /**
      * Загруженное состояние: каталог упражнений (стандартные +
      * пользовательские, отсортирован по имени — сортировка на стороне
-     * SQL, `ExerciseDao.observeExercises`).
+     * SQL, `ExerciseDao.observeExercises`) + состояние подтверждения
+     * удаления + one-shot ошибка удаления.
      *
      * @property exercises Список упражнений каталога (может быть пустым)
+     * @property pendingDeleteId Идентификатор упражнения, для которого
+     *   пользователь выбрал «Удалить» в long-press меню и открыт алерт
+     *   подтверждения (`null` — алерт закрыт). Копия прецедента
+     *   [MainUiState.Success.pendingDeleteId] (edit-delete-exercise
+     *   design Decision 3).
+     * @property deleteError Причина ошибки удаления для одноразового
+     *   снекбара; `null` — нет ошибки. Sealed-тип
+     *   [DeleteExerciseError] различает FK / стандартное / прочее —
+     *   снекбар показывает конкретный текст (Decision 3, 6). Сбрасывается
+     *   в `null` через `onErrorShown()` после показа.
      */
     data class Success(
-        val exercises: List<Exercise>
+        val exercises: List<Exercise>,
+        val pendingDeleteId: Long? = null,
+        val deleteError: DeleteExerciseError? = null
     ) : ExercisesUiState()
 }
