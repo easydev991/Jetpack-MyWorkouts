@@ -21,17 +21,41 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ExerciseDao {
     /**
-     * Возвращает каталог, отфильтрованный по подстроке названия
-     * (без учёта регистра) и отсортированный по убыванию кастомности,
-     * затем по убыванию `createdAt`, затем по `name` без учёта регистра.
-     * Пустая подстрока возвращает весь каталог.
+     * Возвращает активный каталог (только `is_archived = 0`), отфильтрованный
+     * по подстроке названия (без учёта регистра) и отсортированный по
+     * убыванию кастомности, затем по убыванию `createdAt`, затем по `name`
+     * без учёта регистра. Пустая подстрока возвращает весь активный каталог.
+     * Архивные упражнения — только через [observeArchivedExercises]
+     * (exercises-archive).
      */
     @Query(
         "SELECT * FROM exercises " +
-            "WHERE name LIKE '%' || :query || '%' COLLATE NOCASE " +
+            "WHERE is_archived = 0 " +
+            "AND name LIKE '%' || :query || '%' COLLATE NOCASE " +
             "ORDER BY is_custom DESC, created_at DESC, name COLLATE NOCASE"
     )
     fun observeExercises(query: String): Flow<List<ExerciseEntity>>
+
+    /**
+     * Реактивный список архивных упражнений (`is_archived = 1`),
+     * отсортированный по тому же контракту, что и [observeExercises]
+     * (exercises-archive, design Decision 6: сортировка едина для обоих
+     * экранов).
+     */
+    @Query(
+        "SELECT * FROM exercises " +
+            "WHERE is_archived = 1 " +
+            "ORDER BY is_custom DESC, created_at DESC, name COLLATE NOCASE"
+    )
+    fun observeArchivedExercises(): Flow<List<ExerciseEntity>>
+
+    /**
+     * Реактивный счётчик архивных упражнений (exercises-archive, design
+     * Decision 2): источник условной видимости кнопки архива в `TopAppBar`.
+     * Запрос лёгкий; индекс на `is_archived` не нужен, пока таблица мала.
+     */
+    @Query("SELECT COUNT(*) FROM exercises WHERE is_archived = 1")
+    fun observeArchivedCount(): Flow<Int>
 
     /**
      * Вставляет новое упражнение. Конфликт по `id` завершится ошибкой
@@ -45,6 +69,18 @@ interface ExerciseDao {
     /** Обновляет существующее упражнение. */
     @Update
     suspend fun update(entity: ExerciseEntity)
+
+    /**
+     * Проставляет флаг архивации упражнения за один SQL-запрос
+     * (exercises-archive): один round-trip вместо read-modify-write.
+     *
+     * @return число изменённых строк — `0` если id отсутствует
+     */
+    @Query("UPDATE exercises SET is_archived = :isArchived WHERE id = :id")
+    suspend fun updateArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Int
 
     /** Возвращает упражнение по идентификатору или `null`, если не найдено. */
     @Query("SELECT * FROM exercises WHERE id = :id")

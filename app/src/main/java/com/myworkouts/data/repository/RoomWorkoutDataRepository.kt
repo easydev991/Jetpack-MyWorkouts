@@ -33,9 +33,9 @@ import kotlinx.coroutines.flow.map
  *   [deleteAllData] — тот же список, что передаётся в
  *   [com.myworkouts.data.db.WorkoutDatabase.create]
  *
- * `TooManyFunctions` подавлен осознанно: 14 методов — единый контракт
- * [WorkoutDataRepository] (app-data-screen); дробить реализацию на части
- * хуже подавления.
+ * `TooManyFunctions` подавлен осознанно: 17 методов — единый контракт
+ * [WorkoutDataRepository] (app-data-screen, exercises-archive); дробить
+ * реализацию на части хуже подавления.
  */
 @Suppress("TooManyFunctions")
 class RoomWorkoutDataRepository(
@@ -55,6 +55,39 @@ class RoomWorkoutDataRepository(
         exerciseDao
             .observeExercises(query)
             .map { entities -> entities.map { it.toDomain() } }
+
+    /**
+     * Архивация/восстановление упражнения (exercises-archive, design
+     * Decision 3): один метод для обоих направлений, один SQL round-trip
+     * через [ExerciseDao.updateArchived]. Отсутствующий id →
+     * `Result.failure(IllegalStateException("Упражнение не найдено"))` —
+     * race между сбором списка и подтверждением алерта (паттерн
+     * [deleteExercise]); прочие ошибки БД — generic `Result.failure`.
+     */
+    override suspend fun setArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Result<Unit> =
+        runCatching {
+            if (exerciseDao.updateArchived(id, isArchived) == 0) {
+                error("Упражнение не найдено")
+            }
+        }
+
+    /**
+     * Реактивный список архивных упражнений, отсортированный по тому же
+     * контракту, что и [exercises] (exercises-archive, design Decision 6).
+     */
+    override fun archivedExercises(): Flow<List<Exercise>> =
+        exerciseDao
+            .observeArchivedExercises()
+            .map { entities -> entities.map { it.toDomain() } }
+
+    /**
+     * Реактивный счётчик архивных упражнений (exercises-archive, design
+     * Decision 2) — условная видимость кнопки архива в `TopAppBar`.
+     */
+    override fun archivedCount(): Flow<Int> = exerciseDao.observeArchivedCount()
 
     /**
      * Вставляет новое упражнение в каталог. Возвращает id вставленной записи

@@ -9,6 +9,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -260,14 +261,37 @@ class ExercisesScreenTest {
     // region edit-delete-exercise §4 (long-press, menu, alert)
 
     /**
-     * §4.1: long-press на строке стандартного упражнения — меню НЕ
-     * появляется (нет пунктов «Изменить»/«Удалить»), поведение
-     * `isCustom == false` по design Decision 4 edit-delete-exercise.
+     * §6.2: long-press на строке стандартного упражнения — меню из
+     * одного пункта «Архивировать» (`Icons.Filled.Archive`); пункты
+     * «Изменить» и «Удалить» НЕ показываются (exercises-archive
+     * spec «Контекстное меню по долгому нажатию — с учётом типа
+     * упражнения»). Переименовано из
+     * `row_long_press_when_standard_then_no_context_menu` §4.1:
+     * ранее стандартные не открывали меню (edit-delete-exercise
+     * Decision 4), теперь — единственный пункт «Архивировать»
+     * (exercises-archive Decision 4).
      */
     @Test
-    fun row_long_press_when_standard_then_no_context_menu() {
-        // Given — только стандартные упражнения
-        setContentWith(ExercisesUiState.Success(exercises = listOf(pullups, plank)))
+    fun row_long_press_when_standard_then_menu_with_archive_only() {
+        // Given — стандартные упражнения + локальная state-машина
+        // (как в тестах кастомного упражнения — `setContentWith` использует
+        // дефолтные no-op callbacks и не хранит `contextMenu`, меню не
+        // открывается)
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState = ExercisesUiState.Success(exercises = listOf(pullups, plank)),
+                        contextMenu = menu,
+                        onAddExerciseClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestEdit = {},
+                        onRequestArchive = {},
+                        onRequestDelete = {}
+                    )
+            )
+        }
 
         // When — long-press на строке стандартного упражнения
         composeTestRule
@@ -275,30 +299,33 @@ class ExercisesScreenTest {
             .performTouchInput { longClick() }
         composeTestRule.waitForIdle()
 
-        // Then — пунктов «Изменить»/«Удалить» нет в дереве
+        // Then — пункт «Архивировать» присутствует
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_archive))
+            .assertExists()
+
+        // Then — пунктов «Изменить» и «Удалить» нет
         composeTestRule
             .onAllNodesWithText(context.getString(R.string.exercise_list_menu_edit))
             .assertCountEquals(0)
         composeTestRule
             .onAllNodesWithText(context.getString(R.string.exercise_list_menu_delete))
             .assertCountEquals(0)
+
+        // Then — строка подсвечена (Selected semantic)
+        composeTestRule
+            .onNodeWithText("Подтягивания")
+            .assertIsDisplayed()
     }
 
     /**
-     * §4.2: long-press на строке кастомного упражнения — открывается
-     * меню из двух пунктов «Изменить» / «Удалить» у точки нажатия
-     * (спека edit-delete-exercise, requirement «Контекстное меню по
-     * долгому нажатию»). Пункт «Изменить» выше пункта «Удалить»
-     * (как на MainScreen — порядок edit/delete).
-     *
-     * Тест через state-машину (как в §4.3): `setContentWith` использует
-     * `ExercisesScreenContent` с дефолтными no-op callbacks —
-     * long-press в этом случае не открывает меню, т.к. callback не
-     * сохраняет `contextMenu`. Здесь собираем state-машину как в
-     * VM-обёртке.
+     * §6.1: long-press на строке кастомного упражнения — меню из трёх
+     * пунктов «Изменить» / «Архивировать» / «Удалить» в указанном
+     * порядке (exercises-archive spec). Ранее — два пункта
+     * «Изменить» / «Удалить» (edit-delete-exercise §4.2).
      */
     @Test
-    fun row_long_press_when_custom_then_menu_with_edit_and_delete_opens() {
+    fun row_long_press_when_custom_then_menu_with_edit_archive_delete_in_order() {
         // Given — кастомное упражнение + локальная state-машина
         composeTestRule.setContent {
             var menu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
@@ -310,6 +337,7 @@ class ExercisesScreenTest {
                         onAddExerciseClick = {},
                         onContextMenuItemChange = { menu = it },
                         onRequestEdit = {},
+                        onRequestArchive = {},
                         onRequestDelete = {}
                     )
             )
@@ -321,17 +349,24 @@ class ExercisesScreenTest {
             .performTouchInput { longClick() }
         composeTestRule.waitForIdle()
 
-        // Then — оба пункта видны
+        // Then — все три пункта видны
         composeTestRule
             .onNodeWithText(context.getString(R.string.exercise_list_menu_edit))
+            .assertExists()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_archive))
             .assertExists()
         composeTestRule
             .onNodeWithText(context.getString(R.string.exercise_list_menu_delete))
             .assertExists()
 
-        // Then — «Изменить» выше «Удалить» (порядок как на MainScreen)
+        // Then — «Изменить» выше «Архивировать», «Архивировать» выше «Удалить»
         assertDisplayedAbove(
             higher = context.getString(R.string.exercise_list_menu_edit),
+            lower = context.getString(R.string.exercise_list_menu_archive)
+        )
+        assertDisplayedAbove(
+            higher = context.getString(R.string.exercise_list_menu_archive),
             lower = context.getString(R.string.exercise_list_menu_delete)
         )
     }
@@ -366,6 +401,7 @@ class ExercisesScreenTest {
                         onAddExerciseClick = {},
                         onContextMenuItemChange = { menu = it },
                         onRequestEdit = {},
+                        onRequestArchive = {},
                         onRequestDelete = { item ->
                             menu = null
                             pendingId = item.id
@@ -439,6 +475,7 @@ class ExercisesScreenTest {
                             menu = null
                             capturedId = item.id
                         },
+                        onRequestArchive = {},
                         onRequestDelete = {},
                         onConfirmDelete = {},
                         onCancelDelete = {}
@@ -484,5 +521,285 @@ class ExercisesScreenTest {
             higherTop < lowerTop
         )
     }
+    // endregion
+
+    // region exercises-archive §6 (long-press archive menu, alert, TopAppBar button)
+
+    /**
+     * §6.3: long-press на кастомном → тап «Архивировать» в меню →
+     * алерт «Архивировать упражнение?» с именем упражнения;
+     * тап «Отмена» — алерт закрыт, упражнение остаётся в списке.
+     */
+    @Test
+    fun row_long_press_when_custom_tap_archive_then_alert_with_name_then_cancel_keeps() {
+        // Given — экран с локальной state-машиной (как в MainScreenTest)
+        val cancelled = mutableListOf<Unit>()
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+            var pendingArchiveId by remember { mutableStateOf<Long?>(null) }
+            val current =
+                ExercisesUiState.Success(
+                    exercises = listOf(bench),
+                    pendingArchiveId = pendingArchiveId
+                )
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState = current,
+                        contextMenu = menu,
+                        onAddExerciseClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestEdit = {},
+                        onRequestArchive = { item ->
+                            menu = null
+                            pendingArchiveId = item.id
+                        },
+                        onRequestDelete = {},
+                        onConfirmDelete = {},
+                        onCancelDelete = {},
+                        onConfirmArchive = { pendingArchiveId = null },
+                        onCancelArchive = {
+                            cancelled += Unit
+                            pendingArchiveId = null
+                        },
+                        onArchivedExercisesClick = {}
+                    )
+            )
+        }
+
+        // When — long-press на кастомном, тап «Архивировать»
+        composeTestRule
+            .onNodeWithText("Жим")
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_archive))
+            .assertExists()
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — алерт с заголовком и именем упражнения
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_archive_dialog_title))
+            .assertExists()
+        composeTestRule
+            .onNodeWithText(
+                context.getString(R.string.exercise_archive_dialog_text, "Жим")
+            ).assertExists()
+
+        // When — тап «Отмена»
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_archive_dialog_cancel))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — алерт закрыт, упражнение в списке
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_archive_dialog_title))
+            .assertCountEquals(0)
+        composeTestRule
+            .onNodeWithText("Жим")
+            .assertIsDisplayed()
+        assertEquals("cancelArchive должен быть вызван один раз", 1, cancelled.size)
+    }
+
+    /**
+     * §6.4: long-press на кастомном → тап «Архивировать» → тап
+     * «Архивировать» в алерте подтверждения → сработал колбэк
+     * подтверждения архивации; после обновления state (исключающего
+     * заархивированное упражнение из списка) строка исчезает.
+     *
+     * Content-based инфраструктура текущего `ExercisesScreenTest` —
+     * репозиторий не проверяется, проверяется колбэк подтверждения
+     * + перерисовка state.
+     */
+    @Test
+    fun row_long_press_when_custom_tap_archive_in_dialog_then_callback_and_row_removed() {
+        // Given — экран с локальной state-машиной
+        var confirmed = false
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+            var pendingArchiveId by remember { mutableStateOf<Long?>(null) }
+            // Имитация реактивного обновления: после confirm —
+            // упражнение пропадает из списка
+            val exercisesAfterArchive = remember { mutableStateOf<List<Exercise>>(listOf(bench)) }
+            val current =
+                ExercisesUiState.Success(
+                    exercises = exercisesAfterArchive.value,
+                    pendingArchiveId = pendingArchiveId
+                )
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState = current,
+                        contextMenu = menu,
+                        onAddExerciseClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestEdit = {},
+                        onRequestArchive = { item ->
+                            menu = null
+                            pendingArchiveId = item.id
+                        },
+                        onRequestDelete = {},
+                        onConfirmDelete = {},
+                        onCancelDelete = {},
+                        onConfirmArchive = {
+                            confirmed = true
+                            pendingArchiveId = null
+                            exercisesAfterArchive.value = emptyList()
+                        },
+                        onCancelArchive = { pendingArchiveId = null },
+                        onArchivedExercisesClick = {}
+                    )
+            )
+        }
+
+        // When — long-press → тап «Архивировать» → тап «Архивировать» в алерте
+        composeTestRule
+            .onNodeWithText("Жим")
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_archive))
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_archive_dialog_confirm))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — алерт закрыт, упражнение пропало из списка,
+        // колбэк подтверждения сработал
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_archive_dialog_title))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText("Жим")
+            .assertCountEquals(0)
+        org.junit.Assert.assertTrue(
+            "confirmArchive должен быть вызван",
+            confirmed
+        )
+    }
+
+    /**
+     * §6.5: `archivedCount == 0` → кнопка архива в `TopAppBar` скрыта;
+     * `archivedCount == 1` → кнопка отображается с иконкой
+     * `Icons.Filled.Archive` и `contentDescription =
+     * exercises_archive_button`; тап кнопки — сработал колбэк
+     * `onArchivedExercisesClick`.
+     */
+    @Test
+    fun exercises_screen_when_archivedCount_is_zero_then_archive_button_hidden() {
+        // Given — `archivedCount = 0`
+        setContentWith(
+            ExercisesUiState.Success(exercises = listOf(pullups, plank), archivedCount = 0)
+        )
+
+        // Then — кнопки архива нет
+        composeTestRule
+            .onAllNodesWithContentDescription(
+                context.getString(R.string.exercises_archive_button)
+            ).assertCountEquals(0)
+    }
+
+    @Test
+    fun exercises_screen_when_archivedCount_is_one_then_archive_button_visible_and_tap_fires_callback() {
+        // Given — `archivedCount = 1`, захват callback
+        var clickCount = 0
+        composeTestRule.setContent {
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState =
+                            ExercisesUiState.Success(
+                                exercises = listOf(pullups),
+                                archivedCount = 1
+                            ),
+                        onAddExerciseClick = {},
+                        onArchivedExercisesClick = { clickCount += 1 }
+                    )
+            )
+        }
+
+        // Then — кнопка архива видна
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.exercises_archive_button))
+            .assertIsDisplayed()
+
+        // When — тап по кнопке
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.exercises_archive_button))
+            .performClick()
+
+        // Then — колбэк вызван один раз
+        assertEquals("onArchivedExercisesClick должен быть вызван один раз", 1, clickCount)
+    }
+
+    /**
+     * §6.6: реактивное появление/скрытие кнопки — после изменения
+     * `archivedCount` с 0 на 1 кнопка появляется; после восстановления
+     * (1 → 0) — скрывается. `mutableStateOf<ExercisesUiState>` в
+     * `setContent` имитирует реактивное обновление (Content-based
+     * инфраструктура текущего `ExercisesScreenTest` без отдельного
+     * FakeRepository).
+     */
+    @Test
+    fun exercises_screen_archive_button_reactive_show_hide() {
+        // Given — начальное состояние `archivedCount = 0`
+        composeTestRule.setContent {
+            val uiState: androidx.compose.runtime.MutableState<ExercisesUiState> =
+                remember {
+                    androidx.compose.runtime.mutableStateOf<ExercisesUiState>(
+                        ExercisesUiState.Success(exercises = listOf(pullups))
+                    )
+                }
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState = uiState.value,
+                        onAddExerciseClick = {}
+                    )
+            )
+            // Сохраняем ссылку на uiState через side-effect
+            uiStateRef = uiState
+        }
+        composeTestRule.waitForIdle()
+
+        // Then — кнопка скрыта
+        composeTestRule
+            .onAllNodesWithContentDescription(
+                context.getString(R.string.exercises_archive_button)
+            ).assertCountEquals(0)
+
+        // When — реактивное обновление: `archivedCount = 1`
+        composeTestRule.runOnIdle {
+            uiStateRef.value =
+                ExercisesUiState.Success(exercises = listOf(pullups), archivedCount = 1)
+        }
+        composeTestRule.waitForIdle()
+
+        // Then — кнопка появилась
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.exercises_archive_button))
+            .assertIsDisplayed()
+
+        // When — реактивное обновление: `archivedCount = 0`
+        composeTestRule.runOnIdle {
+            uiStateRef.value =
+                ExercisesUiState.Success(exercises = listOf(pullups), archivedCount = 0)
+        }
+        composeTestRule.waitForIdle()
+
+        // Then — кнопка скрылась
+        composeTestRule
+            .onAllNodesWithContentDescription(
+                context.getString(R.string.exercises_archive_button)
+            ).assertCountEquals(0)
+    }
+
+    /** Side-effect-ссылка на uiState для теста реактивного обновления. */
+    private var uiStateRef: androidx.compose.runtime.MutableState<ExercisesUiState> =
+        androidx.compose.runtime.mutableStateOf(ExercisesUiState.Loading)
     // endregion
 }

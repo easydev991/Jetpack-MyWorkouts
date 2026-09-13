@@ -114,7 +114,7 @@
   новые методы `observeArchivedExercises(): Flow<List<ExerciseEntity>>`,
   `observeArchivedCount(): Flow<Int>`.
 - `app/src/main/java/com/myworkouts/data/repository/WorkoutDataRepository.kt`
-  + `RoomWorkoutDataRepository.kt` — `setArchived(id, isArchived)`;
+  - `RoomWorkoutDataRepository.kt` — `setArchived(id, isArchived)`;
   `archivedCount()` (через DAO); `archivedExercises()` (через DAO);
   `exercises(query)` теперь фильтрует `is_archived = 0` в SQL.
 - `app/src/main/java/com/myworkouts/navigation/Screen.kt` —

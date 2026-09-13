@@ -115,7 +115,8 @@ class ExercisesLiveUpdateTest {
                                 viewModel(
                                     factory = ExercisesViewModel.factory(repository)
                                 ),
-                            onAddExerciseClick = { navController.navigate("stub") }
+                            onAddExerciseClick = { navController.navigate("stub") },
+                            onArchivedExercisesClick = {}
                         )
                     }
                     composable("stub") {
@@ -169,7 +170,8 @@ class ExercisesLiveUpdateTest {
                                 viewModel(
                                     factory = ExercisesViewModel.factory(repository)
                                 ),
-                            onAddExerciseClick = { navController.navigate("stub") }
+                            onAddExerciseClick = { navController.navigate("stub") },
+                            onArchivedExercisesClick = {}
                         )
                     }
                     composable("stub") {
@@ -230,7 +232,8 @@ class ExercisesLiveUpdateTest {
                                 viewModel(
                                     factory = ExercisesViewModel.factory(repository)
                                 ),
-                            onAddExerciseClick = {}
+                            onAddExerciseClick = {},
+                            onArchivedExercisesClick = {}
                         )
                     }
                 }

@@ -10,7 +10,8 @@ import org.junit.jupiter.api.Test
  * Unit-тесты маппинга `Exercise` ↔ `ExerciseEntity` (Mappers.kt).
  *
  * Покрывают двусторонний перенос `measuredBy` ↔ `measured_by` по образцу
- * `category`: enum в домене, строка в entity.
+ * `category`: enum в домене, строка в entity. А также двусторонний перенос
+ * флага архивации `isArchived` ↔ `is_archived`.
  */
 class MappersTest {
     private fun sampleExercise(measuredBy: ExerciseMeasuredBy) =
@@ -36,6 +37,36 @@ class MappersTest {
         // Then — TIME сохраняется в обе стороны, entity хранит имя значения
         assertEquals("TIME", entity.measuredBy)
         assertEquals(ExerciseMeasuredBy.TIME, restored.measuredBy)
+    }
+
+    @Test
+    fun exercise_isArchived_true_roundtrip_preserved() {
+        // Given — заархивированное упражнение
+        val exercise =
+            sampleExercise(measuredBy = ExerciseMeasuredBy.REPS)
+                .copy(isArchived = true)
+
+        // When
+        val entity = exercise.toEntity()
+        val restored = entity.toDomain()
+
+        // Then — true проброшен в обе стороны
+        assertEquals(true, entity.isArchived)
+        assertEquals(true, restored.isArchived)
+    }
+
+    @Test
+    fun exercise_isArchived_false_roundtrip_preserved() {
+        // Given — активное упражнение (false по умолчанию)
+        val exercise = sampleExercise(measuredBy = ExerciseMeasuredBy.REPS)
+
+        // When
+        val entity = exercise.toEntity()
+        val restored = entity.toDomain()
+
+        // Then — false проброшен в обе стороны
+        assertEquals(false, entity.isArchived)
+        assertEquals(false, restored.isArchived)
     }
 
     private fun sampleListItemEntity(weightKg: Double?) =

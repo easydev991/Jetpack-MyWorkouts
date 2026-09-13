@@ -29,12 +29,14 @@ import com.myworkouts.navigation.visibleTabs
 import com.myworkouts.ui.screens.appdata.AppDataScreen
 import com.myworkouts.ui.screens.appearance.AppearanceScreen
 import com.myworkouts.ui.screens.entry.EntryCreateScreen
+import com.myworkouts.ui.screens.exercises.ArchivedExercisesScreen
 import com.myworkouts.ui.screens.exercises.ExerciseCreateScreen
 import com.myworkouts.ui.screens.exercises.ExercisesScreen
 import com.myworkouts.ui.screens.main.MainScreen
 import com.myworkouts.ui.screens.more.MoreScreen
 import com.myworkouts.ui.viewmodel.AppDataViewModel
 import com.myworkouts.ui.viewmodel.AppearanceViewModel
+import com.myworkouts.ui.viewmodel.ArchivedExercisesViewModel
 import com.myworkouts.ui.viewmodel.EntryCreateViewModel
 import com.myworkouts.ui.viewmodel.ExerciseCreateViewModel
 import com.myworkouts.ui.viewmodel.ExercisesViewModel
@@ -138,12 +140,9 @@ private fun AppNavHost(
             )
         }
         composable(Screen.Exercises.route) {
-            ExercisesScreen(
-                viewModel = viewModel(factory = ExercisesViewModel.factory(repository)),
-                onAddExerciseClick = { navController.navigate(Screen.ExerciseCreate.createRoute()) },
-                onEditExercise = { exerciseId ->
-                    navController.navigate(Screen.ExerciseCreate.createRoute(exerciseId))
-                }
+            ExercisesNavDestination(
+                repository = repository,
+                navController = navController
             )
         }
         composable(Screen.More.route) {
@@ -192,7 +191,55 @@ private fun AppNavHost(
                 onBackClick = { navController.popBackStack() }
             )
         }
+        composable(Screen.ArchivedExercises.route) {
+            ArchivedExercisesNavDestination(
+                repository = repository,
+                navController = navController
+            )
+        }
     }
+}
+
+/**
+ * `composable(Screen.Exercises.route) { ... }` — вынесено из
+ * `AppNavHost` ради соблюдения detekt `LongMethod`. Колбэк архива —
+ * навигация на `Screen.ArchivedExercises.route` (exercises-archive,
+ * tasks §6.7.a).
+ */
+@Composable
+private fun ExercisesNavDestination(
+    repository: WorkoutDataRepository,
+    navController: NavHostController
+) {
+    ExercisesScreen(
+        viewModel = viewModel(factory = ExercisesViewModel.factory(repository)),
+        onAddExerciseClick = { navController.navigate(Screen.ExerciseCreate.createRoute()) },
+        onEditExercise = { exerciseId ->
+            navController.navigate(Screen.ExerciseCreate.createRoute(exerciseId))
+        },
+        onArchivedExercisesClick = {
+            navController.navigate(Screen.ArchivedExercises.route)
+        }
+    )
+}
+
+/**
+ * `composable(Screen.ArchivedExercises.route) { ... }` — вынесено из
+ * `AppNavHost` ради соблюдения detekt `LongMethod`.
+ * Не-tab экран (non-tab-screen-navigation/spec.md).
+ */
+@Composable
+private fun ArchivedExercisesNavDestination(
+    repository: WorkoutDataRepository,
+    navController: NavHostController
+) {
+    ArchivedExercisesScreen(
+        viewModel =
+            viewModel(
+                factory = ArchivedExercisesViewModel.factory(repository)
+            ),
+        onBackClick = { navController.popBackStack() }
+    )
 }
 
 /**

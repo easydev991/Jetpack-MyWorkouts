@@ -65,6 +65,31 @@ class ExercisesViewModel(
     private val deleteError: MutableStateFlow<DeleteExerciseError?> = MutableStateFlow(null)
 
     /**
+     * Id упражнения, для которого сейчас показан алерт подтверждения
+     * архивации; `null` — алерт закрыт. Обновляется через [requestArchive]
+     * / [confirmArchive] / [cancelArchive] (exercises-archive design
+     * Decision 7 — паттерн `pendingDeleteId`).
+     */
+    private val pendingArchiveId: MutableStateFlow<Long?> = MutableStateFlow(null)
+
+    /**
+     * Реактивный счётчик архивных упражнений (exercises-archive design
+     * Decision 2): значение попадает в
+     * [ExercisesUiState.Success.archivedCount] для условной видимости
+     * кнопки архива в `TopAppBar`. `WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS)`
+     * — прецедент `MainViewModel`: подписка живёт 5 секунд после отписки,
+     * повторные открытия экрана не дёргают SQL.
+     */
+    private val archivedCount =
+        repository
+            .archivedCount()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+                initialValue = 0
+            )
+
+    /**
      * Реактивный список id упражнений с записями для pre-check в
      * [requestDelete] (design Decision 8). Приватное поле VM — в UiState
      * не нужно (UI его не рендерит напрямую, кнопки в меню нет, состояние
@@ -89,19 +114,31 @@ class ExercisesViewModel(
     /**
      * UI State экрана: `Loading` до первой эмиссии репозитория,
      * затем `Success` со списком каталога, состоянием подтверждения
-     * удаления ([ExercisesUiState.Success.pendingDeleteId]) и one-shot
-     * ошибкой ([ExercisesUiState.Success.deleteError]).
+     * удаления ([ExercisesUiState.Success.pendingDeleteId]), one-shot
+     * ошибкой ([ExercisesUiState.Success.deleteError]), состоянием
+     * подтверждения архивации ([ExercisesUiState.Success.pendingArchiveId])
+     * и реактивным счётчиком архивных
+     * ([ExercisesUiState.Success.archivedCount]).
+     *
+     * Пять потоков в `combine` — на пределе типизированного overload
+     * (exercises-archive design.md Risks: «5 streams в `combine` —
+     * на пределе overload»). Если добавится шестой поток — переход на
+     * vararg-форму или каскад `combine`.
      */
     val uiState: StateFlow<ExercisesUiState> =
         combine(
             repository.exercises(""),
             pendingDeleteId,
-            deleteError
-        ) { exercises, pendingId, error ->
+            deleteError,
+            pendingArchiveId,
+            archivedCount
+        ) { exercises, pendingId, error, pendingArchive, archived ->
             ExercisesUiState.Success(
                 exercises = exercises,
                 pendingDeleteId = pendingId,
-                deleteError = error
+                deleteError = error,
+                pendingArchiveId = pendingArchive,
+                archivedCount = archived
             )
         }.stateIn(
             scope = viewModelScope,
@@ -176,6 +213,44 @@ class ExercisesViewModel(
      */
     fun onErrorShown() {
         deleteError.value = null
+    }
+
+    // ---------- Архивация (exercises-archive, §3.5) ----------
+
+    /**
+     * Запрашивает архивацию упражнения: открывает алерт подтверждения
+     * через [ExercisesUiState.Success.pendingArchiveId]. Доступно и для
+     * стандартных, и для пользовательских упражнений (exercises-archive
+     * design Decision 4). Аналог [requestDelete], но без pre-check
+     * (архивация не имеет FK-ограничений и доступна для всех типов).
+     */
+    fun requestArchive(item: Exercise) {
+        pendingArchiveId.value = item.id
+    }
+
+    /**
+     * Закрывает алерт подтверждения архивации без архивации (кнопка
+     * «Отмена» / системная «Назад»).
+     */
+    fun cancelArchive() {
+        pendingArchiveId.value = null
+    }
+
+    /**
+     * Подтверждает архивацию из алерта: вызывает
+     * [WorkoutDataRepository.setArchived] с `isArchived = true`. При
+     * `Result.success` и `Result.failure` pending сбрасывается — failure
+     * НЕ показывается пользователю (архивация обратима, повторный
+     * `requestArchive` достаточен; spec «Failure при подтверждении —
+     * алерт закрыт, каталог без изменений»; tasks §3.3). `success` —
+     * реактивный `Flow` каталога сам уберёт упражнение из списка.
+     */
+    fun confirmArchive() {
+        val id = pendingArchiveId.value ?: return
+        viewModelScope.launch {
+            repository.setArchived(id, true)
+            pendingArchiveId.value = null
+        }
     }
 
     companion object {

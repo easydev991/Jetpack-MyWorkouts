@@ -88,6 +88,19 @@ private class AppDataViewModelFakeRepository(
     override suspend fun getExercise(id: Long): Result<Exercise?> = Result.success(null)
 
     override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = MutableStateFlow(emptySet())
+
+    // Новые методы контракта (exercises-archive, §2.7): заглушки —
+    // AppDataViewModel их не вызывает (фильтрация архивных приходит
+    // через `exercises`).
+
+    override suspend fun setArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Result<Unit> = Result.success(Unit)
+
+    override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
+
+    override fun archivedCount(): Flow<Int> = MutableStateFlow(0)
 }
 
 /**

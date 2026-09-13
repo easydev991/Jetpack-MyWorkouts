@@ -62,6 +62,37 @@ private class ExercisesViewModelFakeRepository(
 
     var lastDeletedExerciseId: Long? = null
 
+    /**
+     * Вызовы `setArchived` в порядке обращений (exercises-archive, §2.7):
+     * тесты §3 проверяют id и направление архивации.
+     */
+    val setArchivedCalls = mutableListOf<Pair<Long, Boolean>>()
+
+    /**
+     * Сценарий `setArchived` для теста §3.3: по умолчанию — успех; тест
+     * ошибки ставит `Result.failure(IllegalStateException("Упражнение не
+     * найдено"))` для имитации race между pre-check и confirm.
+     */
+    var setArchivedResult: Result<Unit> = Result.success(Unit)
+
+    /**
+     * Управляемый из тестов счётчик архивных (exercises-archive, §2.7):
+     * тест §3.4 устанавливает значение через `archivedCountFlow.value = ...`.
+     */
+    val archivedCountFlow: MutableStateFlow<Int> = MutableStateFlow(0)
+
+    override suspend fun setArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Result<Unit> {
+        setArchivedCalls.add(id to isArchived)
+        return setArchivedResult
+    }
+
+    override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
+
+    override fun archivedCount(): Flow<Int> = archivedCountFlow
+
     override fun exercises(query: String): Flow<List<Exercise>> = catalog
 
     override fun entries(): Flow<List<com.myworkouts.domain.model.EntryListItem>> = MutableStateFlow(emptyList())
@@ -369,6 +400,193 @@ class ExercisesViewModelTest {
             assertNull(
                 afterShown.deleteError,
                 "onErrorShown() сбрасывает deleteError"
+            )
+        }
+
+    // ---------- §3. TDD: pending-архивация + archivedCount ----------
+
+    /**
+     * `requestArchive(item)` ставит `pendingArchiveId == item.id` в
+     * `Success`; `cancelArchive()` сбрасывает в `null`. Доступно и для
+     * кастомных, и для стандартных (exercises-archive design Decision 4).
+     *
+     * (exercises-archive, tasks §3.1.)
+     */
+    @Test
+    fun requestArchive_setsPendingArchiveId_and_cancelArchiveResetsIt() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — запрос архивации кастомного (через pullups)
+            viewModel.requestArchive(pullups)
+            advanceUntilIdle()
+
+            // Then
+            val afterRequest = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                pullups.id,
+                afterRequest.pendingArchiveId,
+                "requestArchive ставит pendingArchiveId = item.id"
+            )
+
+            // When — отмена
+            viewModel.cancelArchive()
+            advanceUntilIdle()
+
+            // Then
+            val afterCancel = viewModel.uiState.value as ExercisesUiState.Success
+            assertNull(
+                afterCancel.pendingArchiveId,
+                "cancelArchive сбрасывает pendingArchiveId"
+            )
+
+            // When — запрос архивации стандартного (через plank,
+            // isCustom = false) — тот же путь, архивация разрешена для обоих
+            viewModel.requestArchive(plank)
+            advanceUntilIdle()
+
+            // Then
+            val afterStandard = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                plank.id,
+                afterStandard.pendingArchiveId,
+                "requestArchive работает и для стандартного упражнения"
+            )
+        }
+
+    /**
+     * `confirmArchive()` вызывает `repository.setArchived(id, true)`;
+     * при `Result.success` pending сбрасывается, ошибок в state не
+     * появляется (архивация обратима — снекбар неуместен, design
+     * exercises-archive Decision 5; tasks §3.2).
+     */
+    @Test
+    fun confirmArchive_onSuccess_clearsPendingAndCallsSetArchivedTrue() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestArchive(pullups)
+            advanceUntilIdle()
+            assertEquals(pullups.id, (viewModel.uiState.value as ExercisesUiState.Success).pendingArchiveId)
+
+            // When — подтверждение, по умолчанию `setArchived` возвращает success
+            viewModel.confirmArchive()
+            advanceUntilIdle()
+
+            // Then
+            val state = viewModel.uiState.value as ExercisesUiState.Success
+            assertNull(state.pendingArchiveId, "pending сброшен после успешной архивации")
+            assertEquals(
+                listOf(pullups.id to true),
+                repository.setArchivedCalls,
+                "confirmArchive вызвал setArchived(id, true)"
+            )
+        }
+
+    /**
+     * `confirmArchive()` при `Result.failure(IllegalStateException("Упражнение
+     * не найдено"))` — pending сброшен, повторный `requestArchive`
+     * возможен (race между pre-check и confirm — exercises-archive
+     * design Decision 3; tasks §3.3). В отличие от `confirmDelete`,
+     * никакого `archiveError` в UiState не появляется: архивация
+     * обратима, повторный `requestArchive` достаточен (spec «Failure
+     * при подтверждении»).
+     */
+    @Test
+    fun confirmArchive_onFailure_clearsPending_andAllowsRetry() =
+        runTest(testDispatcher) {
+            // Given — форсируем failure для setArchived
+            repository.setArchivedResult =
+                Result.failure(IllegalStateException("Упражнение не найдено"))
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestArchive(pullups)
+            advanceUntilIdle()
+
+            // When — подтверждение, репозиторий вернёт failure
+            viewModel.confirmArchive()
+            advanceUntilIdle()
+
+            // Then — pending сброшен
+            val afterConfirm = viewModel.uiState.value as ExercisesUiState.Success
+            assertNull(
+                afterConfirm.pendingArchiveId,
+                "pending сброшен и при failure (не блокирует повторный запрос)"
+            )
+
+            // When — повторный requestArchive после ошибки
+            viewModel.requestArchive(plank)
+            advanceUntilIdle()
+
+            // Then — повторный запрос открывает новый pending
+            val retryState = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                plank.id,
+                retryState.pendingArchiveId,
+                "Повторный requestArchive открывает новый pending после failure"
+            )
+        }
+
+    /**
+     * `archivedCount` из репозитория реактивно попадает в
+     * `Success.archivedCount` (exercises-archive design Decision 2;
+     * tasks §3.4). Тест управляет значением через
+     * `repository.archivedCountFlow.value`.
+     */
+    @Test
+    fun archivedCount_fromRepository_reactivelyReflectedInUiState() =
+        runTest(testDispatcher) {
+            // Given — стартовое значение 0
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            val initial = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                0,
+                initial.archivedCount,
+                "Стартовое archivedCount = 0 (initialValue stateIn)"
+            )
+
+            // When — счётчик архивных стал 1 (первое заархивированное)
+            repository.archivedCountFlow.value = 1
+            advanceUntilIdle()
+
+            // Then
+            val afterOne = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                1,
+                afterOne.archivedCount,
+                "archivedCount реактивно = 1 после изменения в репозитории"
+            )
+
+            // When — восстановили последнее (1 → 0)
+            repository.archivedCountFlow.value = 0
+            advanceUntilIdle()
+
+            // Then
+            val afterZero = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                0,
+                afterZero.archivedCount,
+                "archivedCount реактивно = 0 после восстановления"
+            )
+
+            // When — стало 2
+            repository.archivedCountFlow.value = 2
+            advanceUntilIdle()
+
+            // Then
+            val afterTwo = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                2,
+                afterTwo.archivedCount,
+                "archivedCount реактивно = 2"
             )
         }
 }

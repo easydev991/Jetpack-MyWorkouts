@@ -92,6 +92,18 @@ private class MainViewModelFakeRepository(
         catalog.value = emptyList()
         return Result.success(Unit)
     }
+
+    // Новые методы контракта (exercises-archive, §2.7): заглушки —
+    // MainViewModel их не вызывает.
+
+    override suspend fun setArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Result<Unit> = Result.success(Unit)
+
+    override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
+
+    override fun archivedCount(): Flow<Int> = MutableStateFlow(0)
 }
 
 /**

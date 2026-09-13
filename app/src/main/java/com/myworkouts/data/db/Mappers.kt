@@ -25,7 +25,8 @@ internal fun ExerciseEntity.toDomain(): Exercise =
         isCustom = isCustom,
         comment = comment,
         createdAt = createdAt,
-        measuredBy = ExerciseMeasuredBy.valueOf(measuredBy)
+        measuredBy = ExerciseMeasuredBy.valueOf(measuredBy),
+        isArchived = isArchived
     )
 
 internal fun Exercise.toEntity(): ExerciseEntity =
@@ -36,7 +37,8 @@ internal fun Exercise.toEntity(): ExerciseEntity =
         isCustom = isCustom,
         comment = comment,
         createdAt = createdAt,
-        measuredBy = measuredBy.name
+        measuredBy = measuredBy.name,
+        isArchived = isArchived
     )
 
 internal fun ExerciseEntryEntity.toDomain(): ExerciseEntry =

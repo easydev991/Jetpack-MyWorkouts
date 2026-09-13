@@ -56,6 +56,15 @@ class EntryCreateViewModel(
     private var originalEntry: ExerciseEntry? = null
 
     /**
+     * Снимок упражнения записи (edit-режим, exercises-archive §8.9):
+     * если оно в архиве, добавляется в опции выпадающего списка, чтобы
+     * оставаться доступным после смены упражнения на другое. Архивация/
+     * возврат недоступны, пока открыт экран записи, — снимок актуален
+     * всю сессию правки.
+     */
+    private var originalExercise: Exercise? = null
+
+    /**
      * Момент открытия экрана (epoch millis): фиксируется один раз и далее
      * не пересчитывается (spec-сценарий «Момент открытия не пересчитывается»).
      * Граница для ограничения даты/времени записи.
@@ -78,7 +87,17 @@ class EntryCreateViewModel(
                             // Decision 8: записи нет — пустая форма + подсказка
                             mutableUiState.update { it.copy(isEntryMissing = true) }
                         } else {
-                            mutableUiState.update { prefillState(it, entry) }
+                            // exercises-archive §8.5: упражнение записи
+                            // резолвится по id без фильтра архива (spec
+                            // «Редактирование записи, упражнение которой
+                            // в архиве»); выбор живёт в форме, поэтому
+                            // переживает реактивную фильтрацию каталога.
+                            val selected = repository.getExercise(entry.exerciseId).getOrNull()
+                            originalExercise = selected
+                            mutableUiState.update { state ->
+                                val prefilled = prefillState(state, entry)
+                                if (selected == null) prefilled else prefilled.copy(selectedExercise = selected)
+                            }
                         }
                     }.onFailure {
                         // Ошибка загрузки приравнена к «запись недоступна»
@@ -197,7 +216,10 @@ class EntryCreateViewModel(
      * Производные поля состояния (design Decision 3/4): подстановка
      * упражнения из каталога по `originalEntry.exerciseId` — пока не
      * выбрано вручную и есть оригинал (покрывает оба порядка эмита
-     * каталога и `getEntry`); `hasChanges` — черновик != оригинал.
+     * каталога и `getEntry`); опции списка — активный каталог плюс
+     * архивное исходное упражнение записи (edit-режим, exercises-archive
+     * spec «Смена архивного упражнения — исходное остаётся в списке
+     * до сохранения»); `hasChanges` — черновик != оригинал.
      */
     private fun derivedState(
         state: EntryCreateUiState,
@@ -207,8 +229,15 @@ class EntryCreateViewModel(
         val selected =
             state.selectedExercise
                 ?: original?.let { orig -> exercises.firstOrNull { it.id == orig.exerciseId } }
+        // Исходное добавляется, только если его нет в активном каталоге
+        // (архивное); активное уже приходит из каталога — дубля нет.
+        val options =
+            exercises +
+                listOfNotNull(
+                    originalExercise?.takeIf { orig -> exercises.none { it.id == orig.id } }
+                )
         val withSelected =
-            state.copy(exercises = exercises, selectedExercise = selected)
+            state.copy(exercises = options, selectedExercise = selected)
         val draft = draftOf(withSelected, original)
         return withSelected.copy(
             hasChanges = original != null && draft != null && draft != original

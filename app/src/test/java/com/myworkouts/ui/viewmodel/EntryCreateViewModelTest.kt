@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
@@ -36,11 +38,32 @@ import java.time.ZoneId
  * записывают переданную запись и возвращают настраиваемый результат,
  * `getEntry` отвечает настраиваемой записью (`null` — «не найдена»),
  * остальные операции — заглушки.
+ *
+ * `setArchived(id, isArchived)` обновляет множество [archivedIds] и
+ * пересчитывает каталог через реактивный `Flow`: упражнения с
+ * `isArchived = true` отфильтровываются из `exercises()` (паттерн
+ * `WHERE is_archived = 0` в реальном Room-SQL — exercises-archive §2.4).
+ * Это позволяет тесту §8.1 имитировать сценарий «выбранное X
+ * заархивировали во время открытия экрана».
  */
 private class FakeWorkoutDataRepository(
     exercises: List<Exercise>
 ) : WorkoutDataRepository {
-    private val catalog = MutableStateFlow(exercises)
+    private val allExercises = MutableStateFlow(exercises)
+
+    /**
+     * Реактивное множество id заархивированных упражнений (exercises-archive,
+     * §8.1): `setArchived(id, true)` добавляет id, `setArchived(id, false)`
+     * удаляет. `exercises()` фильтрует по нему. Тест управляет через
+     * [setArchived] (или прямой сеттер, если нужно).
+     */
+    val archivedIds = MutableStateFlow<Set<Long>>(emptySet())
+
+    /** Реактивный каталог — все упражнения минус архивные. */
+    private val catalog =
+        combine(allExercises, archivedIds) { all, archived ->
+            all.filterNot { archived.contains(it.id) }
+        }
 
     var addedEntry: ExerciseEntry? = null
         private set
@@ -77,14 +100,17 @@ private class FakeWorkoutDataRepository(
 
     override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
 
-    override suspend fun getExercise(id: Long): Result<Exercise?> = Result.success(null)
+    override suspend fun getExercise(id: Long): Result<Exercise?> {
+        val match = allExercises.value.firstOrNull { it.id == id }
+        return Result.success(match)
+    }
 
     override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = MutableStateFlow(emptySet())
 
     // Новые методы контракта (app-data-screen, задача 1.4): заглушки на
     // состоянии Flow для компиляции — EntryCreateViewModel их не вызывает.
 
-    override suspend fun getAllExercises(): Result<List<Exercise>> = Result.success(catalog.value)
+    override suspend fun getAllExercises(): Result<List<Exercise>> = Result.success(allExercises.value)
 
     override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = Result.success(emptyList())
 
@@ -94,6 +120,30 @@ private class FakeWorkoutDataRepository(
     ): Result<Unit> = Result.success(Unit)
 
     override suspend fun deleteAllData(): Result<Unit> = Result.success(Unit)
+
+    // Новые методы контракта (exercises-archive, §2.7 + §8.1): `setArchived`
+    // управляет `archivedIds`; фильтрация в `exercises()` приходит
+    // через `combine(allExercises, archivedIds)`.
+
+    override suspend fun setArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Result<Unit> {
+        archivedIds.value =
+            if (isArchived) {
+                archivedIds.value + id
+            } else {
+                archivedIds.value - id
+            }
+        return Result.success(Unit)
+    }
+
+    override fun archivedExercises(): Flow<List<Exercise>> =
+        combine(allExercises, archivedIds) { all, archived ->
+            all.filter { archived.contains(it.id) }
+        }
+
+    override fun archivedCount(): Flow<Int> = archivedIds.map { it.size }
 }
 
 /**
@@ -995,5 +1045,174 @@ class EntryCreateViewModelTest {
             } finally {
                 java.util.TimeZone.setDefault(originalZone)
             }
+        }
+
+    // ---------- §8.1 exercises-archive: фильтрация архивных упражнений ----------
+
+    /**
+     * `selectedExercise = X` и каталог содержит X; после
+     * `fakeRepository.setArchived(X.id, true)` VM-`uiState.exercises`
+     * реактивно обновляется и НЕ содержит X; `selectedExercise` остаётся
+     * равным X (form-state не пересчитывается из каталога —
+     * exercises-archive spec «Выбранное упражнение оказалось в архиве
+     * между открытием и сохранением»).
+     *
+     * Использует существующий `FakeWorkoutDataRepository` с override
+     * `setArchived` (обновляет `archivedIds` → реактивная фильтрация
+     * `exercises()` через `combine`).
+     */
+    @Test
+    fun selected_exercise_when_archived_in_repository_then_excluded_from_catalog_but_selection_kept() =
+        runTest(testDispatcher) {
+            // Given — выбран X в форме (открытие экрана)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onExerciseChange(repsExercise)
+            advanceUntilIdle()
+            assertEquals(
+                repsExercise,
+                viewModel.uiState.value.selectedExercise,
+                "Предусловие: X выбран"
+            )
+            assertTrue(
+                viewModel.uiState.value.exercises
+                    .contains(repsExercise),
+                "Предусловие: X в каталоге"
+            )
+
+            // When — пользователь заархивировал X через long-press на
+            // `ExercisesScreen` (race между открытием и сохранением)
+            repository.setArchived(repsExercise.id, true)
+            advanceUntilIdle()
+
+            // Then — каталог реактивно обновился: X больше нет в списке
+            assertFalse(
+                viewModel.uiState.value.exercises
+                    .contains(repsExercise),
+                "Архивное упражнение X отфильтровано из каталога (WHERE is_archived = 0)"
+            )
+
+            // Then — `selectedExercise` остаётся равным X (form-state не
+            // пересчитывается из каталога; UI не падает, выбор сохраняется)
+            assertEquals(
+                repsExercise,
+                viewModel.uiState.value.selectedExercise,
+                "selectedExercise остаётся X даже после архивации"
+            )
+        }
+
+    // ---------- §8.4 exercises-archive (багфикс): редактирование записи,
+    // упражнение которой уже в архиве ----------
+
+    /**
+     * Edit-режим, упражнение записи X заархивировано ДО открытия экрана:
+     * `selectedExercise` резолвится в X (по `exerciseId` без фильтра
+     * архива), X — доступная опция выпадающего списка; сохранение требует
+     * изменений (инвариант edit-режима), после изменения подходов запись
+     * сохраняется с тем же `exerciseId = X.id` (spec «Редактирование
+     * записи, упражнение которой в архиве»).
+     */
+    @Test
+    fun edit_mode_when_entry_exercise_archived_before_open_then_field_shows_it_and_save_after_change() =
+        runTest(testDispatcher) {
+            // Given — X в архиве ещё до создания VM; запись ссылается на X
+            repository.setArchived(repsExercise.id, true)
+            repository.entryById = originalEntry
+            val viewModel = createViewModel(entryId = originalEntry.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then — упражнение записи отображается в поле и доступно в списке
+            assertEquals(
+                repsExercise,
+                viewModel.uiState.value.selectedExercise,
+                "Упражнение архивной записи X отображается в поле выбора"
+            )
+            assertTrue(
+                viewModel.uiState.value.exercises
+                    .contains(repsExercise),
+                "Архивное X — доступная опция списка в режиме правки записи"
+            )
+            assertFalse(
+                viewModel.uiState.value.canSave,
+                "Без изменений кнопка сохранения неактивна (инвариант edit-режима)"
+            )
+            assertTrue(
+                viewModel.uiState.value.exercises
+                    .contains(repsExercise),
+                "Архивное X — доступная опция списка в режиме правки записи"
+            )
+
+            // When — изменены подходы
+            viewModel.onSetsChange("4")
+            advanceUntilIdle()
+
+            // Then — сохранение разрешено и пишет запись с exerciseId = X.id
+            assertTrue(
+                viewModel.uiState.value.canSave,
+                "После изменения полей canSave = true"
+            )
+            var savedCalled = false
+            viewModel.save { savedCalled = true }
+            advanceUntilIdle()
+            val saved = checkNotNull(repository.updatedEntry) { "updateEntry должен быть вызван" }
+            assertTrue(savedCalled, "Успешное сохранение вызывает onSaved")
+            assertEquals(originalEntry.id, saved.id, "Сохраняется исходная запись")
+            assertEquals(repsExercise.id, saved.exerciseId, "exerciseId остаётся X.id")
+        }
+
+    /**
+     * Edit-режим, X заархивирован: смена упражнения на активное Y
+     * не убирает X из списка опций (исходное упражнение записи доступно
+     * до сохранения); возврат к X возможен, сохранение после изменения
+     * полей пишет запись с `exerciseId = X.id` (spec «Смена архивного
+     * упражнения — исходное остаётся в списке до сохранения»).
+     */
+    @Test
+    fun edit_mode_when_archived_exercise_changed_then_original_stays_in_options() =
+        runTest(testDispatcher) {
+            // Given — X в архиве, запись с X открыта на правку
+            repository.setArchived(repsExercise.id, true)
+            repository.entryById = originalEntry
+            val viewModel = createViewModel(entryId = originalEntry.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — смена на активное Y
+            viewModel.onExerciseChange(timeExercise)
+            advanceUntilIdle()
+
+            // Then — исходное X остаётся опцией списка
+            assertEquals(timeExercise, viewModel.uiState.value.selectedExercise, "Выбран Y")
+            assertTrue(
+                viewModel.uiState.value.exercises
+                    .contains(repsExercise),
+                "Исходное архивное X остаётся в списке опций после смены на Y"
+            )
+
+            // When — возврат к X
+            viewModel.onExerciseChange(repsExercise)
+            advanceUntilIdle()
+
+            // Then — возврат возможен
+            assertEquals(
+                repsExercise,
+                viewModel.uiState.value.selectedExercise,
+                "Исходное X возвращается как выбор формы"
+            )
+
+            // When — восстановлен erased переходом X→Y→X повторы,
+            // изменены подходы, сохранение
+            viewModel.onRepsChange("10")
+            viewModel.onSetsChange("4")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.canSave, "После изменения canSave = true")
+            viewModel.save { }
+            advanceUntilIdle()
+
+            // Then — запись сохранена с exerciseId = X.id
+            val saved = checkNotNull(repository.updatedEntry) { "updateEntry должен быть вызван" }
+            assertEquals(repsExercise.id, saved.exerciseId, "exerciseId остаётся X.id")
         }
 }

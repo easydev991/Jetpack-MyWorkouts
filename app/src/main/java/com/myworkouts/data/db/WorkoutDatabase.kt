@@ -9,7 +9,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 /**
  * Room-база данных приложения: каталог упражнений и записи о выполнении.
  *
- * Версия `1`, экспорт схемы в `app/schemas/` включён через
+ * Версия `2` (в `1` добавилась колонка `exercises.is_archived` —
+ * exercises-archive Decision 1: bump вместо миграции, до релиза
+ * деструктивный фоллбек), экспорт схемы в `app/schemas/` включён через
  * `ksp { arg("room.schemaLocation", ...) }` — JSON-схема коммитится в репо
  * (`workouts` появится отдельным изменением схемы, design.md Decision 7).
  *
@@ -23,7 +25,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [ExerciseEntity::class, ExerciseEntryEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class WorkoutDatabase : RoomDatabase() {

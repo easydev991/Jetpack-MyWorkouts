@@ -37,6 +37,16 @@ sealed class Screen(
     object AppData : Screen(route = "app_data")
 
     /**
+     * Экран «Архив упражнений» — список архивных упражнений с
+     * возможностью восстановления (не в нижней навигации). Доступен через
+     * `TopAppBar`-кнопку архива на [Exercises]. Паттерн — [Appearance]:
+     * маршрут регистрируется в `NavHost`, нижний бар скрыт контрактом
+     * `currentRoute in tabs.map { it.route }` (exercises-archive,
+     * non-tab-screen-navigation).
+     */
+    object ArchivedExercises : Screen(route = "archived_exercises")
+
+    /**
      * Экран записи о выполнении (не в нижней навигации): создание и
      * редактирование на одном composable. Опциональный query-аргумент
      * `entryId` выбирает режим: отсутствует/[NO_ENTRY_ID] — создание (FAB),

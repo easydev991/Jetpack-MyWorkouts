@@ -1,5 +1,6 @@
 package com.myworkouts.ui.screens.exercises
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -18,14 +19,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -66,10 +71,13 @@ import com.myworkouts.ui.viewmodel.ExercisesViewModel
  * Экран «Упражнения» — вкладка каталога: реактивный список
  * стандартных и пользовательских упражнений, пустое состояние, FAB
  * навигации на создание упражнения, long-press меню для кастомных
- * упражнений с edit/delete (exercises-screen, спека + спека
+ * упражнений с edit/delete/archive (exercises-screen, спека + спека
  * edit-delete-exercise «Контекстное меню по долгому нажатию»,
  * «Алерт подтверждения удаления упражнения», «Ошибка удаления —
- * типизированные причины в снекбаре»).
+ * типизированные причины в снекбаре»; exercises-archive: меню
+ * «Архивировать» для кастомных и стандартных, алерт подтверждения
+ * архивации, `IconButton` архива в `TopAppBar` при
+ * `archivedCount > 0`).
  *
  * VM-обёртка: подписка на [ExercisesViewModel.uiState], локальное
  * состояние long-press меню, `SnackbarHostState` для one-shot
@@ -83,6 +91,10 @@ import com.myworkouts.ui.viewmodel.ExercisesViewModel
  *   упражнения → навигация на
  *   `Screen.ExerciseCreate.createRoute(item.id)` (edit-delete-exercise
  *   §4.6.a — маршрут прокидывается из `RootScreen`).
+ * @param onArchivedExercisesClick Тап `IconButton` архива в
+ *   `TopAppBar` → навигация на
+ *   [com.myworkouts.navigation.Screen.ArchivedExercises]
+ *   (exercises-archive spec «Кнопка архива в TopAppBar»).
  * @param modifier внешний модификатор
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -91,6 +103,7 @@ fun ExercisesScreen(
     viewModel: ExercisesViewModel,
     onAddExerciseClick: () -> Unit,
     onEditExercise: (Long) -> Unit = {},
+    onArchivedExercisesClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -107,7 +120,16 @@ fun ExercisesScreen(
         when (val s = uiState) {
             ExercisesUiState.Loading -> null
             is ExercisesUiState.Success ->
-                s.deleteError?.let { deleteErrorMessageResource(it) }
+                s.deleteError?.let { error ->
+                    when (error) {
+                        DeleteExerciseError.HasLinkedEntries ->
+                            stringResource(R.string.exercise_delete_error_used_in_workouts)
+                        DeleteExerciseError.StandardExercise ->
+                            stringResource(R.string.exercise_delete_error_standard)
+                        DeleteExerciseError.Other ->
+                            stringResource(R.string.exercise_delete_error_generic)
+                    }
+                }
         }
 
     // One-shot snackbar для ошибки удаления (design Decision 6):
@@ -138,12 +160,19 @@ fun ExercisesScreen(
                     contextMenu = null
                     onEditExercise(item.id)
                 },
+                onRequestArchive = { item ->
+                    contextMenu = null
+                    viewModel.requestArchive(item)
+                },
                 onRequestDelete = { item ->
                     contextMenu = null
                     viewModel.requestDelete(item)
                 },
                 onConfirmDelete = viewModel::confirmDelete,
-                onCancelDelete = viewModel::cancelDelete
+                onCancelDelete = viewModel::cancelDelete,
+                onConfirmArchive = viewModel::confirmArchive,
+                onCancelArchive = viewModel::cancelArchive,
+                onArchivedExercisesClick = onArchivedExercisesClick
             ),
         snackbarHostState = snackbarHostState,
         modifier = modifier
@@ -161,6 +190,16 @@ internal data class ExerciseContextMenuState(
 )
 
 /**
+ * Режим long-press меню: [Active] — пункты по типу упражнения
+ * (Изменить/Архивировать/Удалить для кастомных, Архивировать для
+ * стандартных); [Unarchive] — единственный пункт «Вернуть» для
+ * архивных строк (exercises-archive Decision 4). Разделяемое
+ * упражнениями и архивом — режим выбирает сам меню, вызывающему
+ * достаточно передать нужные колбэки с дефолтом `{}`.
+ */
+internal enum class ExerciseMenuMode { Active, Unarchive }
+
+/**
  * Test/Preview-state для [ExercisesScreenContent]: данные
  * [ExercisesUiState] плюс колбэки. UI-тесты и превью передают
  * готовый state без ViewModel (образец — `MainScreenState`).
@@ -175,9 +214,13 @@ internal data class ExercisesScreenState(
     val onAddExerciseClick: () -> Unit = {},
     val onContextMenuItemChange: (ExerciseContextMenuState?) -> Unit = {},
     val onRequestEdit: (Exercise) -> Unit = {},
+    val onRequestArchive: (Exercise) -> Unit = {},
     val onRequestDelete: (Exercise) -> Unit = {},
     val onConfirmDelete: () -> Unit = {},
-    val onCancelDelete: () -> Unit = {}
+    val onCancelDelete: () -> Unit = {},
+    val onConfirmArchive: () -> Unit = {},
+    val onCancelArchive: () -> Unit = {},
+    val onArchivedExercisesClick: () -> Unit = {}
 )
 
 /**
@@ -212,7 +255,27 @@ internal fun ExercisesScreenContent(
         // и т.п.).
         contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
         topBar = {
-            TopAppBar(title = { Text(stringResource(R.string.exercises_title)) })
+            TopAppBar(
+                title = { Text(stringResource(R.string.exercises_title)) },
+                actions = {
+                    // Кнопка архива — реактивно по `archivedCount > 0`
+                    // (exercises-archive spec «Кнопка архива в TopAppBar»).
+                    // Видимость через текущий `Success` — при `Loading`
+                    // или в превью без VM поле `archivedCount` отсутствует,
+                    // иконка не показывается.
+                    val archivedCount =
+                        (state.uiState as? ExercisesUiState.Success)?.archivedCount ?: 0
+                    if (archivedCount > 0) {
+                        IconButton(onClick = state.onArchivedExercisesClick) {
+                            Icon(
+                                imageVector = Icons.Filled.Archive,
+                                contentDescription =
+                                    stringResource(R.string.exercises_archive_button)
+                            )
+                        }
+                    }
+                }
+            )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = state.onAddExerciseClick) {
@@ -240,7 +303,9 @@ internal fun ExercisesScreenContent(
 /**
  * Тело экрана для `ExercisesUiState.Success`: каталог или заглушка
  * пустого состояния, long-press меню у якоря, алерт удаления при
- * непустом `pendingDeleteId` (edit-delete-exercise §4.6.d).
+ * непустом `pendingDeleteId` (edit-delete-exercise §4.6.d),
+ * алерт архивации при `pendingArchiveId` (exercises-archive spec
+ * «Алерт подтверждения архивации»).
  */
 @Composable
 private fun SuccessBody(
@@ -264,13 +329,33 @@ private fun SuccessBody(
             ExercisesList(state = state, success = success)
         }
 
-        val pendingExercise =
+        val pendingDelete =
             success.exercises.firstOrNull { it.id == success.pendingDeleteId }
-        if (pendingExercise != null) {
-            ExerciseDeleteDialog(
-                itemName = pendingExercise.name,
+        if (pendingDelete != null) {
+            ExerciseConfirmDialog(
+                itemName = pendingDelete.name,
+                titleRes = R.string.exercise_delete_dialog_title,
+                textRes = R.string.exercise_delete_dialog_text,
+                confirmRes = R.string.exercise_delete_dialog_confirm,
+                cancelRes = R.string.exercise_delete_dialog_cancel,
+                confirmInError = true,
                 onConfirm = state.onConfirmDelete,
                 onCancel = state.onCancelDelete
+            )
+        }
+
+        val pendingArchive =
+            success.exercises.firstOrNull { it.id == success.pendingArchiveId }
+        if (pendingArchive != null) {
+            ExerciseConfirmDialog(
+                itemName = pendingArchive.name,
+                titleRes = R.string.exercise_archive_dialog_title,
+                textRes = R.string.exercise_archive_dialog_text,
+                confirmRes = R.string.exercise_archive_dialog_confirm,
+                cancelRes = R.string.exercise_archive_dialog_cancel,
+                confirmInError = false,
+                onConfirm = state.onConfirmArchive,
+                onCancel = state.onCancelArchive
             )
         }
     }
@@ -317,7 +402,6 @@ private fun ExercisesList(
                             .onGloballyPositioned { coords ->
                                 positionInRoot = coords.positionInRoot()
                             }.applyLongPress(
-                                isCustom = exercise.isCustom,
                                 item = exercise,
                                 positionInRootProvider = { positionInRoot },
                                 onItemLongPress = state.onContextMenuItemChange
@@ -325,56 +409,67 @@ private fun ExercisesList(
                 )
             }
         }
-        if (state.contextMenu != null) {
-            val density = LocalDensity.current
-            val menuOffset =
-                DpOffset(
-                    x =
-                        with(density) {
-                            (state.contextMenu.offsetInRoot.x - anchorOrigin.x).toDp()
-                        },
-                    y =
-                        with(density) {
-                            (state.contextMenu.offsetInRoot.y - anchorOrigin.y - anchorHeight)
-                                .toDp()
-                        }
-                )
+        state.contextMenu?.let { menu ->
             ExerciseContextMenu(
-                offset = menuOffset,
+                offset = contextMenuDpOffset(menu.offsetInRoot, anchorOrigin, anchorHeight),
+                mode = ExerciseMenuMode.Active,
+                isCustom = menu.item.isCustom,
                 onMenuDismiss = { state.onContextMenuItemChange(null) },
-                onEditClick = { state.onRequestEdit(state.contextMenu.item) },
-                onDeleteClick = { state.onRequestDelete(state.contextMenu.item) }
+                onEditClick = { state.onRequestEdit(menu.item) },
+                onArchiveClick = { state.onRequestArchive(menu.item) },
+                onDeleteClick = { state.onRequestDelete(menu.item) }
             )
         }
     }
 }
 
 /**
- * Подключает `detectTapGestures(onLongPress)` только для кастомных
- * упражнений (design Decision 4: стандартные — тишина, не дискриминация).
+ * Вычисляет `DpOffset` для `DropdownMenu` относительно я-коря списка:
+ * позиция long-press в корне минус позиция списка в корне, по высоте
+ * дополнительно учитывается высота контейнера (long-press-меню
+ * привязывается к нижней границе строки; паттерн MainScreen.kt).
+ * Общий хелпер для `ExercisesScreen` и `ArchivedExercisesScreen` —
+ * вынесен ради соблюдения detekt `LongMethod`.
+ */
+@Composable
+internal fun contextMenuDpOffset(
+    offsetInRoot: Offset,
+    anchorOrigin: IntOffset,
+    anchorHeight: Int
+): DpOffset {
+    val density = LocalDensity.current
+    return DpOffset(
+        x = with(density) { (offsetInRoot.x - anchorOrigin.x).toDp() },
+        y = with(density) { (offsetInRoot.y - anchorOrigin.y - anchorHeight).toDp() }
+    )
+}
+
+/**
+ * Подключает `detectTapGestures(onLongPress)` для строки упражнения.
+ * Long-press активен для всех упражнений каталога: для кастомных —
+ * меню из трёх пунктов (Изменить/Архивировать/Удалить), для стандартных —
+ * единственный пункт «Архивировать». `ExerciseContextMenu` выбирает пункты
+ * по `isCustom` сам (exercises-archive Decision 4). Общая функция для
+ * `ExercisesScreen` и `ArchivedExercisesScreen`.
+ *
  * `positionInRootProvider` — лямбда, возвращающая актуальную позицию
  * строки в корне: closure ссылается на `mutableStateOf<Offset>`, чтобы
  * избежать пересоздания `pointerInput` при каждом изменении позиции
  * (иначе long-press отваливался бы на скролле).
  */
-private fun Modifier.applyLongPress(
-    isCustom: Boolean,
+internal fun Modifier.applyLongPress(
     item: Exercise,
     positionInRootProvider: () -> Offset,
     onItemLongPress: (ExerciseContextMenuState) -> Unit
 ): Modifier =
-    if (isCustom) {
-        this.pointerInput(item.id) {
-            detectTapGestures(
-                onLongPress = { localOffset ->
-                    onItemLongPress(
-                        ExerciseContextMenuState(item, positionInRootProvider() + localOffset)
-                    )
-                }
-            )
-        }
-    } else {
-        this
+    this.pointerInput(item.id) {
+        detectTapGestures(
+            onLongPress = { localOffset ->
+                onItemLongPress(
+                    ExerciseContextMenuState(item, positionInRootProvider() + localOffset)
+                )
+            }
+        )
     }
 
 /**
@@ -429,8 +524,15 @@ internal fun ExerciseListItemRow(
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(1f)
             )
+            // Локализованный лейбл типа измерения. Тотальный `when` без
+            // `else`: при добавлении значения enum компилятор заставит
+            // дописать ветку (design decision 5).
             Text(
-                text = measuredByLabel(exercise.measuredBy),
+                text =
+                    when (exercise.measuredBy) {
+                        ExerciseMeasuredBy.REPS -> stringResource(R.string.exercise_measured_by_reps)
+                        ExerciseMeasuredBy.TIME -> stringResource(R.string.exercise_measured_by_time)
+                    },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.End
@@ -447,111 +549,140 @@ internal fun ExerciseListItemRow(
 }
 
 /**
- * Меню `DropdownMenu` в точке long-press: «Изменить» (карандаш)
- * выше «Удалить» (корзина), у обоих `leadingIcon` с
- * `contentDescription = null` — текст пункта сам читается
- * службами доступности (entry-edit-mode, design Decision 6;
- * образец — `MainScreen.EntryContextMenu`).
+ * Меню `DropdownMenu` в точке long-press: режим [ExerciseMenuMode.Active]
+ * — для кастомного упражнения три пункта (Изменить / Архивировать /
+ * Удалить), для стандартного один пункт «Архивировать»; режим
+ * [ExerciseMenuMode.Unarchive] — единственный пункт «Вернуть» для
+ * архивных строк (exercises-archive spec «Контекстное меню по долгому
+ * нажатию — с учётом типа упражнения»; «Long-press меню «Вернуть» для
+ * архивных строк»). У всех `leadingIcon` с `contentDescription = null` —
+ * текст пункта сам читается службами доступности (entry-edit-mode,
+ * design Decision 6; образец — `MainScreen.EntryContextMenu`).
+ *
+ * Колбэки лишних пунктов для конкретного режима не нужны и идут с
+ * дефолтом `{}` (`onUnarchiveClick` — для Active, остальные — для
+ * Unarchive). Это позволяет одному вызову обслуживать оба экрана
+ * (`ExercisesScreen`, `ArchivedExercisesScreen`).
  */
+@Suppress("LongParameterList")
 @Composable
 internal fun ExerciseContextMenu(
     offset: DpOffset,
+    mode: ExerciseMenuMode,
+    isCustom: Boolean,
     onMenuDismiss: () -> Unit,
-    onEditClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onEditClick: () -> Unit = {},
+    onArchiveClick: () -> Unit = {},
+    onDeleteClick: () -> Unit = {},
+    onUnarchiveClick: () -> Unit = {}
 ) {
     DropdownMenu(
         expanded = true,
         onDismissRequest = onMenuDismiss,
         offset = offset
     ) {
-        DropdownMenuItem(
-            text = { Text(stringResource(R.string.exercise_list_menu_edit)) },
-            onClick = onEditClick,
-            leadingIcon = {
-                Icon(imageVector = Icons.Filled.Edit, contentDescription = null)
+        when (mode) {
+            ExerciseMenuMode.Active -> {
+                if (isCustom) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.exercise_list_menu_edit)) },
+                        onClick = onEditClick,
+                        leadingIcon = {
+                            Icon(imageVector = Icons.Filled.Edit, contentDescription = null)
+                        }
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.exercise_list_menu_archive)) },
+                    onClick = onArchiveClick,
+                    leadingIcon = {
+                        Icon(imageVector = Icons.Filled.Archive, contentDescription = null)
+                    }
+                )
+                if (isCustom) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.exercise_list_menu_delete)) },
+                        onClick = onDeleteClick,
+                        leadingIcon = {
+                            Icon(imageVector = Icons.Filled.Delete, contentDescription = null)
+                        }
+                    )
+                }
             }
-        )
-        DropdownMenuItem(
-            text = { Text(stringResource(R.string.exercise_list_menu_delete)) },
-            onClick = onDeleteClick,
-            leadingIcon = {
-                Icon(imageVector = Icons.Filled.Delete, contentDescription = null)
-            }
-        )
+            ExerciseMenuMode.Unarchive ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.exercise_list_menu_unarchive)) },
+                    onClick = onUnarchiveClick,
+                    leadingIcon = {
+                        Icon(imageVector = Icons.Filled.Unarchive, contentDescription = null)
+                    }
+                )
+        }
     }
 }
 
 /**
- * Алерт подтверждения удаления упражнения: заголовок
- * «Удалить упражнение?», текст с названием упражнения,
- * confirm в `colorScheme.error` (edit-delete-exercise §4.6.c;
- * образец — `MainScreen.EntryDeleteDialog`).
+ * Алерт подтверждения для удаления/архивации упражнения: одна функция
+ * обслуживает оба сценария — различаются только локализованные строки и
+ * цвет confirm (edit-delete-exercise §4.6.c; exercises-archive design
+ * Decision 5). Используется и в `ExercisesScreen` (удаление,
+ * архивация), и в превью-файле. Структура `AlertDialog` (title + text +
+ * confirm + dismiss) одинакова для обоих сценариев; раньше это были две
+ * почти-одинаковые функции, отличавшиеся тремя ID ресурсов и цветом
+ * confirm (`colorScheme.error` для удаления, дефолтный для архивации —
+ * операция обратима).
  *
- * @param itemName Название упражнения (для текста алерта)
- * @param onConfirm Обработчик «Удалить» — VM вызывает `confirmDelete()`
- * @param onCancel Обработчик «Отмена» — VM вызывает `cancelDelete()`,
- *   также срабатывает на тап вне алерта / системный back
- *   (`onDismissRequest = onCancel`).
+ * @param itemName Название упражнения (для текста алерта — `%1$s`)
+ * @param titleRes Заголовок алерта
+ * @param textRes Тело алерта (с подстановкой `%1$s`)
+ * @param confirmRes Текст кнопки подтверждения
+ * @param cancelRes Текст кнопки отмены
+ * @param confirmInError `true` — confirm в `colorScheme.error`
+ *   (необратимое действие); `false` — дефолтный цвет (обратимое)
+ * @param onConfirm Подтверждение — VM вызывает `confirmDelete()` /
+ *   `confirmArchive()`
+ * @param onCancel Отмена — VM вызывает `cancelDelete()` /
+ *   `cancelArchive()`; также срабатывает на тап вне алерта / системный
+ *   back (`onDismissRequest = onCancel`).
  */
+@Suppress("LongParameterList")
 @Composable
-internal fun ExerciseDeleteDialog(
+internal fun ExerciseConfirmDialog(
     itemName: String,
+    @StringRes titleRes: Int,
+    @StringRes textRes: Int,
+    @StringRes confirmRes: Int,
+    @StringRes cancelRes: Int,
+    confirmInError: Boolean,
     onConfirm: () -> Unit,
     onCancel: () -> Unit
 ) {
+    val confirmColors =
+        if (confirmInError) {
+            ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+        } else {
+            ButtonDefaults.textButtonColors()
+        }
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text(stringResource(R.string.exercise_delete_dialog_title)) },
-        text = {
-            Text(stringResource(R.string.exercise_delete_dialog_text, itemName))
-        },
+        title = { Text(stringResource(titleRes)) },
+        text = { Text(stringResource(textRes, itemName)) },
         confirmButton = {
-            TextButton(
-                onClick = onConfirm,
-                colors =
-                    androidx.compose.material3.ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-            ) {
-                Text(stringResource(R.string.exercise_delete_dialog_confirm))
+            TextButton(onClick = onConfirm, colors = confirmColors) {
+                Text(stringResource(confirmRes))
             }
         },
         dismissButton = {
             TextButton(onClick = onCancel) {
-                Text(stringResource(R.string.exercise_delete_dialog_cancel))
+                Text(stringResource(cancelRes))
             }
         }
     )
 }
 
 /**
- * Локализованный лейбл типа измерения. Тотальный `when` без `else`:
- * при добавлении значения enum компилятор заставит дописать ветку
- * (design Decision 5).
+ * Локализованный лейбл типа измерения и маппинг типизированной
+ * ошибки удаления — инлайнены в места использования (`ExerciseListItemRow`
+ * и VM-обёртка `ExercisesScreen`) ради соблюдения detekt
+ * `TooManyFunctions` для файла.
  */
-@Composable
-private fun measuredByLabel(measuredBy: ExerciseMeasuredBy): String =
-    when (measuredBy) {
-        ExerciseMeasuredBy.REPS -> stringResource(R.string.exercise_measured_by_reps)
-        ExerciseMeasuredBy.TIME -> stringResource(R.string.exercise_measured_by_time)
-    }
-
-/**
- * Маппинг типизированной ошибки удаления в локализованное сообщение
- * снекбара (edit-delete-exercise §4.6.d, design Decision 3 + 6).
- * Канон маппинга — норматив в спек-е `exercises-screen`, requirement
- * «Ошибка удаления — типизированные причины в снекбаре»: VM не
- * парсит текст исключения, UI не парсит — решение о типе ошибки
- * (`DeleteExerciseError`) принимается в VM, локализация — здесь.
- */
-@Composable
-private fun deleteErrorMessageResource(error: DeleteExerciseError): String =
-    when (error) {
-        DeleteExerciseError.HasLinkedEntries ->
-            stringResource(R.string.exercise_delete_error_used_in_workouts)
-        DeleteExerciseError.StandardExercise ->
-            stringResource(R.string.exercise_delete_error_standard)
-        DeleteExerciseError.Other ->
-            stringResource(R.string.exercise_delete_error_generic)
-    }

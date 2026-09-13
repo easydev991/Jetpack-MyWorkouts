@@ -130,4 +130,15 @@
     <string name="error_import_failed">Не удалось восстановить данные</string>
     <string name="error_invalid_backup">Файл не является резервной копией или повреждён</string>
     <string name="error_delete_failed">Не удалось удалить данные</string>
+
+    <!-- Exercises archive (long-press menu, dialog, archived screen) -->
+    <string name="exercise_list_menu_archive">Архивировать</string>
+    <string name="exercise_list_menu_unarchive">Вернуть</string>
+    <string name="exercise_archive_dialog_title">Архивировать упражнение?</string>
+    <string name="exercise_archive_dialog_text">Чтобы снова использовать упражнение \"%1$s\" в тренировках, нужно будет вернуть его из архива</string>
+    <string name="exercise_archive_dialog_cancel">Отмена</string>
+    <string name="exercise_archive_dialog_confirm">Архивировать</string>
+    <string name="exercises_archive_button">Архив упражнений</string>
+    <string name="archived_exercises_title">Архив упражнений</string>
+    <string name="archived_exercises_empty">В архиве пусто</string>
 </resources>

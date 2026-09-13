@@ -761,6 +761,78 @@ class EntryCreateScreenTest {
             .assertCountEquals(0)
     }
 
+    /**
+     * §8.2 exercises-archive: `mutableStateOf<EntryCreateUiState>` с
+     * `selectedExercise = X` и `exercises = [X, Y, ...]`; при перерисовке
+     * state заменить `exercises = [Y, ...]` (имитация реактивного
+     * обновления после архивации, без VM/repo) — X продолжает
+     * отображаться как текущий выбор упражнения формы (поле выбора
+     * показывает X, в выпадающем списке X отсутствует).
+     */
+    @Test
+    fun content_when_selected_exercise_archived_then_field_keeps_selection_but_dropdown_excludes() {
+        // Given — выбрано X, exercises = [X, Y]
+        var uiState by mutableStateOf(
+            EntryCreateUiState(
+                selectedExercise = repsExercise,
+                exercises = listOf(repsExercise, timeExercise)
+            )
+        )
+        composeTestRule.setContent {
+            EntryCreateScreenContent(
+                state =
+                    EntryCreateScreenState(
+                        uiState = uiState,
+                        onExerciseChange = {},
+                        onSetsChange = {},
+                        onRepsChange = {},
+                        onDurationChange = {},
+                        onWeightChange = {},
+                        onDateChange = {},
+                        onTimeChange = { _, _ -> },
+                        onCommentChange = {},
+                        onSaveClick = {},
+                        onBackClick = {}
+                    )
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Sanity: X виден как текущий выбор упражнения формы
+        composeTestRule
+            .onNodeWithText("Подтягивания")
+            .assertIsDisplayed()
+
+        // When — имитация реактивного обновления: X заархивирован,
+        // `exercises` обновлён (X отсутствует)
+        uiState =
+            uiState.copy(
+                exercises = listOf(timeExercise)
+            )
+        composeTestRule.waitForIdle()
+
+        // Then — поле выбора продолжает показывать X как текущее значение
+        // формы (UI не падает; выбор сохраняется в `selectedExercise`)
+        composeTestRule
+            .onNodeWithText("Подтягивания")
+            .assertIsDisplayed()
+
+        // Then — открытие выпадающего списка показывает только Y (X
+        // отфильтрован)
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_field_exercise))
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule
+            .onNodeWithText("Планка")
+            .assertIsDisplayed()
+        composeTestRule
+            .onAllNodesWithText("Подтягивания")
+            // Один экземпляр — поле выбора (текущее значение),
+            // в выпадающем списке нет
+            .assertCountEquals(1)
+    }
+
     @Test
     fun content_when_save_clicked_then_no_confirm_dialog() {
         // Given — валидная форма создания с изменениями

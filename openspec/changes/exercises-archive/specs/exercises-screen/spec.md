@@ -206,7 +206,7 @@ restore it from the archive"), кнопкой отмены
 В `actions` слоте `TopAppBar` `ExercisesScreen` SHALL показываться
 `IconButton` с иконкой `Icons.Filled.Archive` и
 `contentDescription = exercises_archive_button`
-(«Архивированные упражнения» / "Archived exercises"), ЕСЛИ
+(«Архив упражнений» / "Archived exercises"), ЕСЛИ
 `archivedCount > 0` (реактивный счётчик из репозитория). Если
 архивных упражнений нет — кнопка скрыта. Тап по кнопке SHALL
 инициировать навигацию на `Screen.ArchivedExercises.route` через

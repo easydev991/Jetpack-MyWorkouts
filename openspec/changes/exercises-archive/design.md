@@ -93,7 +93,7 @@ NOT NULL DEFAULT 0") }` — отклонена для текущего сост�
 overhead без выгоды, `fallbackToDestructiveMigration` уже решает задачу
 без ручного SQL.
 
-### Decision 2: Реактивный счётчик архивных через `archivedCount():
+### Decision 2: Реактивный счётчик архивных через `archivedCount()
 Flow<Int>`
 
 **Выбор:** новый `ExerciseDao.observeArchivedCount(): Flow<Int>` с

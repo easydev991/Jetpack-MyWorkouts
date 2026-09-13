@@ -14,9 +14,10 @@ import kotlinx.coroutines.flow.Flow
  * (design.md Decision 1 change `entry-create-screen`). API реактивный там,
  * где нужен список (`Flow`), и `suspend` + `Result` для точечных операций.
  *
- * `TooManyFunctions` подавлен осознанно: 13 методов — точечные операции
+ * `TooManyFunctions` подавлен осознанно: 16 методов — точечные операции
  * экранов + снимки и массовые операции управления данными
- * (app-data-screen); единый контракт вместо интерфейсов под каждый экран.
+ * (app-data-screen, exercises-archive); единый контракт вместо
+ * интерфейсов под каждый экран.
  */
 @Suppress("TooManyFunctions")
 interface WorkoutDataRepository {
@@ -56,6 +57,34 @@ interface WorkoutDataRepository {
      * визуальный эффект только при возврате.
      */
     fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>>
+
+    /**
+     * Архивация/восстановление упражнения каталога (exercises-archive,
+     * design Decision 3): `isArchived = true` — в архив, `false` — вернуть.
+     * Отсутствующий id — `Result.failure(IllegalStateException("Упражнение
+     * не найдено"))` (не идемпотентно, в отличие от [deleteEntry]); прочие
+     * ошибки БД — generic `Result.failure`. Доступно и для стандартных, и
+     * для кастомных упражнений.
+     */
+    suspend fun setArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Result<Unit>
+
+    /**
+     * Реактивный список архивных упражнений (exercises-archive, spec
+     * «Реактивный список архивных упражнений»); сортировка — та же, что в
+     * [exercises]. Обновляется при архивации/восстановлении без ручного
+     * refresh.
+     */
+    fun archivedExercises(): Flow<List<Exercise>>
+
+    /**
+     * Реактивный счётчик архивных упражнений (exercises-archive, design
+     * Decision 2) — условная видимость кнопки архива в `TopAppBar`
+     * каталога.
+     */
+    fun archivedCount(): Flow<Int>
 
     /**
      * Вставляет новую запись о выполнении с валидацией [EntryValidator].

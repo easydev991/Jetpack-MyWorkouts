@@ -128,4 +128,15 @@
     <string name="error_import_failed">Failed to restore data</string>
     <string name="error_invalid_backup">The file is not a backup or is corrupted</string>
     <string name="error_delete_failed">Failed to delete data</string>
+
+    <!-- Exercises archive (long-press menu, dialog, archived screen) -->
+    <string name="exercise_list_menu_archive">Archive</string>
+    <string name="exercise_list_menu_unarchive">Restore</string>
+    <string name="exercise_archive_dialog_title">Archive exercise?</string>
+    <string name="exercise_archive_dialog_text">To use \"%1$s\" again in workouts, restore it from the archive</string>
+    <string name="exercise_archive_dialog_cancel">Cancel</string>
+    <string name="exercise_archive_dialog_confirm">Archive</string>
+    <string name="exercises_archive_button">Archived exercises</string>
+    <string name="archived_exercises_title">Archived exercises</string>
+    <string name="archived_exercises_empty">Archive is empty</string>
 </resources>

@@ -24,6 +24,10 @@ import androidx.room.PrimaryKey
  * @property measuredBy Имя типа измерения (`REPS`/`TIME`); дефолт `"REPS"` —
  *   Kotlin-дефолт конструктора (не SQL DEFAULT), именованные вызовы
  *   без поля продолжают компилироваться
+ * @property isArchived Флаг архивации: `true` — скрыто из каталога,
+ *   `false` — активно. SQL DEFAULT `0` — существующие строки при
+ *   деструктивном пересоздании схемы остаются активными (design.md
+ *   exercises-archive Decision 1)
  */
 @Entity(tableName = "exercises")
 data class ExerciseEntity(
@@ -37,5 +41,7 @@ data class ExerciseEntity(
     @ColumnInfo(name = "created_at")
     val createdAt: Long,
     @ColumnInfo(name = "measured_by")
-    val measuredBy: String = "REPS"
+    val measuredBy: String = "REPS",
+    @ColumnInfo(name = "is_archived", defaultValue = "0")
+    val isArchived: Boolean = false
 )

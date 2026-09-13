@@ -16,6 +16,8 @@ package com.myworkouts.domain.model
  * @property createdAt Момент создания записи в каталоге (epoch millis)
  * @property measuredBy Тип измерения нагрузки; по умолчанию `REPS` —
  *   большинство упражнений на повторы
+ * @property isArchived `true` — скрыто из каталога (экран архива);
+ *   `false` — активно (по умолчанию)
  */
 data class Exercise(
     val id: Long,
@@ -24,5 +26,6 @@ data class Exercise(
     val isCustom: Boolean,
     val comment: String?,
     val createdAt: Long,
-    val measuredBy: ExerciseMeasuredBy = ExerciseMeasuredBy.REPS
+    val measuredBy: ExerciseMeasuredBy = ExerciseMeasuredBy.REPS,
+    val isArchived: Boolean = false
 )

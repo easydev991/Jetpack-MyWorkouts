@@ -376,6 +376,18 @@ class ExerciseCreateScreenTest {
         ): Result<Unit> = Result.success(Unit)
 
         override suspend fun deleteAllData(): Result<Unit> = Result.success(Unit)
+
+        // Новые методы контракта (exercises-archive, §2.7): заглушки —
+        // edit-тесты их не вызывают.
+
+        override suspend fun setArchived(
+            id: Long,
+            isArchived: Boolean
+        ): Result<Unit> = Result.success(Unit)
+
+        override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
+
+        override fun archivedCount(): Flow<Int> = MutableStateFlow(0)
     }
 
     /**

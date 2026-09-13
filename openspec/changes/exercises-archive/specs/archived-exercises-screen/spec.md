@@ -1,6 +1,6 @@
 ## Purpose
 
-Экран «Архивированные упражнения» — отдельный экран для просмотра и
+Экран «Архив упражнений» — отдельный экран для просмотра и
 восстановления архивных упражнений каталога. Доступен через навигацию
 с `ExercisesScreen` (тап кнопки архива в `TopAppBar`); не участвует в
 нижней навигации. Позволяет пользователю «вернуть» упражнение из
@@ -24,7 +24,7 @@ WindowInsetsSides.Horizontal)` — симметрично `ExercisesScreen` и
 
 - **WHEN** `ArchivedExercisesScreen` composed с активной русской
   локалью
-- **THEN** `TopAppBar` отображает «Архивированные упражнения»
+- **THEN** `TopAppBar` отображает «Архив упражнений»
 
 #### Scenario: English locale title
 
@@ -35,7 +35,7 @@ WindowInsetsSides.Horizontal)` — симметрично `ExercisesScreen` и
 ### Requirement: TopAppBar со стрелкой назад
 
 `TopAppBar` SHALL содержать заголовок
-`R.string.archived_exercises_title` («Архивированные упражнения» /
+`R.string.archived_exercises_title` («Архив упражнений» /
 "Archived exercises") и `navigationIcon` с `IconButton`,
 отображающим `Icons.AutoMirrored.Filled.ArrowBack` с
 `contentDescription = R.string.back` («Назад» / "Back") — паттерн

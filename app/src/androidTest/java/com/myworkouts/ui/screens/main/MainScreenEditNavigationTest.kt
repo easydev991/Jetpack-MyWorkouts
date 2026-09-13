@@ -119,6 +119,18 @@ class MainScreenEditNavigationTest {
             ): Result<Unit> = error("Не используется в этом тесте")
 
             override suspend fun deleteAllData(): Result<Unit> = error("Не используется в этом тесте")
+
+            // Новые методы контракта (exercises-archive, §2.7): заглушки —
+            // тест их не вызывает.
+
+            override suspend fun setArchived(
+                id: Long,
+                isArchived: Boolean
+            ): Result<Unit> = Result.success(Unit)
+
+            override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
+
+            override fun archivedCount(): Flow<Int> = MutableStateFlow(0)
         }
 
     /**

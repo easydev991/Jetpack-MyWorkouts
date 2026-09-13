@@ -1135,4 +1135,197 @@ class RoomWorkoutDataRepositoryTest {
             assertEquals(10, items[1].reps)
             assertEquals(null, items[1].durationSec)
         }
+
+    // Архивация (exercises-archive, tasks §2): setArchived, archivedExercises,
+    // archivedCount, фильтрация архивных в exercises().
+
+    /**
+     * `setArchived(id, true)` для активного упражнения → `Result.success`,
+     * упражнение пропадает из реактивного каталога и появляется в архиве
+     * (spec-сценарий «Архивация активного упражнения»). Упражнение —
+     * стандартное: архивация разрешена независимо от `isCustom` (spec
+     * «Архивация стандартного упражнения»).
+     */
+    @Test
+    fun setArchived_withActiveExercise_succeeds_andRemovesFromCatalog() =
+        runBlocking {
+            // Given — стандартное упражнение из setUp
+            val pullupsId =
+                database
+                    .exerciseDao()
+                    .getAll()
+                    .single { it.name == "Подтягивания" }
+                    .id
+
+            // When
+            val result = repository.setArchived(pullupsId, true)
+
+            // Then — успех; пропало из каталога, появилось в архиве
+            assertTrue(result.isSuccess)
+            val catalog = repository.exercises("").first()
+            assertNull("Заархивированное упражнение не должно попадать в каталог", catalog.firstOrNull { it.id == pullupsId })
+            assertEquals(
+                pullupsId,
+                repository
+                    .archivedExercises()
+                    .first()
+                    .single()
+                    .id
+            )
+        }
+
+    /**
+     * `setArchived(id, false)` для архивного упражнения → `Result.success`,
+     * упражнение возвращается в каталог с `isArchived = false` и пропадает
+     * из архива (spec-сценарий «Восстановление архивного упражнения»).
+     */
+    @Test
+    fun setArchived_withArchivedExercise_succeeds_andRestoresToCatalog() =
+        runBlocking {
+            // Given — заархивированное стандартное упражнение
+            val pullupsId =
+                database
+                    .exerciseDao()
+                    .getAll()
+                    .single { it.name == "Подтягивания" }
+                    .id
+            repository.setArchived(pullupsId, true).getOrThrow()
+
+            // When
+            val result = repository.setArchived(pullupsId, false)
+
+            // Then — успех; снова в каталоге, из архива пропало, флаг сброшен
+            assertTrue(result.isSuccess)
+            assertNotNull(
+                "Восстановленное упражнение должно вернуться в каталог",
+                repository.exercises("").first().firstOrNull { it.id == pullupsId }
+            )
+            assertTrue(
+                "После восстановления архив должен быть пуст",
+                repository.archivedExercises().first().isEmpty()
+            )
+            assertFalse(
+                repository.getExercise(pullupsId).getOrThrow()?.isArchived ?: true
+            )
+        }
+
+    /**
+     * `setArchived` для несуществующего id →
+     * `Result.failure(IllegalStateException("Упражнение не найдено"))`,
+     * каталог не изменён (spec-сценарий «Архивация несуществующего
+     * упражнения отклоняется»; паттерн `deleteExercise`).
+     */
+    @Test
+    fun setArchived_withMissingId_returnsFailure_exerciseNotFound() =
+        runBlocking {
+            // When
+            val result = repository.setArchived(9_999L, true)
+
+            // Then — failure с ожидаемым типом и сообщением
+            assertTrue(result.isFailure)
+            val exception = result.exceptionOrNull()
+            assertTrue(
+                "Ожидается IllegalStateException, получено: $exception",
+                exception is IllegalStateException
+            )
+            assertEquals("Упражнение не найдено", exception?.message)
+
+            // And — каталог остался без изменений (2 упражнения из setUp)
+            assertEquals(2, repository.exercises("").first().size)
+        }
+
+    /**
+     * `archivedExercises()` эмитит только упражнения с `is_archived = 1`,
+     * отсортированные по контракту `is_custom DESC, created_at DESC,
+     * name COLLATE NOCASE`; `archivedCount()` эмитит количество
+     * (spec-сценарии «Архив пуст», «Реактивный список архивных упражнений»,
+     * «Реактивный счётчик архивных упражнений»).
+     */
+    @Test
+    fun archivedExercises_emitsOnlyArchived_sortedByContract_andCount() =
+        runBlocking {
+            // Given — пустой архив: счётчик 0, список пуст
+            assertEquals(0, repository.archivedCount().first())
+            assertTrue(repository.archivedExercises().first().isEmpty())
+
+            // And — четыре упражнения с разными ключами сортировки:
+            // кастомные (created_at DESC): Отжимания(2) → Жим(1);
+            // стандартные (created_at DESC, при равенстве name NOCASE):
+            // Бег(5) → Ходьба(5).
+            suspend fun insert(
+                name: String,
+                isCustom: Boolean,
+                createdAt: Long
+            ): Long =
+                database.exerciseDao().insert(
+                    ExerciseEntity(
+                        name = name,
+                        category = "PULL",
+                        isCustom = isCustom,
+                        createdAt = createdAt
+                    )
+                )
+            val ids =
+                listOf(
+                    insert("Отжимания", isCustom = true, createdAt = 2L),
+                    insert("Жим", isCustom = true, createdAt = 1L),
+                    insert("Бег", isCustom = false, createdAt = 5L),
+                    insert("Ходьба", isCustom = false, createdAt = 5L)
+                )
+            ids.forEach { id -> repository.setArchived(id, true).getOrThrow() }
+
+            // When
+            val archived = repository.archivedExercises().first()
+            val count = repository.archivedCount().first()
+
+            // Then — только архивные, в порядке контракта сортировки
+            assertEquals(listOf("Отжимания", "Жим", "Бег", "Ходьба"), archived.map { it.name })
+            assertTrue("Все элементы архива должны быть isArchived=true", archived.all { it.isArchived })
+            assertEquals(4, count)
+        }
+
+    /**
+     * `exercises("")` НЕ возвращает архивные упражнения (фильтрация
+     * `WHERE is_archived = 0` в SQL); поиск по подстроке тоже фильтрует
+     * архивные (spec «Поиск и сортировка каталога»: архивные не попадают
+     * в результат `exercises(query)`).
+     */
+    @Test
+    fun exercises_excludesArchived_emptyQuery_andSubstringSearch() =
+        runBlocking {
+            // Given — кастомное «Подъёмы ног» заархивировано;
+            // «Подтягивания» из setUp активно; оба содержат подстроку «од»
+            val archivedId =
+                database.exerciseDao().insert(
+                    ExerciseEntity(
+                        name = "Подъёмы ног",
+                        category = "PULL",
+                        isCustom = true,
+                        createdAt = 3L
+                    )
+                )
+            repository.setArchived(archivedId, true).getOrThrow()
+
+            // When — пустой запрос
+            val all = repository.exercises("").first()
+
+            // Then — архивные не попадают, активные на месте
+            assertNull(
+                "Пустой запрос не должен возвращать архивные",
+                all.firstOrNull { it.id == archivedId }
+            )
+            assertNotNull(all.firstOrNull { it.name == "Подтягивания" })
+            assertNotNull(all.firstOrNull { it.name == "Планка" })
+
+            // When — поиск по подстроке, совпадающей с обоими названиями
+            val bySubstring = repository.exercises("од").first()
+
+            // Then — архивные отфильтрованы и в поиске
+            assertTrue(bySubstring.isNotEmpty())
+            assertNull(
+                "Поиск по подстроке не должен возвращать архивные",
+                bySubstring.firstOrNull { it.id == archivedId }
+            )
+            assertNotNull(bySubstring.firstOrNull { it.name == "Подтягивания" })
+        }
 }

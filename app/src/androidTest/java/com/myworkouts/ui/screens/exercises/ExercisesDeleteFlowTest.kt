@@ -109,6 +109,18 @@ class ExercisesDeleteFlowTest {
         ): Result<Unit> = Result.success(Unit)
 
         override suspend fun deleteAllData(): Result<Unit> = Result.success(Unit)
+
+        // Новые методы контракта (exercises-archive, §2.7): заглушки —
+        // delete-тесты их не вызывают.
+
+        override suspend fun setArchived(
+            id: Long,
+            isArchived: Boolean
+        ): Result<Unit> = Result.success(Unit)
+
+        override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
+
+        override fun archivedCount(): Flow<Int> = MutableStateFlow(0)
     }
 
     /** Регистрирует [ExercisesScreen] с реальной VM на fake-репозитории. */
@@ -120,7 +132,8 @@ class ExercisesDeleteFlowTest {
                         viewModel(
                             factory = ExercisesViewModel.factory(repository)
                         ),
-                    onAddExerciseClick = {}
+                    onAddExerciseClick = {},
+                    onArchivedExercisesClick = {}
                 )
             }
         }
@@ -243,6 +256,18 @@ class ExercisesErrorSnackbarTest(
         ): Result<Unit> = Result.success(Unit)
 
         override suspend fun deleteAllData(): Result<Unit> = Result.success(Unit)
+
+        // Новые методы контракта (exercises-archive, §2.7): заглушки —
+        // delete-тесты их не вызывают.
+
+        override suspend fun setArchived(
+            id: Long,
+            isArchived: Boolean
+        ): Result<Unit> = Result.success(Unit)
+
+        override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
+
+        override fun archivedCount(): Flow<Int> = MutableStateFlow(0)
     }
 
     @Test
@@ -259,7 +284,8 @@ class ExercisesErrorSnackbarTest(
                         viewModel(
                             factory = ExercisesViewModel.factory(fake)
                         ),
-                    onAddExerciseClick = {}
+                    onAddExerciseClick = {},
+                    onArchivedExercisesClick = {}
                 )
             }
         }
@@ -402,6 +428,18 @@ class ExercisesPreCheckSnackbarTest {
         ): Result<Unit> = Result.success(Unit)
 
         override suspend fun deleteAllData(): Result<Unit> = Result.success(Unit)
+
+        // Новые методы контракта (exercises-archive, §2.7): заглушки —
+        // delete-тесты их не вызывают.
+
+        override suspend fun setArchived(
+            id: Long,
+            isArchived: Boolean
+        ): Result<Unit> = Result.success(Unit)
+
+        override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
+
+        override fun archivedCount(): Flow<Int> = MutableStateFlow(0)
     }
 
     @Test
@@ -419,7 +457,8 @@ class ExercisesPreCheckSnackbarTest {
                         viewModel(
                             factory = ExercisesViewModel.factory(fake)
                         ),
-                    onAddExerciseClick = {}
+                    onAddExerciseClick = {},
+                    onArchivedExercisesClick = {}
                 )
             }
         }
