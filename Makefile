@@ -79,8 +79,67 @@ check: build test
 install:
 	./gradlew installDebug
 
+# Настройка окружения
+## setup: Установка и настройка инструментов для локальной разработки (JDK, markdownlint-cli, git hooks)
+setup:
+	@$(MAKE) _check_jdk
+	@$(MAKE) _check_markdownlint
+	@$(MAKE) setup_git_hooks
+
+## _check_jdk: Проверка JDK 17 (требование сборки и detekt)
+_check_jdk:
+	@printf "\n"
+	@printf "$(YELLOW)Проверка JDK 17...$(RESET)\n"
+	@if [ -n "$$JAVA_HOME" ] && [ -x "$$JAVA_HOME/bin/java" ]; then \
+		JAVA_BIN="$$JAVA_HOME/bin/java"; \
+	else \
+		JAVA_BIN="java"; \
+	fi; \
+	JAVA_VERSION=$$($$JAVA_BIN -version 2>&1 | head -n 1 | sed -E 's/.*"([0-9]+).*/\1/'); \
+	if [ "$$JAVA_VERSION" = "17" ]; then \
+		printf "$(GREEN)JDK 17 найден: $$JAVA_BIN$(RESET)\n"; \
+	else \
+		printf "$(RED)Ошибка: требуется JDK 17, найдена версия '$${JAVA_VERSION:-неизвестно}' ($$JAVA_BIN)$(RESET)\n"; \
+		printf "$(YELLOW)Проверьте JAVA_HOME: $$JAVA_HOME$(RESET)\n"; \
+		exit 1; \
+	fi
+
+## _check_markdownlint: Проверка наличия markdownlint-cli
+_check_markdownlint:
+	@printf "\n"
+	@printf "$(YELLOW)Проверка markdownlint-cli...$(RESET)\n"
+	@if ! command -v npm >/dev/null 2>&1; then \
+		printf "$(RED)Ошибка: Node.js/npm не установлен. Установите Node.js с https://nodejs.org/$(RESET)\n"; \
+		exit 1; \
+	fi
+	@if ! command -v markdownlint >/dev/null 2>&1; then \
+		printf "Установка markdownlint-cli...\n"; \
+		npm install -g markdownlint-cli; \
+	else \
+		printf "$(GREEN)markdownlint-cli уже установлен$(RESET)\n"; \
+	fi
+
+# Документация
+## update_readme_versions: Обновить бейджи версий в README.md (Kotlin, Android SDK, Gradle, AGP)
+update_readme_versions:
+	@printf "$(YELLOW)Обновляю версии в README.md...$(RESET)\n"
+	./gradlew updateReadmeVersions --no-configuration-cache --quiet
+	@printf "$(GREEN)Версии обновлены успешно$(RESET)\n"
+
+## setup_git_hooks: Настроить Git hooks для автоматического обновления README.md
+setup_git_hooks:
+	@printf "$(YELLOW)Настройка Git hooks...$(RESET)\n"
+	@if [ ! -f ".githooks/pre-commit" ]; then \
+		printf "$(RED)Файл .githooks/pre-commit не найден$(RESET)\n"; \
+		exit 1; \
+	fi
+	@chmod +x .githooks/pre-commit
+	@git config core.hooksPath .githooks
+	@printf "$(GREEN)Git hooks настроены: core.hooksPath = .githooks$(RESET)\n"
+	@printf "$(YELLOW)Теперь pre-commit хук будет автоматически обновлять версии в README.md$(RESET)\n"
+
 # Запуск всех задач
 ## all: Полная проверка (сборка + тесты + линтер) и установка APK на устройство
 all: check install
 
-.PHONY: help build clean test lint format check install all android-test
+.PHONY: help build clean test lint format check install all android-test setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks

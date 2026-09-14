@@ -4,3 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.detekt) apply false
 }
+
+// Скрипт-плагин: задача updateReadmeVersions (бейджи версий в README.md)
+// вынесена в gradle/updateReadmeVersions.gradle.kts.
+apply(from = "gradle/updateReadmeVersions.gradle.kts")
