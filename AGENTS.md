@@ -23,8 +23,16 @@ DataStore, Room. Manual DI — без Hilt.
 `make help` — список целей. Перед коммитом:
 `make format && make lint && make test`.
 
-`make install` ставит APK на подключённый adb-девайс
-(`./gradlew installDebug`).
+Флейворы дистрибуции: `github` (по умолчанию) и `rustore` (заглушка),
+выбор — `FLAVOR=`: `make build FLAVOR=rustore`. Детали —
+`docs/plans/flavors-implementation.md`.
+
+`make install` ставит debug-APK на подключённый adb-девайс
+(`./gradlew install$(FLAVOR)Debug`).
+
+`make apk` — подписанный release-APK в корне репо
+(`myworkouts{VERSION_CODE}.apk`); при первом запуске сам подтягивает
+секреты из приватного репозитория `android-secrets` (`_load_secrets`).
 
 ---
 

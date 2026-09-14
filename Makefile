@@ -7,6 +7,17 @@ RED=\033[1;31m
 BOLD=\033[1m
 RESET=\033[0m
 
+# Флейвор дистрибуции и секреты (план flavors-implementation.md)
+FLAVOR ?= github
+FLAVOR_TITLE := $(if $(filter rustore,$(FLAVOR)),Rustore,Github)
+ifeq ($(filter rustore github,$(FLAVOR)),)
+$(error Unknown FLAVOR=$(FLAVOR). Expected: rustore, github)
+endif
+
+SECRETS_REPO = git@github.com:easydev991/android-secrets.git
+SECRETS_DIR = myworkouts
+APP_NAME ?= myworkouts
+
 ## help: Показать это справочное сообщение
 help:
 	@echo "Доступные команды Makefile:"
@@ -16,9 +27,9 @@ help:
 	@echo ""
 
 # Сборка проекта
-## build: Сборка APK для отладки
+## build: Сборка debug APK. Использование: make build FLAVOR=rustore (по умолчанию FLAVOR=github)
 build:
-	./gradlew assembleDebug
+	./gradlew assemble$(FLAVOR_TITLE)Debug
 
 ## clean: Очистка кеша проекта
 clean:
@@ -44,9 +55,9 @@ endef
 test:
 	$(call run_tests,test,app/build/test-results)
 
-## android-test: Запуск интеграционных тестов на Android устройстве со статистикой в консоли
+## android-test: Запуск интеграционных тестов на Android устройстве со статистикой в консоли. Использование: make android-test FLAVOR=rustore (по умолчанию FLAVOR=github)
 android-test:
-	$(call run_tests,connectedDebugAndroidTest,app/build/outputs/androidTest-results/connected/debug)
+	$(call run_tests,connected$(FLAVOR_TITLE)DebugAndroidTest,app/build/outputs/androidTest-results/connected/debug)
 
 # Анализ кода
 ## lint: Запуск ktlint, detekt и markdownlint (проверка)
@@ -75,9 +86,41 @@ check: build test
 	./gradlew ktlintCheck detekt
 
 # Установка приложения
-## install: Установка APK на устройство
+## install: Установка debug APK на устройство. Использование: make install FLAVOR=rustore (по умолчанию FLAVOR=github)
 install:
-	./gradlew installDebug
+	./gradlew install$(FLAVOR_TITLE)Debug
+
+# Релизная сборка и секреты
+## _load_secrets: Загрузить секреты из SSH-репозитория во временную директорию
+_load_secrets:
+	@printf "$(YELLOW)Загрузка секретов из репозитория по SSH...$(RESET)\n"
+	@TEMP_DIR=$$(mktemp -d); \
+	trap "rm -rf $$TEMP_DIR" EXIT; \
+	printf "$(YELLOW)Клонирую репозиторий $(SECRETS_REPO)...$(RESET)\n"; \
+	if ! git clone --depth 1 $(SECRETS_REPO) "$$TEMP_DIR" 2>/dev/null; then \
+		printf "$(RED)Ошибка: не удалось клонировать репозиторий$(RESET)\n"; \
+		printf "$(YELLOW)Проверьте SSH-доступ к GitHub: ssh -T git@github.com$(RESET)\n"; \
+		exit 1; \
+	fi; \
+	mkdir -p .secrets; \
+	cp -r "$$TEMP_DIR/$(SECRETS_DIR)/*" .secrets/ 2>/dev/null || cp -r "$$TEMP_DIR/$(SECRETS_DIR)"/* .secrets/; \
+	sed -i.tmp 's|^KEYSTORE_FILE=.*|KEYSTORE_FILE=.secrets/keystore/$(APP_NAME)-release.keystore|' .secrets/secrets.properties && rm -f .secrets/secrets.properties.tmp; \
+	printf "$(GREEN)Секреты загружены успешно$(RESET)\n"
+
+## _ensure_secrets: Обёртка над _load_secrets — клонирует секреты, только если .secrets/ отсутствует
+_ensure_secrets:
+	@if [ ! -d .secrets ]; then $(MAKE) _load_secrets; fi
+
+## apk: Создать подписанный release APK (без повышения версии). Использование: make apk FLAVOR=rustore (по умолчанию FLAVOR=github). Файл: $(APP_NAME){VERSION_CODE}.apk в корне репо
+apk: _ensure_secrets
+	@printf "$(YELLOW)Создаю релизный APK ($(FLAVOR))...$(RESET)\n"
+	@./gradlew assemble$(FLAVOR_TITLE)Release --console=plain
+	@VERSION_CODE=$$(grep "^VERSION_CODE=" gradle.properties | cut -d'=' -f2); \
+	VERSION_NAME=$$(grep "^VERSION_NAME=" gradle.properties | cut -d'=' -f2); \
+	OUTPUT_FILE="$(APP_NAME)$$VERSION_CODE.apk"; \
+	cp app/build/outputs/apk/$(FLAVOR)/release/app-$(FLAVOR)-release.apk "$$OUTPUT_FILE"; \
+	printf "$(GREEN)APK создан: $$OUTPUT_FILE$(RESET)\n"; \
+	printf "$(YELLOW)Версия: $$VERSION_NAME (build $$VERSION_CODE)$(RESET)\n"
 
 # Настройка окружения
 ## setup: Установка и настройка инструментов для локальной разработки (JDK, markdownlint-cli, git hooks)
@@ -142,4 +185,4 @@ setup_git_hooks:
 ## all: Полная проверка (сборка + тесты + линтер) и установка APK на устройство
 all: check install
 
-.PHONY: help build clean test lint format check install all android-test setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks
+.PHONY: help build clean test lint format check install all android-test setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets

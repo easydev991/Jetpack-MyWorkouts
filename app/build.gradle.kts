@@ -1,5 +1,6 @@
 import org.gradle.api.tasks.testing.Test
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -7,6 +8,16 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
+}
+
+// Секреты подписи (план flavors-implementation.md): .secrets/secrets.properties
+// загружается make-целью _load_secrets из приватного репозитория
+// android-secrets. Дефолты в signingConfigs — чтобы конфигурационная фаза
+// не падала на машине без секретов (риск 2): упадёт только release-сборка.
+val secretsProperties = Properties()
+val secretsPropertiesFile = rootProject.file(".secrets/secrets.properties")
+if (secretsPropertiesFile.exists()) {
+    secretsPropertiesFile.inputStream().use { secretsProperties.load(it) }
 }
 
 android {
@@ -25,6 +36,31 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Флейворы дистрибуции: пока различий нет, оба пустые — содержательное
+    // наполнение rustore отложено (план, «Вне скоупа»). Без суффиксов
+    // applicationId/versionName: один package для всех каналов, как в JetpackDays.
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("github")
+        create("rustore")
+    }
+
+    signingConfigs {
+        create("release") {
+            val keystoreFile =
+                secretsProperties["KEYSTORE_FILE"] as? String
+                    ?: ".secrets/keystore/myworkouts-release.keystore"
+            val keystorePassword = secretsProperties["KEYSTORE_PASSWORD"] as? String ?: ""
+            val keyAlias = secretsProperties["KEY_ALIAS"] as? String ?: "upload"
+            val keyPassword = secretsProperties["KEY_PASSWORD"] as? String ?: ""
+
+            storeFile = rootProject.file(keystoreFile)
+            storePassword = keystorePassword
+            this.keyAlias = keyAlias
+            this.keyPassword = keyPassword
+        }
+    }
+
     buildTypes {
         release {
             // R8: вырезает неиспользуемый код (иначе material-icons-extended
@@ -35,6 +71,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

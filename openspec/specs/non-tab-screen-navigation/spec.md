@@ -83,7 +83,6 @@ individual tabs is NOT filtered here — it is governed by
 - **THEN** its `NavigationBar` iterates `BottomTabs` (not a screen-level
   list) to render `NavigationBarItem`s
 
-
 ### Requirement: ExerciseCreate object added to sealed Screen
 
 `Screen.ExerciseCreate` SHALL быть `object ExerciseCreate : Screen(route =
