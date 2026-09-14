@@ -17,10 +17,14 @@ default-значений: состояние и запись — выше по �
 (ADDED-требование про тоггл выше; design Decision 8). Its `Scaffold`
 SHALL contain `topBar = { TopAppBar(title = {
 Text(stringResource(R.string.more_title)) }) }`. The `Scaffold` body
-SHALL contain a `Box` with a `Row(fillMaxWidth,
-Arrangement.Center) { FilledTonalButton(...) { Text(stringResource(R.string.appearance_title)) } }`
-near the top, and a `Text` with the app version at the bottom, aligned
-via `Alignment.BottomCenter`.
+SHALL contain a `Box` with a `Column(fillMaxSize,
+verticalArrangement = Arrangement.spacedBy(spacing_xxsmall),
+horizontalAlignment = Alignment.CenterHorizontally)`; its direct
+children — кнопки экрана без layout-обёрток (интервал между ними задаёт
+`spacedBy`), первая — `FilledTonalButton(...) {
+Text(stringResource(R.string.appearance_title)) }` near the top; and a
+`Text` with the app version at the bottom, aligned via
+`Alignment.BottomCenter` as a direct child of the `Box`.
 
 #### Scenario: MoreScreen renders with localized title
 
@@ -138,7 +142,7 @@ dimensionResource(R.dimen.button_horizontal_padding))` where
 - **THEN** the button's left margin (distance from `root.left` to
   `button.left`) equals the right margin (distance from `button.right`
   to `root.right`) within ±1px (regression test for the
-  `Row(fillMaxWidth, Arrangement.Center)` wrapper)
+  `Column(horizontalAlignment = CenterHorizontally)` wrapper)
 
 ### Requirement: MoreScreen has app data button
 

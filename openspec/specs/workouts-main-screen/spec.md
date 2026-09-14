@@ -9,7 +9,7 @@ ru/en подписями и корректной обработкой систе
 ## Requirements
 ### Requirement: MainScreen Scaffold with TopAppBar
 
-`MainScreen` SHALL be a `@Composable fun MainScreen(viewModel: MainViewModel, onAddEntryClick: () -> Unit, modifier: Modifier = Modifier)` annotated with `@OptIn(ExperimentalMaterial3Api::class)`. Its `Scaffold` SHALL contain `topBar = { TopAppBar(title = { Text(stringResource(R.string.workouts_title)) }) }`. The `Scaffold` body SHALL display the list of workout entries or, when there are no entries, the empty-state placeholder (см. «Пустое состояние списка записей»).
+`MainScreen` SHALL be a `@Composable fun MainScreen(viewModel: MainViewModel, onAddEntryClick: () -> Unit, onEditEntryClick: (Long) -> Unit = {}, modifier: Modifier = Modifier)` annotated with `@OptIn(ExperimentalMaterial3Api::class)`. Its `Scaffold` SHALL contain `topBar = { TopAppBar(title = { Text(stringResource(R.string.workouts_title)) }) }`. The `Scaffold` body SHALL display the list of workout entries or, when there are no entries, the empty-state placeholder (см. «Пустое состояние списка записей»).
 
 #### Scenario: MainScreen renders with localized title
 

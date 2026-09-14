@@ -457,8 +457,8 @@ id от БД (`autoGenerate`); значение `isArchived` импортиру�
 Репозиторий SHALL предоставлять метод
 `setArchived(id: Long, isArchived: Boolean): Result<Unit>` — единый
 метод для архивации (`isArchived = true`) и восстановления
-(`isArchived = false`). Метод SHALL обновлять существующее упражнение
-через `ExerciseDao.update(entity.copy(isArchived = isArchived))`
+(`isArchived = false`). Метод SHALL обновлять существующее упражнение одним SQL-запросом
+через `ExerciseDao.updateArchived(id, isArchived)`
 внутри `runCatching`. Отсутствующий id SHALL возвращать
 `Result.failure(IllegalStateException("Упражнение не найдено"))` —
 race между сбором списка и подтверждением алерта (не идемпотентно, в
