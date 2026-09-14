@@ -169,7 +169,7 @@ private fun AppDataButtons(
         ) { uri ->
             uri?.let(state.onRestoreRequest)
         }
-    // Единый стиль кнопок «Ещё»/JetpackDays: ширина по тексту,
+    // Единый стиль кнопок «Ещё»: ширина по тексту,
     // горизонтальный паддинг из ресурса
     val buttonContentPadding =
         PaddingValues(horizontal = dimensionResource(R.dimen.button_horizontal_padding))

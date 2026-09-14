@@ -359,7 +359,7 @@ private fun EntryListItems(
  * Меню `DropdownMenu` в точке long-press: «Изменить» (карандаш) выше
  * «Удалить» (корзина), у обоих `leadingIcon` с `contentDescription = null`
  * — текст пункта сам читается службами доступности (entry-edit-mode,
- * design Decision 6; образец — JetpackDays `ContextMenu`). Вынесено из
+ * design Decision 6). Вынесено из
  * [EntryList], чтобы уложиться в лимит detekt `LongMethod: 60`.
  */
 @Composable

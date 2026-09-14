@@ -47,16 +47,20 @@ python3 scripts/test_report.py app/build/outputs/androidTest-results/connected/d
 **Один тест-класс / один метод** (если не нужны все):
 
 ```bash
-./gradlew test --tests "com.myworkouts.ui.viewmodel.ArchivedExercisesViewModelTest"
-./gradlew test --tests "*ArchivedExercises*"                                              # wildcard
-./gradlew test --tests "com.myworkouts.ui.viewmodel.ArchivedExercisesViewModelTest.unarchive_calls_setArchived_with_false"
-./gradlew connectedDebugAndroidTest --tests "com.myworkouts.ui.screens.exercises.ArchivedExercisesScreenTest"
+./gradlew testDebugUnitTest --tests "com.myworkouts.ui.viewmodel.ArchivedExercisesViewModelTest"
+./gradlew testDebugUnitTest --tests "*ArchivedExercises*"                                              # wildcard
+./gradlew testDebugUnitTest --tests "com.myworkouts.ui.viewmodel.ArchivedExercisesViewModelTest.unarchive_calls_setArchived_with_false"
+# androidTest: `--tests` с connectedDebugAndroidTest НЕ работает (Unknown
+# command-line option). Только через runner-arguments:
+./gradlew :app:connectedDebugAndroidTest --console=plain \
+  -Pandroid.testInstrumentationRunnerArguments.class='com.myworkouts.ui.screens.exercises.ArchivedExercisesScreenTest'
+# метод — через # : …class='com.myworkouts.…ScreenTest#row_long_press_when_standard_then_no_context_menu'
 ```
 
 Несколько классов:
 
 ```bash
-./gradlew test --tests "ClassA" --tests "ClassB"
+./gradlew testDebugUnitTest --tests "ClassA" --tests "ClassB"
 ```
 
 ## Когда `make` НЕ подходит
@@ -65,7 +69,7 @@ python3 scripts/test_report.py app/build/outputs/androidTest-results/connected/d
 теста с большим выводом, который скрипт обрезает). Тогда:
 
 ```bash
-./gradlew test --tests "Class.testName" --info
+./gradlew testDebugUnitTest --tests "Class.testName" --info
 ```
 
 Но **проверка результатов** после такого запуска — тоже через

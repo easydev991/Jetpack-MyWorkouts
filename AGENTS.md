@@ -2,7 +2,6 @@
 
 "My Workouts" — Android-приложение для трекинга тренировок. Полностью офлайн.
 Kotlin + Compose + MVVM + Clean Architecture (manual DI, без Hilt).
-Шаблон — [JetpackDays](/Users/Oleg991/Documents/GitHub/JetpackDays).
 
 - Локализация: ru — основной, en — дополнительный. Логи в коде — на русском.
 - Реальные слои добавляй по мере фич, не плоди заранее.
