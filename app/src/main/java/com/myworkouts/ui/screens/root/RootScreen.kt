@@ -46,12 +46,12 @@ import kotlinx.coroutines.launch
 /**
  * Корневой экран с нижней навигацией и вложенными маршрутами.
  *
- * `AppSettingsDataStore` создаётся один раз в `MainActivity.onCreate` и
+ * `AppSettingsDataStore` создаётся один раз в `MyWorkoutsApplication` и
  * передаётся сюда параметром — повторное создание внутри `RootScreen`
  * приведёт к `There are multiple DataStores active for the same file`.
  *
  * @param dataStore единый экземпляр [AppSettingsDataStore] для всего приложения
- * @param repository репозиторий данных тренировок (создан в `MainActivity`)
+ * @param repository репозиторий данных тренировок (создан в `MyWorkoutsApplication`)
  * @param modifier внешний модификатор для [Scaffold]
  */
 @Composable

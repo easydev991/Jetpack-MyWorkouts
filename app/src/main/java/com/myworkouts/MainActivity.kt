@@ -10,10 +10,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import com.myworkouts.data.db.WorkoutDatabase
-import com.myworkouts.data.db.standardExercises
-import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.domain.model.AppTheme
 import com.myworkouts.domain.model.isDark
 import com.myworkouts.ui.screens.root.RootScreen
@@ -22,15 +18,15 @@ import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 /**
  * Главная (и единственная) Activity приложения.
  *
- * Создаёт [com.myworkouts.data.preferences.AppSettingsDataStore] ровно один
- * раз — до `setContent` — и прокидывает его в [RootScreen]. DataStore нельзя
- * создавать дважды на один файл (`There are multiple DataStores active for
- * the same file`).
+ * Ничего не создаёт: зависимости (`AppSettingsDataStore`, репозиторий)
+ * берутся из [MyWorkoutsApplication] — композиционного корня процесса
+ * (fix-entry-list-live-update, design.md Decision 1). Пересоздание
+ * Activity больше не плодит инстансы БД/DataStore.
  */
 class MainActivity : ComponentActivity() {
     /**
-     * Запускает Compose-граф: создаёт DataStore, подписывается на настройки
-     * темы и динамических цветов, перекрашивает статус-бар под текущую тему.
+     * Запускает Compose-граф: подписывается на настройки темы и динамических
+     * цветов, перекрашивает статус-бар под текущую тему.
      *
      * @implNote MainActivityViewModel не создан (YAGNI). Два collectAsState
      * на dataStore.{theme,useDynamicColors} — то же, что VM/factory +
@@ -43,13 +39,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val dataStore = AppSettingsDataStore(applicationContext)
-        // DI-цепочка данных (design.md Decision 3): БД → репозиторий создаются
-        // один раз, как и dataStore; prepopulate и восстановление стандартного
-        // набора в deleteAllData — один и тот же список standardExercises.
-        val standard = standardExercises(applicationContext)
-        val database = WorkoutDatabase.create(applicationContext, standard)
-        val repository = RoomWorkoutDataRepository(database, standard)
+        val app = application as MyWorkoutsApplication
+        val dataStore = app.dataStore
+        val repository = app.repository
 
         setContent {
             val theme by dataStore.theme.collectAsState(initial = AppTheme.SYSTEM)
