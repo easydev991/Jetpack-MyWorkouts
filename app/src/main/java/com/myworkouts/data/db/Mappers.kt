@@ -26,7 +26,8 @@ internal fun ExerciseEntity.toDomain(): Exercise =
         comment = comment,
         createdAt = createdAt,
         measuredBy = ExerciseMeasuredBy.valueOf(measuredBy),
-        isArchived = isArchived
+        isArchived = isArchived,
+        iconNumber = iconNumber
     )
 
 internal fun Exercise.toEntity(): ExerciseEntity =
@@ -38,7 +39,8 @@ internal fun Exercise.toEntity(): ExerciseEntity =
         comment = comment,
         createdAt = createdAt,
         measuredBy = measuredBy.name,
-        isArchived = isArchived
+        isArchived = isArchived,
+        iconNumber = iconNumber
     )
 
 internal fun ExerciseEntryEntity.toDomain(): ExerciseEntry =

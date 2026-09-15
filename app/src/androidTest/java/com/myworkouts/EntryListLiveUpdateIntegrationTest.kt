@@ -247,6 +247,5 @@ class EntryListLiveUpdateIntegrationTest {
      * покрывает только асинхронный лаг invalidation Room, не таймаут
      * подписки.
      */
-    private fun assertRowShows(name: String) =
-        waitRowVisible(name, timeoutMs = 2_000)
+    private fun assertRowShows(name: String) = waitRowVisible(name, timeoutMs = 2_000)
 }

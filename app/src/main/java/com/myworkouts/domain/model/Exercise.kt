@@ -18,6 +18,8 @@ package com.myworkouts.domain.model
  *   большинство упражнений на повторы
  * @property isArchived `true` — скрыто из каталога (экран архива);
  *   `false` — активно (по умолчанию)
+ * @property iconNumber Опциональный номер иконки в наборе ресурсов;
+ *   `null` — иконка не назначена (по умолчанию; exercise-icon-mvp)
  */
 data class Exercise(
     val id: Long,
@@ -27,5 +29,6 @@ data class Exercise(
     val comment: String?,
     val createdAt: Long,
     val measuredBy: ExerciseMeasuredBy = ExerciseMeasuredBy.REPS,
-    val isArchived: Boolean = false
+    val isArchived: Boolean = false,
+    val iconNumber: Int? = null
 )

@@ -103,6 +103,7 @@ internal fun buildBackupJson(
                 .put("measuredBy", exercise.measuredBy.name)
                 .put("isCustom", exercise.isCustom)
                 .put("comment", exercise.comment ?: JSONObject.NULL)
+                .put("iconNumber", exercise.iconNumber ?: JSONObject.NULL)
                 .put("createdAt", exercise.createdAt)
         )
     }

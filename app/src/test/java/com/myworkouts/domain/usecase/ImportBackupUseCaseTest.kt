@@ -8,6 +8,7 @@ import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
+import com.myworkouts.domain.model.ExerciseMeasuredBy
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -83,6 +84,26 @@ class ImportBackupUseCaseTest {
               "createdAt": 1757371250000
             }
           ]
+        }
+        """.trimIndent()
+
+    /** `plankFile` с назначенной иконкой: `"iconNumber": 5` (exercise-icon-mvp). */
+    private val plankWithIconFile =
+        """
+        {
+          "version": 1,
+          "exercises": [
+            {
+              "name": "Планка",
+              "category": "CORE",
+              "measuredBy": "TIME",
+              "isCustom": false,
+              "comment": "Держать ровно",
+              "iconNumber": 5,
+              "createdAt": 1757371150000
+            }
+          ],
+          "entries": []
         }
         """.trimIndent()
 
@@ -333,6 +354,104 @@ class ImportBackupUseCaseTest {
             assertEquals(1, entriesSlots[0].size, "Первый импорт вставляет запись файла")
             assertTrue(exercisesSlots[1].isEmpty(), "Повторный импорт не дублирует упражнение")
             assertTrue(entriesSlots[1].isEmpty(), "Повторный импорт того же файла ничего не добавляет")
+        }
+
+    @Test
+    fun import_when_iconNumberAbsent_then_parsedAsNull() =
+        runTest {
+            // Given: старый файл v1 без iconNumber в упражнениях
+            // (spec-сценарий «Старый файл без номера иконки импортируется»)
+            val repository = repository()
+            val file =
+                """
+                {
+                  "version": 1,
+                  "exercises": [
+                    {"name": "Планка", "category": "CORE", "measuredBy": "TIME",
+                     "isCustom": true, "comment": null, "createdAt": 1757371150000}
+                  ],
+                  "entries": []
+                }
+                """.trimIndent()
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then — импорт успешен, иконка null
+            assertTrue(result.isSuccess, "Старый файл без iconNumber остаётся валидным")
+            val exercisesSlot = slot<List<Exercise>>()
+            coVerify { repository.importData(capture(exercisesSlot), any()) }
+            assertEquals(
+                null,
+                exercisesSlot.captured.single().iconNumber,
+                "Отсутствующее поле даёт iconNumber = null"
+            )
+        }
+
+    @Test
+    fun import_when_newExercise_then_iconNumberKeptFromBackup() =
+        runTest {
+            // Given: в каталоге нет «Планки», файл содержит её с iconNumber = 5
+            // (spec-сценарий «Номер иконки вставленного упражнения сохраняется»)
+            val repository = repository()
+            val useCase = useCase(repository, plankWithIconFile)
+
+            // When
+            val result = useCase(uri)
+
+            // Then
+            assertTrue(result.isSuccess, "Вставка проходит")
+            val exercisesSlot = slot<List<Exercise>>()
+            coVerify { repository.importData(capture(exercisesSlot), any()) }
+            assertEquals(
+                5,
+                exercisesSlot.captured.single().iconNumber,
+                "Вставленное упражнение сохраняет iconNumber из файла"
+            )
+        }
+
+    @Test
+    fun import_when_duplicateExercise_then_existingIconNumberUnchanged() =
+        runTest {
+            // Given: в каталоге «Планка» с iconNumber = 2, файл содержит
+            // «Планка» с iconNumber = 5 — дедупликация по имени
+            // (spec-сценарий «Номер иконки существующего упражнения при
+            // дедупликации не меняется»)
+            val existingPlank =
+                Exercise(
+                    id = 1L,
+                    name = "Планка",
+                    category = ExerciseCategory.CORE,
+                    isCustom = false,
+                    comment = null,
+                    createdAt = 1_757_371_150_000L,
+                    measuredBy = ExerciseMeasuredBy.TIME,
+                    iconNumber = 2
+                )
+            val repository = repository(exercises = listOf(existingPlank))
+            val useCase = useCase(repository, plankWithIconFile)
+
+            // When
+            val result = useCase(uri)
+
+            // Then — дубликат не вставляется, существующее не трогается
+            assertTrue(result.isSuccess, "Дедупликация не ломает импорт")
+            val exercisesSlot = slot<List<Exercise>>()
+            coVerify { repository.importData(capture(exercisesSlot), any()) }
+            assertTrue(
+                exercisesSlot.captured.isEmpty(),
+                "Дубликат имени не создаёт новое упражнение"
+            )
+            assertEquals(
+                2,
+                repository
+                    .getAllExercises()
+                    .getOrThrow()
+                    .single()
+                    .iconNumber,
+                "Существующее упражнение остаётся со своим прежним iconNumber"
+            )
         }
 
     @ParameterizedTest(name = "[{index}] {0}")

@@ -70,6 +70,24 @@ class WorkoutDatabaseTest {
         }
 
     @Test
+    fun createDatabase_thenAllThirteenStandardExercisesHaveNullIconNumber() =
+        runBlocking {
+            // Given — БД с prepopulate из setUp (exercise-icon-mvp, spec-сценарий
+            // «Стандартный набор без иконок при prepopulate»: MVP номера
+            // не проставляет, seed-SQL пишет NULL в icon_number)
+
+            // When
+            val exercises = database.exerciseDao().observeExercises("").first()
+
+            // Then — все 13 стандартных читаются с iconNumber = null
+            assertEquals(13, exercises.size)
+            assertTrue(
+                "Prepopulate не назначает иконки: iconNumber = null у всех стандартных",
+                exercises.all { it.iconNumber == null }
+            )
+        }
+
+    @Test
     fun createDatabase_thenAllThirteenExercisesPresent() =
         runBlocking {
             // Given — ожидаемый состав по design.md Decision 4

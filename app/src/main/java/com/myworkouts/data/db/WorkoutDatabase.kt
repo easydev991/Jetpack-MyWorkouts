@@ -9,10 +9,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 /**
  * Room-база данных приложения: каталог упражнений и записи о выполнении.
  *
- * Версия `2` (в `1` добавилась колонка `exercises.is_archived` —
- * exercises-archive Decision 1: bump вместо миграции, до релиза
- * деструктивный фоллбек), экспорт схемы в `app/schemas/` включён через
- * `ksp { arg("room.schemaLocation", ...) }` — JSON-схема коммитится в репо
+ * Версия `3` (в `2` добавилась колонка `exercises.is_archived` —
+ * exercises-archive Decision 1: bump вместо миграции; в `3` — колонка
+ * `exercises.icon_number`, exercise-icon-mvp Decision 1), экспорт схемы
+ * в `app/schemas/` включён через `ksp { arg("room.schemaLocation", ...) }` —
+ * JSON-схема коммитится в репо
  * (`workouts` появится отдельным изменением схемы, design.md Decision 7).
  *
  * До первого релиза схема может меняться без миграций:
@@ -25,7 +26,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [ExerciseEntity::class, ExerciseEntryEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class WorkoutDatabase : RoomDatabase() {
@@ -99,12 +100,13 @@ abstract class WorkoutDatabase : RoomDatabase() {
                                     exercise.name,
                                     exercise.category.name,
                                     now,
-                                    exercise.measuredBy.name
+                                    exercise.measuredBy.name,
+                                    exercise.iconNumber
                                 )
                             db.execSQL(
                                 "INSERT INTO exercises " +
-                                    "(name, category, is_custom, comment, created_at, measured_by) " +
-                                    "VALUES (?, ?, 0, NULL, ?, ?)",
+                                    "(name, category, is_custom, comment, created_at, measured_by, icon_number) " +
+                                    "VALUES (?, ?, 0, NULL, ?, ?, ?)",
                                 args
                             )
                         }

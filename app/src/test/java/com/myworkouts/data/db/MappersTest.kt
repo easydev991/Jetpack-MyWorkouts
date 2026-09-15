@@ -11,7 +11,8 @@ import org.junit.jupiter.api.Test
  *
  * Покрывают двусторонний перенос `measuredBy` ↔ `measured_by` по образцу
  * `category`: enum в домене, строка в entity. А также двусторонний перенос
- * флага архивации `isArchived` ↔ `is_archived`.
+ * флага архивации `isArchived` ↔ `is_archived` и опционального номера
+ * иконки `iconNumber` ↔ `icon_number` (exercise-icon-mvp).
  */
 class MappersTest {
     private fun sampleExercise(measuredBy: ExerciseMeasuredBy) =
@@ -67,6 +68,36 @@ class MappersTest {
         // Then — false проброшен в обе стороны
         assertEquals(false, entity.isArchived)
         assertEquals(false, restored.isArchived)
+    }
+
+    @Test
+    fun exercise_iconNumber_value_roundtrip_preserved() {
+        // Given — упражнение с назначенной иконкой 5
+        val exercise =
+            sampleExercise(measuredBy = ExerciseMeasuredBy.REPS)
+                .copy(iconNumber = 5)
+
+        // When
+        val entity = exercise.toEntity()
+        val restored = entity.toDomain()
+
+        // Then — 5 проброшен в обе стороны: и в колонку entity, и обратно в домен
+        assertEquals(5, entity.iconNumber)
+        assertEquals(5, restored.iconNumber)
+    }
+
+    @Test
+    fun exercise_iconNumber_null_roundtrip_preserved() {
+        // Given — упражнение без иконки (null по умолчанию)
+        val exercise = sampleExercise(measuredBy = ExerciseMeasuredBy.REPS)
+
+        // When
+        val entity = exercise.toEntity()
+        val restored = entity.toDomain()
+
+        // Then — null доезжает без искажений (отсутствие иконки не теряется)
+        assertEquals(null, entity.iconNumber)
+        assertEquals(null, restored.iconNumber)
     }
 
     private fun sampleListItemEntity(weightKg: Double?) =

@@ -243,6 +243,7 @@ private fun parseExercise(obj: JSONObject): Exercise =
             obj.opt("isCustom") as? Boolean
                 ?: throw invalidFile("Поле isCustom упражнения отсутствует или не Boolean"),
         comment = obj.optionalString("comment"),
+        iconNumber = obj.optionalInt("iconNumber"),
         createdAt = obj.requiredLong("createdAt"),
         measuredBy = obj.requiredEnum("measuredBy", ExerciseMeasuredBy.entries)
     )

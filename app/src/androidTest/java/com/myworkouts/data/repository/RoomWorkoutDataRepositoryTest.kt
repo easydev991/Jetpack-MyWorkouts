@@ -733,6 +733,64 @@ class RoomWorkoutDataRepositoryTest {
             assertEquals(ExerciseMeasuredBy.TIME, fetched.measuredBy)
         }
 
+    /**
+     * Номер иконки доезжает через репозиторий без искажений, отсутствие
+     * иконки и её наличие различимы (exercise-icon-mvp, spec-сценарии
+     * «Сохранение и чтение номера иконки» / «Упражнение без иконки» /
+     * «Отсутствие иконки и её наличие различимы»).
+     */
+    @Test
+    fun addExercise_iconNumber_isPersistedAndDistinguishableFromNull() =
+        runBlocking {
+            // Given — три упражнения: с иконкой 5, без иконки и с иконкой 0
+            val withIconId =
+                repository
+                    .addExercise(
+                        Exercise(
+                            id = 0L,
+                            name = "С иконкой",
+                            category = ExerciseCategory.PUSH,
+                            isCustom = true,
+                            comment = null,
+                            createdAt = 1L,
+                            iconNumber = 5
+                        )
+                    ).getOrThrow()
+            val withoutIconId =
+                repository
+                    .addExercise(
+                        Exercise(
+                            id = 0L,
+                            name = "Без иконки",
+                            category = ExerciseCategory.PUSH,
+                            isCustom = true,
+                            comment = null,
+                            createdAt = 2L
+                        )
+                    ).getOrThrow()
+            val zeroIconId =
+                repository
+                    .addExercise(
+                        Exercise(
+                            id = 0L,
+                            name = "Нулевая иконка",
+                            category = ExerciseCategory.PUSH,
+                            isCustom = true,
+                            comment = null,
+                            createdAt = 3L,
+                            iconNumber = 0
+                        )
+                    ).getOrThrow()
+
+            // When
+            val catalog = repository.exercises("").first()
+
+            // Then — 5 и 0 сохранены как есть, отсутствие иконки — null
+            assertEquals(5, catalog.single { it.id == withIconId }.iconNumber)
+            assertEquals(null, catalog.single { it.id == withoutIconId }.iconNumber)
+            assertEquals(0, catalog.single { it.id == zeroIconId }.iconNumber)
+        }
+
     @Test
     fun addExercise_keepsStandardExercisesUnchanged() =
         runBlocking {

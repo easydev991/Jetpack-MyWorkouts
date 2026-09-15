@@ -113,6 +113,38 @@ class ExportBackupUseCaseTest {
     }
 
     @Test
+    fun buildBackupJson_when_iconNumberPresent_then_serializedAsNumber() {
+        // Given — упражнение с назначенной иконкой 5
+        // (app-data-management, spec-сценарий «Номер иконки в файле»)
+        val withIcon = pullUps.copy(iconNumber = 5)
+
+        // When
+        val exported =
+            JSONObject(buildBackupJson(listOf(withIcon), emptyList()))
+                .getJSONArray("exercises")
+                .getJSONObject(0)
+
+        // Then — номер иконки попал в файл числом
+        assertEquals(5, exported.getInt("iconNumber"), "Номер иконки сериализуется как Int")
+    }
+
+    @Test
+    fun buildBackupJson_when_iconNumberAbsent_then_explicitNull() {
+        // Given — упражнение без иконки (iconNumber = null по умолчанию)
+        // (spec-сценарий «Номер иконки в файле»: поле пишется всегда)
+
+        // When
+        val exported =
+            JSONObject(buildBackupJson(listOf(pullUps), emptyList()))
+                .getJSONArray("exercises")
+                .getJSONObject(0)
+
+        // Then — null сериализуется явно, поле присутствует (стабильная форма файла)
+        assertTrue(exported.has("iconNumber"), "Поле iconNumber пишется всегда, даже как null")
+        assertTrue(exported.isNull("iconNumber"), "Отсутствующая иконка — явный null")
+    }
+
+    @Test
     fun buildBackupJson_when_entry_present_then_linked_by_name_without_db_ids() {
         // Given
         val entries = listOf(repsEntry, timeEntry)

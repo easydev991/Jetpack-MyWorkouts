@@ -28,6 +28,9 @@ import androidx.room.PrimaryKey
  *   `false` — активно. SQL DEFAULT `0` — существующие строки при
  *   деструктивном пересоздании схемы остаются активными (design.md
  *   exercises-archive Decision 1)
+ * @property iconNumber Опциональный номер иконки (`icon_number` INTEGER,
+ *   nullable, без SQL DEFAULT — деструктивное пересоздание и так даёт
+ *   `NULL` в существующих строках; exercise-icon-mvp)
  */
 @Entity(tableName = "exercises")
 data class ExerciseEntity(
@@ -43,5 +46,7 @@ data class ExerciseEntity(
     @ColumnInfo(name = "measured_by")
     val measuredBy: String = "REPS",
     @ColumnInfo(name = "is_archived", defaultValue = "0")
-    val isArchived: Boolean = false
+    val isArchived: Boolean = false,
+    @ColumnInfo(name = "icon_number")
+    val iconNumber: Int? = null
 )
