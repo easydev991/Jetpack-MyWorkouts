@@ -17,8 +17,8 @@ repository.setArchived(id, true)`, без какой-либо памяти о т
 **Goals:**
 
 - Прокинуть `AppSettingsDataStore` в `ExercisesViewModel` через
-  manual DI (composition root в `MainActivity` → `RootScreen` →
-  `ExercisesScreen`), без Hilt.
+  manual DI (composition root в `MyWorkoutsApplication` →
+  `MainActivity` → `RootScreen` → `ExercisesScreen`), без Hilt.
 - Расширить `AppSettingsDataStore` одним `Flow<Boolean>` и
   `suspend`-сеттером.
 - Добавить в `ExerciseConfirmDialog` опциональный слот
@@ -107,7 +107,7 @@ repository.setArchived(id, true)`, без какой-либо памяти о т
    (method-reference адаптируется к новой сигнатуре поля);
    line 357 — `onConfirm = { state.onConfirmArchive(suppress) }`;
    line 342 (delete) — без правок (`onConfirmDelete: () -> Unit`
-   не меняется); превью `ExercisesScreenPreview.kt:193, 214`
+   не меняется); превью `ExercisesScreenPreview.kt:193, 215`
    (диалог удаления и диалог архивации) — без правок: обе
    используют `onConfirm = {}` для диалога, чья сигнатура
    `() -> Unit` не изменилась.
@@ -122,9 +122,12 @@ repository.setArchived(id, true)`, без какой-либо памяти о т
 
 6. **Manual DI без Hilt** — фабрика `ExercisesViewModel` принимает
    `repository` и `dataStore`, компонуется в `RootScreen`. Single
-   instance `AppSettingsDataStore` создаётся в `MainActivity.onCreate`
-   и прокидывается вниз — соответствует требованию capability
-   `appearance` (ровно один экземпляр на процесс).
+   instance `AppSettingsDataStore` создаётся в `MyWorkoutsApplication`
+   (lazy) и берётся из `application` в `MainActivity` — соответствует
+   требованию capability `appearance` (ровно один экземпляр на
+   процесс; см. одноимённое MODIFIED-требование в
+   `specs/appearance/spec.md` этого change — канон обновляется
+   этим change'ом).
 
 ## Risks / Trade-offs
 

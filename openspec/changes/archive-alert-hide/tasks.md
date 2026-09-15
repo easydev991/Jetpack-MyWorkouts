@@ -144,7 +144,8 @@
 
 - [ ] 5.1 В `MainActivity.kt` — без изменений (dataStore уже
       доходит до `RootScreen` через существующую DI-цепочку
-      `MainActivity.kt:46 → RootScreen.kt:77`). В `RootScreen.kt`
+      `MyWorkoutsApplication` → `MainActivity.kt:42–44, 69`).
+      В `RootScreen.kt`
       выполнить шаги (a)–(c) из `proposal.md` Impact (расширить
       `ExercisesNavDestination` (line 210) параметром `dataStore:
       AppSettingsDataStore`; передать его из `AppNavHost`

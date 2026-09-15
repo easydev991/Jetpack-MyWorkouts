@@ -1,8 +1,11 @@
 ## Context
 
-Приложение офлайн, manual DI без Hilt: композиционный корень — `MainActivity.onCreate`
-(dataStore, WorkoutDatabase, repository), ViewModel'ы получают зависимости через
-`companion factory()` в точке `composable(...)`. Использование `CancellationException`
+Приложение офлайн, manual DI без Hilt: композиционный корень —
+`MyWorkoutsApplication` (lazy `dataStore`, `WorkoutDatabase`,
+`repository`); `MainActivity.onCreate` берёт их через
+`application as MyWorkoutsApplication` и пробрасывает дальше.
+ViewModel'ы получают зависимости через `companion factory()` в точке
+`composable(...)`. Использование `CancellationException`
 rethrow в use-cases бэкапа уже реализовано. `configuration-cache=true` включён.
 Proguard-правила для Crashlytics и `.gitignore`-запись `app/google-services.json`
 уже подготовлены заранее. В `Makefile` существует механизм `_load_secrets` /
@@ -22,8 +25,11 @@ Proguard-правила для Crashlytics и `.gitignore`-запись `app/goo
 
 **Non-Goals:**
 
-- Остальное вне области не дублируем здесь — канон в proposal.md (Impact, «Вне области»):
-  opt-out аналитики в UI, Timber, `MyWorkoutsApplication` и т.д.
+- Остальное вне области не дублируем здесь — канон в proposal.md
+  (Impact, «Вне области»): opt-out аналитики в UI, Timber, изменения
+  `MyWorkoutsApplication` (выбор/инициализация провайдера туда не
+  переносим — Firebase инициализируется автоматически провайдером
+  google-services) и т.д.
 
 ## Decisions
 
@@ -57,10 +63,15 @@ Proguard-правила для Crashlytics и `.gitignore`-запись `app/goo
 `NoopAnalyticsProvider` в debug, `FirebaseAnalyticsProvider(applicationContext)`
 в release. Проброс параметрами, как остальным зависимостям:
 `MainActivity` → `RootScreen(dataStore, repository, analyticsProvider)` →
-`factory()` ViewModel (+1 параметр) и в слушатель навигации. Application-класс
-не создаём — Firebase инициализируется автоматически провайдером google-services.
+`factory()` ViewModel (+1 параметр `analyticsProvider` последним) и в слушатель
+навигации. `Application`-класс (`MyWorkoutsApplication`) уже есть после
+`fix-entry-list-live-update`; изменений в нём нет — Firebase инициализируется
+автоматически провайдером `google-services`, в `MyWorkoutsApplication.onCreate`
+ничего не добавляем. Сигнатуры VM с учётом запланированной ранее фичи
+`archive-alert-hide` (которая добавляет `dataStore` вторым параметром
+в `ExercisesViewModel`):
 `AppDataViewModel(repository, exportUseCase, importUseCase, analyticsProvider)`,
-`ExercisesViewModel(repository, analyticsProvider)`.
+`ExercisesViewModel(repository, dataStore, analyticsProvider)`.
 
 ### D5. Отключение debug двумя механизмами
 

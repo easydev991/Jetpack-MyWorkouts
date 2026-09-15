@@ -61,10 +61,12 @@ Breaking changes: нет — при существующей установке 
   `(Boolean) -> Unit` (детали и сводка по строкам — `design.md`
   Decision 4).
 - `app/src/main/java/com/myworkouts/MainActivity.kt` — **без
-  изменений**: `AppSettingsDataStore` уже создаётся в `onCreate`
-  (`MainActivity.kt:46`) и передаётся в `RootScreen`
-  (`MainActivity.kt:77`) — DI-цепочка от `MainActivity` до
-  `RootScreen` уже корректна.
+  изменений**: `AppSettingsDataStore` создаётся в `MyWorkoutsApplication`
+  как процесс-singleton, MainActivity берёт его через
+  `application as MyWorkoutsApplication` (`MainActivity.kt:42–44`)
+  и передаёт в `RootScreen` (`MainActivity.kt:69`) — DI-цепочка
+  от `MyWorkoutsApplication` до `RootScreen` уже корректна
+  (после `fix-entry-list-live-update`).
 - `app/src/main/java/com/myworkouts/ui/screens/root/RootScreen.kt`
   — **правка в середине DI-цепочки**: `AppNavHost` (line 119)
   уже принимает `dataStore`, но `ExercisesNavDestination` (line

@@ -177,9 +177,10 @@ AppSettingsDataStore): ViewModelProvider.Factory` через
 dataStore) } }`. `RootScreen` SHALL пробрасывать тот же `dataStore`
 в фабрику `ExercisesViewModel` при композиции экрана упражнений.
 Требование «ровно один экземпляр `AppSettingsDataStore` на
-процесс, создаётся в `MainActivity.onCreate`» — канон в capability
-`appearance` (требование «MainActivity создаёт DataStore и
-подписывается напрямую», `openspec/specs/appearance/spec.md`).
+процесс, создаётся в `MyWorkoutsApplication` (lazy)» — канон в
+capability `appearance` (MODIFIED-требование этого change в
+`openspec/changes/archive-alert-hide/specs/appearance/spec.md`;
+синхронизируется через `openspec sync-specs` при архивации).
 
 #### Scenario: VM получает dataStore через factory
 

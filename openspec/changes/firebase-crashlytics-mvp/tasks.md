@@ -45,5 +45,5 @@
 
 ## 9. Документация и финальная проверка
 
-- [ ] 9.1 AGENTS.md: уточнить правило Offline-only — запрет касается фича-сетевых библиотек (Retrofit/OkHttp/Ktor), телеметрия Firebase разрешена; дополнить раздел Project Structure новыми пакетами `crash/` (CrashlyticsHelper) и `analytics/` (AnalyticsEvent, AnalyticsProvider, провайдеры). Verify: `make lint` (markdownlint) зелёный
+- [ ] 9.1 AGENTS.md: уточнить правило Offline-only — запрет касается фича-сетевых библиотек (Retrofit/OkHttp/Ktor), телеметрия Firebase разрешена; обновить раздел Project Structure — добавить `MyWorkoutsApplication.kt` (композиционный корень DI, создан `fix-entry-list-live-update`) и описания пакетов `crash/` (CrashlyticsHelper) и `analytics/` (AnalyticsEvent, AnalyticsProvider, провайдеры). Verify: `make lint` (markdownlint) зелёный
 - [ ] 9.2 Финальная проверка: `make format && make lint && make test`, `make build` (debug — сбор телеметрии off), `make apk` (release — on). Verify: все команды зелёные, `git status` не содержит `app/google-services.json`
