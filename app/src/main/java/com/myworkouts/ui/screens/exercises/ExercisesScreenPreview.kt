@@ -1,14 +1,30 @@
+// TooManyFunctions подавлен осознанно: 11 preview-функций — это требование
+// конвенции проекта (светлая + тёмная тема для каждого ключевого состояния,
+// AGENTS.md), а не раздувание логики; дробить превью на файлы хуже подавления.
+@file:Suppress("TooManyFunctions")
+
 package com.myworkouts.ui.screens.exercises
 
 import android.content.res.Configuration
+import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -25,8 +41,11 @@ import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
  * `JetpackMyWorkoutsTheme`). Ключевые состояния: список с комментарием
  * и без, пустое состояние, Loading — FAB виден на каждом полноэкранном
  * превью (он часть [ExercisesScreenContent]). Отдельно — long-press меню,
- * алерт удаления, алерт архивации и подсветка строки (edit-delete-exercise
- * §9.1; exercises-archive §9.1, §9.3, §9.5).
+ * алерт удаления, алерт архивации (с чекбоксом «Больше не показывать»
+ * снятым/поставленным) и подсветка строки (edit-delete-exercise §9.1;
+ * exercises-archive §9.1, §9.3, §9.5; archive-alert-hide §6.1–§6.3).
+ * Алерты рендерятся windowless-сэмплом [ExerciseConfirmDialogSample]:
+ * окно AlertDialog в Compose Preview не рисуется.
  */
 
 private val previewPullups =
@@ -177,60 +196,148 @@ internal fun ExerciseContextMenuPreview() {
     }
 }
 
+/**
+ * Windowless-сэмпл контента [ExerciseConfirmDialog]: окно AlertDialog
+ * не рендерится в Compose Preview (диалог живёт в отдельном окне,
+ * Layoutlib рисует только основное), поэтому алерт-превью показывают
+ * контент напрямую — те же строки, слот `suppressContent` и цвета
+ * confirm-кнопки ([exerciseConfirmButtonColors]), что и у настоящего
+ * диалога. Ограничение: M3-хром окна (реальные отступы и раскладка
+ * кнопок) в превью не воспроизводится.
+ */
+@Composable
+private fun ExerciseConfirmDialogSample(
+    itemName: String,
+    @StringRes titleRes: Int,
+    @StringRes textRes: Int,
+    @StringRes confirmRes: Int,
+    @StringRes cancelRes: Int,
+    confirmInError: Boolean,
+    suppressContent: (@Composable () -> Unit)? = null
+) {
+    Surface(shape = MaterialTheme.shapes.extraLarge) {
+        Column(modifier = Modifier.padding(24.dp)) {
+            Text(
+                text = stringResource(titleRes),
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Text(
+                text = stringResource(textRes, itemName),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(top = 16.dp)
+            )
+            if (suppressContent != null) {
+                suppressContent()
+            }
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = {}) {
+                    Text(text = stringResource(cancelRes))
+                }
+                TextButton(
+                    onClick = {},
+                    colors = exerciseConfirmButtonColors(confirmInError)
+                ) {
+                    Text(text = stringResource(confirmRes))
+                }
+            }
+        }
+    }
+}
+
 @Preview(showBackground = true, locale = "ru")
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
 @Composable
 internal fun ExerciseDeleteDialogPreview() {
     JetpackMyWorkoutsTheme {
         // Алерт подтверждения: confirm «Удалить» в error-цвете
-        ExerciseConfirmDialog(
+        ExerciseConfirmDialogSample(
             itemName = previewRunning.name,
             titleRes = R.string.exercise_delete_dialog_title,
             textRes = R.string.exercise_delete_dialog_text,
             confirmRes = R.string.exercise_delete_dialog_confirm,
             cancelRes = R.string.exercise_delete_dialog_cancel,
-            confirmInError = true,
-            onConfirm = {},
-            onCancel = {}
+            confirmInError = true
         )
     }
 }
 
 /**
- * §9.1 exercises-archive: алерт подтверждения архивации — обычный
- * цвет confirm (НЕ error).
+ * archive-alert-hide, §6.2: алерт архивации с заполненным слотом
+ * `suppressContent` — чекбокс «Больше не показывать» изначально снят
+ * (`suppress = false`), как в production-коде `SuccessBody`.
+ * Состояние поднимается здесь через `remember` и передаётся в
+ * [ArchiveSuppressSlot]; замыкание `onConfirm` диалога его игнорирует
+ * (production-сигнатура диалога — `() -> Unit`, диалог не знает про
+ * `suppress`; design.md Decision 4).
  */
 @Preview(showBackground = true, locale = "ru")
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
 @Composable
-internal fun ExerciseArchiveDialogPreview() {
+internal fun ExerciseArchiveDialogWithSuppressPreview() {
+    var suppress by remember { mutableStateOf(false) }
     JetpackMyWorkoutsTheme {
-        ExerciseConfirmDialog(
+        ExerciseConfirmDialogSample(
             itemName = previewRunning.name,
             titleRes = R.string.exercise_archive_dialog_title,
             textRes = R.string.exercise_archive_dialog_text,
             confirmRes = R.string.exercise_archive_dialog_confirm,
             cancelRes = R.string.exercise_archive_dialog_cancel,
             confirmInError = false,
-            onConfirm = {},
-            onCancel = {}
+            suppressContent = {
+                ArchiveSuppressSlot(
+                    checked = suppress,
+                    onCheckedChange = { suppress = it }
+                )
+            }
         )
     }
 }
 
 /**
- * §9.5 exercises-archive: ключевые состояния `archivedCount` рядом
- * (конвенция AGENTS.md «Preview» — ключевые состояния рядом) — кнопка
- * архива в TopAppBar видна при `archivedCount = 1`, скрыта при
- * `archivedCount = 0`.
+ * archive-alert-hide, §6.3: тот же диалог архивации с чекбоксом,
+ * изначально поставленным (`suppress = true`) — отдельное превью
+ * второго ключевого состояния компонента (конвенция AGENTS.md
+ * «Preview»: одно состояние — одно превью).
  */
 @Preview(showBackground = true, locale = "ru")
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
 @Composable
-internal fun ExercisesScreenContentArchivedCountPreview() {
+internal fun ExerciseArchiveDialogWithSuppressPreviewChecked() {
+    var suppress by remember { mutableStateOf(true) }
     JetpackMyWorkoutsTheme {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Кнопка архива в TopAppBar скрыта (`archivedCount = 0`)
+        ExerciseConfirmDialogSample(
+            itemName = previewRunning.name,
+            titleRes = R.string.exercise_archive_dialog_title,
+            textRes = R.string.exercise_archive_dialog_text,
+            confirmRes = R.string.exercise_archive_dialog_confirm,
+            cancelRes = R.string.exercise_archive_dialog_cancel,
+            confirmInError = false,
+            suppressContent = {
+                ArchiveSuppressSlot(
+                    checked = suppress,
+                    onCheckedChange = { suppress = it }
+                )
+            }
+        )
+    }
+}
+
+/**
+ * §9.5 exercises-archive: состояние `archivedCount = 0` — кнопка
+ * архива в TopAppBar скрыта.
+ */
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun ExercisesScreenContentArchivedCountHiddenPreview() {
+    JetpackMyWorkoutsTheme {
+        Surface(modifier = Modifier.fillMaxSize()) {
             ExercisesScreenContent(
                 state =
                     previewScreenState(
@@ -239,11 +346,22 @@ internal fun ExercisesScreenContentArchivedCountPreview() {
                                 exercises = listOf(previewPullups, previewPlank),
                                 archivedCount = 0
                             )
-                    ),
-                modifier = Modifier.weight(1f)
+                    )
             )
-            // Кнопка архива в TopAppBar видна (`archivedCount = 1`,
-            // Icons.Filled.Archive)
+        }
+    }
+}
+
+/**
+ * §9.5 exercises-archive: состояние `archivedCount = 1` — кнопка
+ * архива в TopAppBar видна (Icons.Filled.Archive).
+ */
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun ExercisesScreenContentArchivedCountVisiblePreview() {
+    JetpackMyWorkoutsTheme {
+        Surface(modifier = Modifier.fillMaxSize()) {
             ExercisesScreenContent(
                 state =
                     previewScreenState(
@@ -252,8 +370,7 @@ internal fun ExercisesScreenContentArchivedCountPreview() {
                                 exercises = listOf(previewPullups, previewPlank),
                                 archivedCount = 1
                             )
-                    ),
-                modifier = Modifier.weight(1f)
+                    )
             )
         }
     }

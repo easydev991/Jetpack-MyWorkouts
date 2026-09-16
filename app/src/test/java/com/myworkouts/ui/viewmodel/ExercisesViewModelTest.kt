@@ -1,6 +1,7 @@
 package com.myworkouts.ui.viewmodel
 
 import android.util.Log
+import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.LinkedEntriesDeletionException
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
@@ -10,13 +11,16 @@ import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.ui.state.ExercisesUiState
+import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
@@ -165,6 +169,12 @@ class ExercisesViewModelTest {
 
     private lateinit var repository: ExercisesViewModelFakeRepository
 
+    /** Mock [AppSettingsDataStore] для VM (archive-alert-hide, tasks §1.2).
+     *  На этом этапе используется только чтобы компилировались тесты;
+     *  реальные stub'ы для `dontShowArchiveDialog` / `setDontShowArchiveDialog`
+     *  появятся в §2.x. */
+    private lateinit var dataStore: AppSettingsDataStore
+
     @BeforeEach
     fun setUp() {
         testDispatcher = StandardTestDispatcher()
@@ -176,6 +186,11 @@ class ExercisesViewModelTest {
         every { Log.e(any(), any<String>()) } returns 0
         every { Log.e(any(), any<String>(), any<Throwable>()) } returns 0
         repository = ExercisesViewModelFakeRepository(initialCatalog = listOf(pullups, plank))
+        dataStore = mockk(relaxed = true)
+        // Default-поведение: opt-out выключен (= показывать диалог) —
+        // обратная совместимость для существующих тестов §1–§3. Тесты
+        // §4.1 (red) переопределяют stub на `flowOf(true)`.
+        every { dataStore.dontShowArchiveDialog } returns flowOf(false)
     }
 
     @AfterEach
@@ -184,7 +199,7 @@ class ExercisesViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(): ExercisesViewModel = ExercisesViewModel(repository)
+    private fun createViewModel(): ExercisesViewModel = ExercisesViewModel(repository, dataStore)
 
     @Test
     fun state_initial_before_subscription_then_loading() =
@@ -588,5 +603,135 @@ class ExercisesViewModelTest {
                 afterTwo.archivedCount,
                 "archivedCount реактивно = 2"
             )
+        }
+
+    // ---------- §4. archive-alert-hide: opt-out диалога через DataStore ----------
+
+    /**
+     * `requestArchive(item)` при `dataStore.dontShowArchiveDialog == true` —
+     * сразу вызывает `repository.setArchived(item.id, true)` без открытия
+     * диалога: `confirmArchive` НЕ вызывается, `pendingArchiveId == null`,
+     * `setArchivedCalls` содержит `(item.id, true)`.
+     *
+     * (archive-alert-hide, tasks §2.1 / §3.1.)
+     */
+    @Test
+    fun requestArchive_when_dontShowDialog_true_then_archive_without_dialog() =
+        runTest(testDispatcher) {
+            // Given — opt-out включён в DataStore
+            every { dataStore.dontShowArchiveDialog } returns flowOf(true)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — запрос архивации (текущее поведение — открыть диалог;
+            // новое поведение — архивировать сразу)
+            viewModel.requestArchive(pullups)
+            advanceUntilIdle()
+
+            // Then — диалог не открыт, архивация прошла
+            val state = viewModel.uiState.value as ExercisesUiState.Success
+            assertNull(
+                state.pendingArchiveId,
+                "pendingArchiveId == null при dontShowArchiveDialog=true"
+            )
+            assertEquals(
+                listOf(pullups.id to true),
+                repository.setArchivedCalls,
+                "setArchived(id, true) вызван сразу при requestArchive"
+            )
+        }
+
+    /**
+     * `requestArchive(item)` при `dataStore.dontShowArchiveDialog == false`
+     * (default) — открывает диалог, `setArchived` НЕ вызывается
+     * (поведение архивации — как было до feature).
+     *
+     * (archive-alert-hide, tasks §2.2 / §3.1.)
+     */
+    @Test
+    fun requestArchive_when_dontShowDialog_false_then_open_dialog() =
+        runTest(testDispatcher) {
+            // Given — opt-out выключен (default)
+            every { dataStore.dontShowArchiveDialog } returns flowOf(false)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.requestArchive(pullups)
+            advanceUntilIdle()
+
+            // Then — диалог открыт, репозиторий не тронут
+            val state = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                pullups.id,
+                state.pendingArchiveId,
+                "pendingArchiveId == item.id при dontShowArchiveDialog=false"
+            )
+            assertTrue(
+                repository.setArchivedCalls.isEmpty(),
+                "setArchived НЕ вызван на requestArchive (default-поведение — диалог)"
+            )
+        }
+
+    /**
+     * `confirmArchive(suppress = true)` — вызывает
+     * `repository.setArchived(id, true)` И
+     * `dataStore.setDontShowArchiveDialog(true)` ровно один раз.
+     *
+     * (archive-alert-hide, tasks §2.3 / §3.2.)
+     */
+    @Test
+    fun confirmArchive_when_suppressTrue_then_writes_pref_and_archives() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestArchive(pullups)
+            advanceUntilIdle()
+
+            // When
+            viewModel.confirmArchive(suppress = true)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(pullups.id to true),
+                repository.setArchivedCalls,
+                "confirmArchive(suppress=true) вызвал setArchived(id, true)"
+            )
+            coVerify(exactly = 1) { dataStore.setDontShowArchiveDialog(true) }
+        }
+
+    /**
+     * `confirmArchive(suppress = false)` — вызывает
+     * `repository.setArchived(id, true)` и НЕ вызывает
+     * `dataStore.setDontShowArchiveDialog` (защита от лишней записи pref).
+     *
+     * (archive-alert-hide, tasks §2.4 — regression-guard; не TDD-red.)
+     */
+    @Test
+    fun confirmArchive_when_suppressFalse_then_does_not_write_pref() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestArchive(pullups)
+            advanceUntilIdle()
+
+            // When
+            viewModel.confirmArchive(suppress = false)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(pullups.id to true),
+                repository.setArchivedCalls,
+                "confirmArchive(suppress=false) вызвал setArchived(id, true)"
+            )
+            coVerify(exactly = 0) { dataStore.setDontShowArchiveDialog(any()) }
         }
 }

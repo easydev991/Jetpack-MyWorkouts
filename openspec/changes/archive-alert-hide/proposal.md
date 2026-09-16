@@ -16,7 +16,7 @@
 - Поддержка `suppress` в `confirmArchive(suppress: Boolean = false)`.
 - Опциональный slot `suppressContent` в `ExerciseConfirmDialog`.
 - Передача `Row { Checkbox + Text }` в слот из `SuccessBody`.
-- Локализация `dont_show_again` (ru + en).
+- Локализация `exercise_archive_dont_show_again` (ru + en).
 - Превью всех ключевых состояний диалога (светлая + тёмная темы).
 
 Breaking changes: нет — при существующей установке pref
@@ -53,8 +53,8 @@ Breaking changes: нет — при существующей установке 
 - `app/src/main/java/com/myworkouts/ui/viewmodel/ExercisesViewModel.kt`
   — конструктор принимает `AppSettingsDataStore`; `requestArchive`
   читает pref через `.first()`; `confirmArchive(suppress: Boolean =
-  false)` при `suppress == true` параллельно пишет pref; factory
-  обновляется.
+  false)` при `suppress == true` пишет pref после архивации и
+  dismiss; factory обновляется.
 - `app/src/main/java/com/myworkouts/ui/screens/exercises/ExercisesScreen.kt`
   — `ExerciseConfirmDialog` принимает slot `suppressContent`; колбэк
   `ExercisesScreenState.onConfirmArchive` расширяется до
@@ -80,7 +80,7 @@ Breaking changes: нет — при существующей установке 
   Это единственное место, где `dataStore` «доходит» до VM
   фабрики.
 - `app/src/main/res/values/strings.xml` + `values-en/strings.xml` —
-  добавляется `dont_show_again`.
+  добавляется `exercise_archive_dont_show_again`.
 - `app/src/test/.../AppSettingsDataStoreTest.kt` — новый файл,
   три TDD-теста на `dontShowArchiveDialog` Flow/setter
   (см. `tasks.md` §1.0).

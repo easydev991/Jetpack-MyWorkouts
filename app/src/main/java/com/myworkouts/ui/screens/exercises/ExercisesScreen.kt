@@ -24,7 +24,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -218,7 +220,16 @@ internal data class ExercisesScreenState(
     val onRequestDelete: (Exercise) -> Unit = {},
     val onConfirmDelete: () -> Unit = {},
     val onCancelDelete: () -> Unit = {},
-    val onConfirmArchive: () -> Unit = {},
+    /**
+     * Подтверждение архивации. Сигнатура `(Boolean) -> Unit`: аргумент —
+     * значение чекбокса «Больше не показывать» (true = записать pref
+     * «больше не показывать диалог», false = не записывать;
+     * archive-alert-hide, tasks §4.3, design.md Decision 4).
+     * `ExerciseConfirmDialog.onConfirm` остаётся `() -> Unit` — лямбда
+     * `{ state.onConfirmArchive(suppress) }` в [SuccessBody] склеивает
+     * захваченный `suppress` и диалог.
+     */
+    val onConfirmArchive: (Boolean) -> Unit = {},
     val onCancelArchive: () -> Unit = {},
     val onArchivedExercisesClick: () -> Unit = {}
 )
@@ -312,6 +323,17 @@ private fun SuccessBody(
     state: ExercisesScreenState,
     success: ExercisesUiState.Success
 ) {
+    // Состояние чекбокса «Больше не показывать» в диалоге архивации
+    // (archive-alert-hide, tasks §4.3, design.md Decision 4): лежит в
+    // scope `SuccessBody` (вне composable-лямбды слота), чтобы и
+    // suppressContent-слот, и onConfirm-лямбда захватывали одну и ту же
+    // `MutableState`-переменную через замыкание. `remember` — состояние
+    // переживает recomposition, но не переживает закрытие диалога
+    // (новый `pendingArchiveId` → новый вызов SuccessBody →
+    // `remember` сбрасывается на `false`, как и требуется — галочка не
+    // переносится между разными диалогами).
+    var suppress by remember { mutableStateOf(false) }
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (success.exercises.isEmpty()) {
             // Заглушка пустого состояния (spec «Пустое состояние
@@ -354,7 +376,20 @@ private fun SuccessBody(
                 confirmRes = R.string.exercise_archive_dialog_confirm,
                 cancelRes = R.string.exercise_archive_dialog_cancel,
                 confirmInError = false,
-                onConfirm = state.onConfirmArchive,
+                // Слот для чекбокса «Больше не показывать». Захватывает
+                // ту же `suppress`, что и onConfirm-лямбда ниже.
+                suppressContent = {
+                    ArchiveSuppressSlot(
+                        checked = suppress,
+                        onCheckedChange = { suppress = it }
+                    )
+                },
+                // `() -> Unit` для ExerciseConfirmDialog.onConfirm —
+                // совместимая сигнатура. Внутри читает захваченную
+                // `suppress` и передаёт в стейт-холдер, который вызовет
+                // `confirmArchive(suppress)` (design.md Decision 4:
+                // диалог не знает про suppress).
+                onConfirm = { state.onConfirmArchive(suppress) },
                 onCancel = state.onCancelArchive
             )
         }
@@ -639,8 +674,15 @@ internal fun ExerciseContextMenu(
  * @param cancelRes Текст кнопки отмены
  * @param confirmInError `true` — confirm в `colorScheme.error`
  *   (необратимое действие); `false` — дефолтный цвет (обратимое)
+ * @param suppressContent Опциональный слот для дополнительного
+ *   контента между основным текстом и кнопками (archive-alert-hide,
+ *   tasks §4.1). `null` — рендеринг байт-в-байт прежний. Используется
+ *   для чекбокса «Больше не показывать» в диалоге архивации; диалог
+ *   удаления и обратная совместимость call-сайтов не передают слот.
  * @param onConfirm Подтверждение — VM вызывает `confirmDelete()` /
- *   `confirmArchive()`
+ *   `confirmArchive()`. Сигнатура `() -> Unit` неизменна: диалог не
+ *   знает про `suppress`, состояние чекбокса захватывается замыканием
+ *   в `SuccessBody` (design.md Decision 4).
  * @param onCancel Отмена — VM вызывает `cancelDelete()` /
  *   `cancelArchive()`; также срабатывает на тап вне алерта / системный
  *   back (`onDismissRequest = onCancel`).
@@ -654,19 +696,25 @@ internal fun ExerciseConfirmDialog(
     @StringRes confirmRes: Int,
     @StringRes cancelRes: Int,
     confirmInError: Boolean,
+    suppressContent: (@Composable () -> Unit)? = null,
     onConfirm: () -> Unit,
     onCancel: () -> Unit
 ) {
-    val confirmColors =
-        if (confirmInError) {
-            ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-        } else {
-            ButtonDefaults.textButtonColors()
-        }
+    val confirmColors = exerciseConfirmButtonColors(confirmInError)
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text(stringResource(titleRes)) },
-        text = { Text(stringResource(textRes, itemName)) },
+        text = {
+            // suppressContent (если есть) отрисовывается между текстом
+            // и кнопками (внутри слота `text` AlertDialog). `null` —
+            // рендеринг прежний, одиночный Text.
+            Column {
+                Text(stringResource(textRes, itemName))
+                if (suppressContent != null) {
+                    suppressContent()
+                }
+            }
+        },
         confirmButton = {
             TextButton(onClick = onConfirm, colors = confirmColors) {
                 Text(stringResource(confirmRes))
@@ -679,6 +727,44 @@ internal fun ExerciseConfirmDialog(
         }
     )
 }
+
+/**
+ * Слот `suppressContent` алерта архивации: чекбокс «Больше не
+ * показывать» + локализованный лейбл (archive-alert-hide). Состояние
+ * поднимается на call-сайте: [SuccessBody] захватывает его в
+ * `onConfirm`-лямбде, превью держат собственную копию через `remember`
+ * (design.md Decision 4 — диалог не знает про `suppress`).
+ */
+@Composable
+internal fun ArchiveSuppressSlot(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(top = 8.dp)
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+        Text(stringResource(R.string.exercise_archive_dont_show_again))
+    }
+}
+
+/**
+ * Цвета confirm-кнопки алерта подтверждения: error-цвет для удаления
+ * (`confirmInError = true`), обычные — для архивации. Общие для
+ * [ExerciseConfirmDialog] и windowless-превью его контента
+ * (`ExerciseConfirmDialogSample` в `ExercisesScreenPreview.kt`).
+ */
+@Composable
+internal fun exerciseConfirmButtonColors(confirmInError: Boolean): ButtonColors =
+    if (confirmInError) {
+        ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+    } else {
+        ButtonDefaults.textButtonColors()
+    }
 
 /**
  * Локализованный лейбл типа измерения и маппинг типизированной

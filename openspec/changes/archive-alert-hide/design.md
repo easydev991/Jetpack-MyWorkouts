@@ -115,9 +115,10 @@ repository.setArchived(id, true)`, без какой-либо памяти о т
 5. **`confirmArchive(suppress: Boolean = false)` вместо двух методов
    или `Pair<Boolean, Boolean>`-флага** — единая точка входа
    (сохраняет обратную совместимость call-сайта из `SuccessBody`),
-   один параметр с очевидным default. Параллельная запись pref через
-   `viewModelScope.launch { dataStore.setDontShowArchiveDialog(true) }`
-   без `await` — архивация не должна блокироваться записью pref;
+   один параметр с очевидным default. Запись pref после dismiss
+   в том же `viewModelScope.launch` (архивация → dismiss →
+   `dataStore.setDontShowArchiveDialog(true)`, оба вызова suspend,
+   UI не блокируется) — архивация не блокируется записью pref;
    если запись pref упадёт, архив уже выполнен (и обратим вручную).
 
 6. **Manual DI без Hilt** — фабрика `ExercisesViewModel` принимает
@@ -140,8 +141,8 @@ repository.setArchived(id, true)`, без какой-либо памяти о т
   UI-поток. DataStore `first()` на горячем Flow — дешёвая операция;
   компромисс не требует отдельного state в VM.
 
-- [Risk] `confirmArchive(suppress = true)` пишет pref параллельно с
-  архивацией; если запись pref упадёт (например, диск переполнен),
+- [Risk] `confirmArchive(suppress = true)` пишет pref после
+  архивации; если запись pref упадёт (например, диск переполнен),
   пользователь не получит opt-out. → [Mitigation] Принимаем
   сознательно: архив уже выполнен (и обратим вручную), pref можно
   восстановить через UI в следующих итерациях; откатывать архивацию

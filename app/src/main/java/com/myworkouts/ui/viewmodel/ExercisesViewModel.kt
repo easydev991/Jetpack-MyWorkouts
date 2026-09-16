@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.LinkedEntriesDeletionException
 import com.myworkouts.data.repository.StandardExerciseDeletionException
 import com.myworkouts.data.repository.WorkoutDataRepository
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -45,9 +47,12 @@ private const val LOG_TAG: String = "ExercisesViewModel"
  * generic снекбар через [DeleteExerciseError.StandardExercise].
  *
  * @property repository Репозиторий данных тренировок
+ * @property dataStore Настройки приложения (используется для opt-out
+ *   диалога подтверждения архивации; archive-alert-hide, tasks §1.2)
  */
 class ExercisesViewModel(
-    private val repository: WorkoutDataRepository
+    private val repository: WorkoutDataRepository,
+    private val dataStore: AppSettingsDataStore
 ) : ViewModel() {
     /**
      * Id упражнения, для которого сейчас показан алерт подтверждения
@@ -223,9 +228,22 @@ class ExercisesViewModel(
      * стандартных, и для пользовательских упражнений (exercises-archive
      * design Decision 4). Аналог [requestDelete], но без pre-check
      * (архивация не имеет FK-ограничений и доступна для всех типов).
+     *
+     * Opt-out (archive-alert-hide): если пользователь ранее отметил
+     * «больше не показывать» и флаг `dontShowArchiveDialog == true` —
+     * архивация выполняется сразу (`repository.setArchived(item.id,
+     * true)`), диалог НЕ открывается. Иначе — обычный путь через
+     * pendingArchiveId (tasks §3.1).
      */
     fun requestArchive(item: Exercise) {
-        pendingArchiveId.value = item.id
+        viewModelScope.launch {
+            val dontShow = dataStore.dontShowArchiveDialog.first()
+            if (dontShow) {
+                repository.setArchived(item.id, true)
+            } else {
+                pendingArchiveId.value = item.id
+            }
+        }
     }
 
     /**
@@ -244,12 +262,22 @@ class ExercisesViewModel(
      * `requestArchive` достаточен; spec «Failure при подтверждении —
      * алерт закрыт, каталог без изменений»; tasks §3.3). `success` —
      * реактивный `Flow` каталога сам уберёт упражнение из списка.
+     *
+     * @param suppress `true` — вместе с архивацией записать флаг
+     *   «больше не показывать диалог» в [AppSettingsDataStore]
+     *   (archive-alert-hide, tasks §3.2). Параметр введён в §1.3;
+     *   здесь — поведение записи pref. Default `false` сохраняет
+     *   обратную совместимость call-сайта диалога удаления (которому
+     *   suppress не нужен).
      */
-    fun confirmArchive() {
+    fun confirmArchive(suppress: Boolean = false) {
         val id = pendingArchiveId.value ?: return
         viewModelScope.launch {
             repository.setArchived(id, true)
             pendingArchiveId.value = null
+            if (suppress) {
+                dataStore.setDontShowArchiveDialog(true)
+            }
         }
     }
 
@@ -259,11 +287,16 @@ class ExercisesViewModel(
          * по образцу [MainViewModel.factory].
          *
          * @param repository Репозиторий данных тренировок
+         * @param dataStore Настройки приложения (для opt-out диалога
+         *   архивации, archive-alert-hide, tasks §1.2)
          * @return Factory для создания ViewModel
          */
-        fun factory(repository: WorkoutDataRepository): ViewModelProvider.Factory =
+        fun factory(
+            repository: WorkoutDataRepository,
+            dataStore: AppSettingsDataStore
+        ): ViewModelProvider.Factory =
             viewModelFactory {
-                initializer { ExercisesViewModel(repository) }
+                initializer { ExercisesViewModel(repository, dataStore) }
             }
     }
 }

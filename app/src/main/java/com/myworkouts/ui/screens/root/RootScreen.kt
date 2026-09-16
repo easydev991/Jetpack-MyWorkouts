@@ -140,10 +140,7 @@ private fun AppNavHost(
             )
         }
         composable(Screen.Exercises.route) {
-            ExercisesNavDestination(
-                repository = repository,
-                navController = navController
-            )
+            ExercisesNavDestination(repository, dataStore, navController)
         }
         composable(Screen.More.route) {
             MoreScreen(
@@ -209,10 +206,11 @@ private fun AppNavHost(
 @Composable
 private fun ExercisesNavDestination(
     repository: WorkoutDataRepository,
+    dataStore: AppSettingsDataStore,
     navController: NavHostController
 ) {
     ExercisesScreen(
-        viewModel = viewModel(factory = ExercisesViewModel.factory(repository)),
+        viewModel = viewModel(factory = ExercisesViewModel.factory(repository, dataStore)),
         onAddExerciseClick = { navController.navigate(Screen.ExerciseCreate.createRoute()) },
         onEditExercise = { exerciseId ->
             navController.navigate(Screen.ExerciseCreate.createRoute(exerciseId))

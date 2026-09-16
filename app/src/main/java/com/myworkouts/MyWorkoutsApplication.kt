@@ -27,7 +27,7 @@ class MyWorkoutsApplication : Application() {
      * на том же файле при пересоздании Activity — риск нескольких активных
      * инстансов на один файл (design.md Decision 1).
      */
-    val dataStore: AppSettingsDataStore by lazy { AppSettingsDataStore(this) }
+    val dataStore: AppSettingsDataStore by lazy { AppSettingsDataStore.create(this) }
 
     /** БД приложения с prepopulate стандартного набора. */
     private val database: WorkoutDatabase by lazy { WorkoutDatabase.create(this, standardList) }

@@ -138,6 +138,8 @@
     <string name="exercise_archive_dialog_text">Чтобы снова использовать упражнение \"%1$s\" в тренировках, нужно будет вернуть его из архива</string>
     <string name="exercise_archive_dialog_cancel">Отмена</string>
     <string name="exercise_archive_dialog_confirm">Архивировать</string>
+    <!-- archive-alert-hide: текст чекбокса «Больше не показывать» в диалоге архивации -->
+    <string name="exercise_archive_dont_show_again">Больше не показывать</string>
     <string name="exercises_archive_button">Архив упражнений</string>
     <string name="archived_exercises_title">Архив упражнений</string>
     <string name="archived_exercises_empty">В архиве пусто</string>

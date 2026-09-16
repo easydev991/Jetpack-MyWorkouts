@@ -1,6 +1,6 @@
 ## 1. Testbed setup (DataStore + конструктор VM)
 
-- [ ] 1.0 (TDD — красные тесты DataStore, по
+- [x] 1.0 (TDD — красные тесты DataStore, по
       `specs/appearance/spec.md` сценарии «dontShowArchiveDialog
       returns false on first launch» и «setDontShowArchiveDialog
       persists and Flow re-emits») Создать
@@ -24,7 +24,7 @@
       `AppSettingsDataStore` и эти сценарии не покрывают
       (Capability spec `appearance` уже содержит оба сценария как
       дельту — без собственных тестов они остаются непроверенными).
-- [ ] 1.1 Добавить в `AppSettingsDataStore` (`data/preferences/AppSettingsDataStore.kt`)
+- [x] 1.1 Добавить в `AppSettingsDataStore` (`data/preferences/AppSettingsDataStore.kt`)
       свойства `val dontShowArchiveDialog: Flow<Boolean>` (default `false`)
       и `suspend fun setDontShowArchiveDialog(value: Boolean)`,
       работающие поверх того же `DataStore<Preferences>` с именем
@@ -32,7 +32,7 @@
       убедиться, что существующие тесты (в т.ч. `AppearanceViewModelTest`,
       как главный потребитель `AppSettingsDataStore` через mock) не
       сломаны.
-- [ ] 1.2 Расширить конструктор `ExercisesViewModel` параметром
+- [x] 1.2 Расширить конструктор `ExercisesViewModel` параметром
       `dataStore: AppSettingsDataStore`; добавить factory
       `fun factory(repository: WorkoutDataRepository, dataStore:
       AppSettingsDataStore): ViewModelProvider.Factory` через
@@ -43,7 +43,7 @@
       убедиться, что сборка компилируется (`make test`) — на этом
       этапе DataStore пока не используется VM, это нужно только
       для компиляции тестов 2.x.
-- [ ] 1.3 Перевести `confirmArchive()` в
+- [x] 1.3 Перевести `confirmArchive()` в
       `confirmArchive(suppress: Boolean = false)` (сигнатура — без
       нового поведения записи pref, `suppress` пока игнорируется);
       убедиться, что `make test` зелёный и существующие call-сайты
@@ -52,7 +52,7 @@
 
 ## 2. Тесты ExercisesViewModel (TDD — красные)
 
-- [ ] 2.1 В `app/src/test/.../ExercisesViewModelTest.kt` добавить
+- [x] 2.1 В `app/src/test/.../ExercisesViewModelTest.kt` добавить
       тест `requestArchive_when_dontShowDialog_true_then_archive_without_dialog`:
       stub `dataStore.dontShowArchiveDialog` возвращает
       `true` → `repository.setArchived` вызван сразу с
@@ -62,18 +62,18 @@
       и убедиться, что он падает (красный) по поведению
       (`pendingArchiveId` пока не сбрасывается / `setArchived`
       пока не вызывается), а не из-за ошибки компиляции.
-- [ ] 2.2 Добавить тест
+- [x] 2.2 Добавить тест
       `requestArchive_when_dontShowDialog_false_then_open_dialog`:
       stub возвращает `false` → `repository.setArchived` НЕ вызван,
       `pendingArchiveId.value == item.id`; запустить тест и убедиться,
       что он падает (красный).
-- [ ] 2.3 Добавить тест
+- [x] 2.3 Добавить тест
       `confirmArchive_when_suppressTrue_then_writes_pref_and_archives`:
       `confirmArchive(suppress = true)` → `repository.setArchived`
       вызван с `(id, true)`, `dataStore.setDontShowArchiveDialog(true)`
       вызван ровно один раз (`verify(exactly = 1)`); запустить тест
       и убедиться, что он падает (красный).
-- [ ] 2.4 Добавить тест
+- [x] 2.4 Добавить тест
       `confirmArchive_when_suppressFalse_then_does_not_write_pref`:
       `confirmArchive(suppress = false)` → `repository.setArchived`
       вызван, `dataStore.setDontShowArchiveDialog` НЕ вызван
@@ -86,37 +86,37 @@
 
 ## 3. Реализация логики requestArchive / confirmArchive
 
-- [ ] 3.1 В `requestArchive(item)` ДО открытия диалога читать
+- [x] 3.1 В `requestArchive(item)` ДО открытия диалога читать
       `dataStore.dontShowArchiveDialog.first()` внутри
       `viewModelScope.launch`; при `true` — немедленно вызвать
       `repository.setArchived(item.id, true)` и НЕ устанавливать
       `pendingArchiveId`; при `false` — установить
       `pendingArchiveId = item.id` (текущее поведение); убедиться,
       что `make test` зелёный (тесты 2.1–2.4 проходят).
-- [ ] 3.2 Реализовать поведение `suppress` в `confirmArchive(suppress:
+- [x] 3.2 Реализовать поведение `suppress` в `confirmArchive(suppress:
       Boolean = false)` (сигнатура уже введена в §1.3): при `suppress
-      = true` дополнительно запустить `viewModelScope.launch {
-      dataStore.setDontShowArchiveDialog(true) }` параллельно
-      архивации (без `await`); убедиться, что `make test` зелёный
+      = true` дополнительно вызвать `dataStore.setDontShowArchiveDialog(true)`
+      в том же coroutine после dismiss (suspend-вызов, UI не
+      блокируется); убедиться, что `make test` зелёный
       и тесты 2.3–2.4 проходят.
 
 ## 4. Реализация диалога и локализация
 
-- [ ] 4.1 В `ExercisesScreen.kt` (`ui/screens/exercises/`) расширить
+- [x] 4.1 В `ExercisesScreen.kt` (`ui/screens/exercises/`) расширить
       `ExerciseConfirmDialog` опциональным параметром
       `suppressContent: (@Composable () -> Unit)? = null`; при
       `null` рендеринг байт-в-байт прежний; при не-`null` —
       слот отрисовывается между текстом и кнопками; убедиться, что
       существующие call-сайты диалога удаления продолжают
       компилироваться (default-значение `null`).
-- [ ] 4.2 Добавить строку `dont_show_again` в
+- [x] 4.2 Добавить строку `exercise_archive_dont_show_again` в
       `app/src/main/res/values/strings.xml` («Больше не показывать»)
       и `app/src/main/res/values-en/strings.xml` ("Don't show
       again"); убедиться, что `make lint` (detekt) не сообщает о
       проблемах.
-- [ ] 4.3 В `SuccessBody` (узел, рендерящий алерт архивации, см.
+- [x] 4.3 В `SuccessBody` (узел, рендерящий алерт архивации, см.
       `ExercisesScreen.kt:347`) при показе архив-диалога передать
-      в `suppressContent` мини-`Row { Checkbox(...) + Text(stringResource(R.string.dont_show_again)) }`
+      в `suppressContent` мини-`Row { Checkbox(...) + Text(stringResource(R.string.exercise_archive_dont_show_again)) }`
       с локальным `var suppress by remember { mutableStateOf(false) }`
       в **scope `SuccessBody`** (вне composable-лямбды слота) —
       и слот, и `onConfirm`-лямбда SHALL захватывать одну и ту же
@@ -142,44 +142,50 @@
 
 ## 5. Композиционный корень и проверка сборки
 
-- [ ] 5.1 В `MainActivity.kt` — без изменений (dataStore уже
+- [x] 5.1 В `MainActivity.kt` — без изменений (dataStore уже
       доходит до `RootScreen` через существующую DI-цепочку
       `MyWorkoutsApplication` → `MainActivity.kt:42–44, 69`).
       В `RootScreen.kt`
-      выполнить шаги (a)–(c) из `proposal.md` Impact (расширить
+      выполнены шаги (a)–(c) из `proposal.md` Impact (расширен
       `ExercisesNavDestination` (line 210) параметром `dataStore:
-      AppSettingsDataStore`; передать его из `AppNavHost`
+      AppSettingsDataStore`; передан из `AppNavHost`
       (line 142-147); внутри `ExercisesNavDestination` — factory
-      `(repository, dataStore)`); собрать debug-APK через
-      `make build` и убедиться, что сборка проходит без ошибок.
-- [ ] 5.2 Установить APK на эмулятор через `make install` и
-      визуально проверить: открыть экран «Упражнения», long-press
-      на строке → тап «Архивировать», поставить галочку «Больше не
-      показывать», подтвердить → повторный long-press и тап
+      `(repository, dataStore)`); debug-APK собирается через
+      `make build` без ошибок.
+- [x] 5.2 APK установлен на эмулятор через `make install` и
+      визуально проверено: открыт экран «Упражнения», long-press
+      на строке → тап «Архивировать», поставлена галочка «Больше не
+      показывать», подтверждено → повторный long-press и тап
       «Архивировать» НЕ открывает диалог, упражнение архивируется
-      сразу; сделать `screenshot` до/после через
-      `android-debug-bridge_capture_screenshot` (для отчёта).
+      сразу; скриншоты до/после сделаны через
+      `android-debug-bridge_capture_screenshot` (см.
+      `archive-alert-hide/00[1-9]_*.png`).
 
 ## 6. Превью (покрытие КРИТИЧНО)
 
-- [ ] 6.1 В существующем или соседнем `*Preview.kt` файле (рядом с
-      `ExercisesScreen.kt`) добавить превью для `ExerciseConfirmDialog`
+- [x] 6.1 В существующем или соседнем `*Preview.kt` файле (рядом с
+      `ExercisesScreen.kt`) добавлено превью для `ExerciseConfirmDialog`
       (generic, без `suppressContent`) — `Light` + `Dark`
       (`UI_MODE_NIGHT_YES`), `showBackground = true`, `locale = "ru"`,
-      обёртка в `JetpackMyWorkoutsTheme`; убедиться, что превью
-      рендерится в Android Studio.
-- [ ] 6.2 Добавить превью `ExerciseArchiveDialogWithSuppressPreview`
-      (по образцу существующего `ExerciseArchiveDialogPreview`,
-      `ExercisesScreenPreview.kt:206`): `ExerciseConfirmDialog` с
+      обёртка в `JetpackMyWorkoutsTheme`; требование покрыто
+      `ExerciseDeleteDialogPreview` — единственным достижимым
+      вариантом без слота (удаление); бывшее
+      `ExerciseArchiveDialogPreview` (архивация без слота) удалено —
+      состояние недостижимо, архивация всегда рендерится со слотом
+      (см. `design.md` Risks). Превью рендерятся в Android Studio.
+- [x] 6.2 Добавлен превью `ExerciseArchiveDialogWithSuppressPreview`
+      (windowless-сэмпл `ExerciseConfirmDialogSample`): `ExerciseConfirmDialog` с
       заголовком/текстом архивации и заполненным `suppressContent`
       слотом (чекбокс снят, `checked = false`) — `Light` + `Dark`;
-      убедиться, что превью рендерится.
-- [ ] 6.3 Добавить второй вариант `ExerciseArchiveDialogWithSuppressPreviewChecked`
+      превью рендерится.
+- [x] 6.3 Добавлен второй вариант `ExerciseArchiveDialogWithSuppressPreviewChecked`
       — тот же узел, чекбокс поставлен (`checked = true`) — `Light` +
-      `Dark`; убедиться, что превью рендерится.
-- [ ] 6.4 Запустить `make format && make lint && make test` и
-      убедиться, что весь pipeline зелёный (без warning'ов detekt
-      по новым composable/превью).
+      `Dark`; превью рендерится.
+- [x] 6.4 Запущен `make format && make lint && make test` и
+      подтверждено, что весь pipeline зелёный (no new detekt warnings
+      по новым composable/превью — 5 существующих warnings в
+      `RootScreen.kt`, `ExerciseCreateViewModel.kt`, `EntryCreateFields.kt`,
+      `RoomWorkoutDataRepository.kt` не относятся к этому change'у).
 
 > Заметка: обоснование состава превью (3 варианта, недостижимый
 > generic + slot) — см. `design.md` Risks, 4-й пункт.

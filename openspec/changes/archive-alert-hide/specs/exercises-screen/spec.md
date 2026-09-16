@@ -39,7 +39,7 @@ pending также сбрасывается (race: упражнение удал
 показывается, требуется подтверждение).
 
 Если в открытом алерте пользователь поставил галочку «Больше не
-показывать» (`R.string.dont_show_again`) и подтвердил архивацию,
+показывать» (`R.string.exercise_archive_dont_show_again`) и подтвердил архивацию,
 `confirmArchive` SHALL дополнительно вызвать
 `dataStore.setDontShowArchiveDialog(true)`. Чекбокс в диалоге
 архивации SHALL отображаться между текстом диалога и кнопками;
@@ -191,7 +191,7 @@ capability `appearance` (MODIFIED-требование этого change в
 
 ### Requirement: Локализация строки «Больше не показывать»
 
-Строки `dont_show_again` SHALL существовать в
+Строки `exercise_archive_dont_show_again` SHALL существовать в
 `res/values/strings.xml` («Больше не показывать») и
 `res/values-en/strings.xml` ("Don't show again"). Лейбл используется
 в слоте `suppressContent` диалога архивации (требование «Алерт

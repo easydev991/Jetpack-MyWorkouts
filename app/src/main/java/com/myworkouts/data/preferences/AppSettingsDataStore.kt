@@ -11,14 +11,6 @@ import com.myworkouts.domain.model.AppTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-/**
- * DataStore для настроек оформления приложения (тема, динамические цвета).
- *
- * Настройки сохраняются постоянно, чтобы при каждом запуске приложения
- * выбор пользователя не сбрасывался.
- */
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "appearance_prefs")
-
 /** DataStore-ключ для выбранной темы. */
 private val THEME_KEY = stringPreferencesKey("theme")
 
@@ -28,20 +20,25 @@ private val USE_DYNAMIC_COLORS_KEY = booleanPreferencesKey("use_dynamic_colors")
 /** DataStore-ключ для видимости вкладки «Упражнения» в нижней навигации. */
 private val SHOW_EXERCISES_TAB_KEY = booleanPreferencesKey("show_exercises_tab")
 
+/** DataStore-ключ для глобального opt-out диалога подтверждения архивации. */
+private val DONT_SHOW_ARCHIVE_DIALOG_KEY = booleanPreferencesKey("dont_show_archive_dialog")
+
 /**
  * Реализация DataStore для настроек оформления приложения.
  *
- * @param context контекст приложения (должен быть applicationContext —
- * иначе DataStore ругнётся на утечку при уничтожении Activity)
+ * @param dataStore Базовый [DataStore] для `appearance_prefs` (singleton
+ *   per file — обеспечивается `preferencesDataStore` делегатом в
+ *   [Companion.create] для production; в тестах инжектится через
+ *   `PreferenceDataStoreFactory.create(produceFile = ...)`).
  *
  * @implNote class, не MyWorkoutsApplication (одна зависимость — лишняя
- * сущность). Хранит 3 ключа (theme/use_dynamic_colors/show_exercises_tab).
- * Новые ключи — точечно по фичам, имя файла appearance_prefs НЕ менять
- * (миграция DataStore). Если появится 2-я зависимость от DataStore —
- * вынести в MyWorkoutsApplication.
+ * сущность). Хранит 4 ключа (theme/use_dynamic_colors/show_exercises_tab/
+ * dont_show_archive_dialog). Новые ключи — точечно по фичам, имя файла
+ * appearance_prefs НЕ менять (миграция DataStore). Если появится 2-я
+ * зависимость от DataStore — вынести в MyWorkoutsApplication.
  */
 class AppSettingsDataStore(
-    private val context: Context
+    private val dataStore: DataStore<Preferences>
 ) {
     /**
      * Сохраняет выбранную тему приложения.
@@ -49,7 +46,7 @@ class AppSettingsDataStore(
      * @param theme Выбранная тема
      */
     suspend fun setTheme(theme: AppTheme) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[THEME_KEY] = theme.name
         }
     }
@@ -60,7 +57,7 @@ class AppSettingsDataStore(
      * @param useDynamicColors Использовать динамические цвета
      */
     suspend fun setUseDynamicColors(useDynamicColors: Boolean) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[USE_DYNAMIC_COLORS_KEY] = useDynamicColors
         }
     }
@@ -70,7 +67,7 @@ class AppSettingsDataStore(
      * При первом запуске возвращает значение по умолчанию (SYSTEM).
      */
     val theme: Flow<AppTheme> =
-        context.dataStore.data
+        dataStore.data
             .map { preferences ->
                 @Suppress("SwallowedException")
                 preferences[THEME_KEY]?.let { themeName ->
@@ -87,7 +84,7 @@ class AppSettingsDataStore(
      * При первом запуске возвращает значение по умолчанию (true).
      */
     val useDynamicColors: Flow<Boolean> =
-        context.dataStore.data
+        dataStore.data
             .map { preferences ->
                 preferences[USE_DYNAMIC_COLORS_KEY] ?: true
             }
@@ -98,7 +95,7 @@ class AppSettingsDataStore(
      * @param show Показывать вкладку «Упражнения» в нижней навигации
      */
     suspend fun setShowExercisesTab(show: Boolean) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[SHOW_EXERCISES_TAB_KEY] = show
         }
     }
@@ -109,8 +106,51 @@ class AppSettingsDataStore(
      * каталог нужен не всем, кому нужен — включит тоггл на «Ещё».
      */
     val showExercisesTab: Flow<Boolean> =
-        context.dataStore.data
+        dataStore.data
             .map { preferences ->
                 preferences[SHOW_EXERCISES_TAB_KEY] ?: false
             }
+
+    /**
+     * Сохраняет настройку глобального opt-out диалога подтверждения
+     * архивации упражнения. При `true` архивация выполняется сразу
+     * без диалога; при `false` (по умолчанию) — диалог показывается.
+     *
+     * @param value Скрывать ли диалог архивации в будущем
+     */
+    suspend fun setDontShowArchiveDialog(value: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[DONT_SHOW_ARCHIVE_DIALOG_KEY] = value
+        }
+    }
+
+    /**
+     * Flow для отслеживания настройки скрытия диалога архивации.
+     * При первом запуске возвращает значение по умолчанию (`false`)
+     * — обратная совместимость: пользователь видит диалог как раньше,
+     * пока сам не поставит галочку.
+     */
+    val dontShowArchiveDialog: Flow<Boolean> =
+        dataStore.data
+            .map { preferences ->
+                preferences[DONT_SHOW_ARCHIVE_DIALOG_KEY] ?: false
+            }
+
+    companion object {
+        /**
+         * Singleton-per-file [DataStore] в файле `appearance_prefs` —
+         * повторные обращения возвращают один и тот же инстанс (иначе
+         * DataStore бросил бы `IllegalStateException`).
+         */
+        private val Context.preferencesDataStoreSingleton: DataStore<Preferences>
+            by preferencesDataStore(name = "appearance_prefs")
+
+        /**
+         * Создаёт [AppSettingsDataStore] поверх [Context] с правильным
+         * именем файла. Для тестов — прямой конструктор с
+         * `PreferenceDataStoreFactory.create(produceFile = ...)`,
+         * минуя singleton-делегат (нужен temp-файл).
+         */
+        fun create(context: Context): AppSettingsDataStore = AppSettingsDataStore(context.preferencesDataStoreSingleton)
+    }
 }
