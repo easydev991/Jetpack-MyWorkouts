@@ -67,9 +67,9 @@ Proguard-правила для Crashlytics и `.gitignore`-запись `app/goo
 навигации. `Application`-класс (`MyWorkoutsApplication`) уже есть после
 `fix-entry-list-live-update`; изменений в нём нет — Firebase инициализируется
 автоматически провайдером `google-services`, в `MyWorkoutsApplication.onCreate`
-ничего не добавляем. Сигнатуры VM с учётом запланированной ранее фичи
-`archive-alert-hide` (которая добавляет `dataStore` вторым параметром
-в `ExercisesViewModel`):
+ничего не добавляем. Сигнатуры VM с учётом уже реализованной фичи
+`archive-alert-hide` (архив 2026-09-16; она добавила `dataStore` вторым
+параметром в `ExercisesViewModel`):
 `AppDataViewModel(repository, exportUseCase, importUseCase, analyticsProvider)`,
 `ExercisesViewModel(repository, dataStore, analyticsProvider)`.
 
