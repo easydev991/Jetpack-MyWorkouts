@@ -295,26 +295,34 @@ it SHALL use the static `LightColorScheme` / `DarkColorScheme`.
 
 ### Requirement: MainActivity creates DataStore and subscribes directly
 
-`MainActivity.onCreate` SHALL create exactly one
-`AppSettingsDataStore(applicationContext)` instance BEFORE `setContent`
-(passing the application context to avoid Activity leaks). Inside
-`setContent`, the activity SHALL subscribe to
-`dataStore.theme.collectAsState(initial = AppTheme.SYSTEM)` and
-`dataStore.useDynamicColors.collectAsState(initial = true)`, compute
-`val isDarkTheme = theme.isDark(isSystemInDarkTheme())`, and call
-`LaunchedEffect(isDarkTheme) { enableEdgeToEdge(statusBarStyle = if
-(isDarkTheme) SystemBarStyle.dark(Color.TRANSPARENT) else
-SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)) }` to
-recolor the status bar on theme change. `RootScreen(dataStore = dataStore)`
-SHALL be composed inside `JetpackMyWorkoutsTheme(appTheme = theme,
-dynamicColor = useDynamicColors)`.
+`MyWorkoutsApplication` SHALL create exactly one
+`AppSettingsDataStore(applicationContext)` instance, lazily (`val
+dataStore: AppSettingsDataStore by lazy { ... }`), so that the
+singleton scope is the **process** (`Application`), not per-Activity —
+пересоздание Activity (смена конфигурации) более не плодит
+инстансов DataStore и `InvalidationTracker` нотифицирует одну
+подписку. `MainActivity.onCreate` SHALL получить этот инстанс через
+`val dataStore = (application as MyWorkoutsApplication).dataStore`
+BEFORE `setContent`. Внутри `setContent` активность подписывается на
+`dataStore.theme.collectAsState(initial = AppTheme.SYSTEM)` и
+`dataStore.useDynamicColors.collectAsState(initial = true)`,
+вычисляет `val isDarkTheme = theme.isDark(isSystemInDarkTheme())` и
+вызывает `LaunchedEffect(isDarkTheme) { enableEdgeToEdge(statusBarStyle
+= if (isDarkTheme) SystemBarStyle.dark(Color.TRANSPARENT) else
+SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)) }` для
+перекраски статус-бара при смене темы. `RootScreen(dataStore =
+dataStore)` SHALL компониться внутри `JetpackMyWorkoutsTheme(appTheme
+= theme, dynamicColor = useDynamicColors)`.
 
-#### Scenario: DataStore created exactly once per process
+#### Scenario: DataStore singleton lives on MyWorkoutsApplication
 
-- **WHEN** `MainActivity.onCreate` is invoked
+- **WHEN** the application process starts and
+  `MyWorkoutsApplication.dataStore` is first accessed
 - **THEN** exactly one `AppSettingsDataStore` is constructed with
-  `applicationContext` (no second instance may be created for the same
-  `appearance_prefs` file — would throw `IllegalStateException`)
+  `applicationContext` (lazy — не создаётся в `onCreate` до первого
+  обращения; повторные обращения возвращают тот же instance — второй
+  instance на тот же файл `appearance_prefs` бросил бы
+  `IllegalStateException`)
 
 #### Scenario: Status bar style follows theme at runtime
 
@@ -330,3 +338,28 @@ dynamicColor = useDynamicColors)`.
 - **THEN** on next launch, `dataStore.theme` first emits `DARK`
 - **AND** the entire UI (including status bar) renders in dark mode
   from the start
+
+### Requirement: AppSettingsDataStore persists archive-dialog preference
+
+`AppSettingsDataStore` SHALL expose
+`val dontShowArchiveDialog: Flow<Boolean>` (default `false`) и
+suspend-метод `setDontShowArchiveDialog(value: Boolean)`. Ключ SHALL
+храниться в том же файле `appearance_prefs` (БЕЗ отдельного
+`DataStore` и БЕЗ миграции — Preferences DataStore расширяет схему
+автоматически при добавлении нового ключа; существующие установки
+видят default `false` до явного opt-out пользователя).
+
+#### Scenario: dontShowArchiveDialog returns false on first launch
+
+- **WHEN** `AppSettingsDataStore.dontShowArchiveDialog` is collected
+  with no prior writes
+- **THEN** the first emitted value is `false`
+
+#### Scenario: setDontShowArchiveDialog persists and Flow re-emits
+
+- **WHEN** `setDontShowArchiveDialog(true)` is awaited
+- **THEN** subsequent `dontShowArchiveDialog` Flow collection emits
+  `true`
+- **WHEN** `setDontShowArchiveDialog(false)` is awaited
+- **THEN** subsequent `dontShowArchiveDialog` Flow collection emits
+  `false`
