@@ -28,7 +28,7 @@ help:
 
 # Сборка проекта
 ## build: Сборка debug APK. Использование: make build FLAVOR=rustore (по умолчанию FLAVOR=github)
-build:
+build: _ensure_secrets
 	./gradlew assemble$(FLAVOR_TITLE)Debug
 
 ## clean: Очистка кеша проекта
@@ -52,11 +52,11 @@ define run_tests
 endef
 
 ## test: Запуск unit-тестов (JVM, без устройства) со статистикой в консоли
-test:
+test: _ensure_secrets
 	$(call run_tests,test,app/build/test-results)
 
 ## android-test: Запуск интеграционных тестов на Android устройстве со статистикой в консоли. Использование: make android-test FLAVOR=rustore (по умолчанию FLAVOR=github)
-android-test:
+android-test: _ensure_secrets
 	$(call run_tests,connected$(FLAVOR_TITLE)DebugAndroidTest,app/build/outputs/androidTest-results/connected/debug)
 
 # Анализ кода
@@ -87,7 +87,7 @@ check: build test
 
 # Установка приложения
 ## install: Установка debug APK на устройство. Использование: make install FLAVOR=rustore (по умолчанию FLAVOR=github)
-install:
+install: _ensure_secrets
 	./gradlew install$(FLAVOR_TITLE)Debug
 
 # Релизная сборка и секреты
@@ -105,11 +105,12 @@ _load_secrets:
 	mkdir -p .secrets; \
 	cp -r "$$TEMP_DIR/$(SECRETS_DIR)/*" .secrets/ 2>/dev/null || cp -r "$$TEMP_DIR/$(SECRETS_DIR)"/* .secrets/; \
 	sed -i.tmp 's|^KEYSTORE_FILE=.*|KEYSTORE_FILE=.secrets/keystore/$(APP_NAME)-release.keystore|' .secrets/secrets.properties && rm -f .secrets/secrets.properties.tmp; \
+	cp -f .secrets/google-services.json app/google-services.json; \
 	printf "$(GREEN)Секреты загружены успешно$(RESET)\n"
 
-## _ensure_secrets: Обёртка над _load_secrets — клонирует секреты, только если .secrets/ отсутствует
+## _ensure_secrets: Обёртка над _load_secrets — клонирует секреты, если нет .secrets/ или app/google-services.json
 _ensure_secrets:
-	@if [ ! -d .secrets ]; then $(MAKE) _load_secrets; fi
+	@if [ ! -d .secrets ] || [ ! -f app/google-services.json ]; then $(MAKE) _load_secrets; fi
 
 ## apk: Создать подписанный release APK (без повышения версии). Использование: make apk FLAVOR=rustore (по умолчанию FLAVOR=github). Файл: $(APP_NAME){VERSION_CODE}.apk в корне репо
 apk: _ensure_secrets

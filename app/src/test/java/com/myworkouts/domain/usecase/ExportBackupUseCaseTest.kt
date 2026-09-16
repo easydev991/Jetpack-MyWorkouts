@@ -18,6 +18,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import java.util.concurrent.CancellationException
 
 /**
  * Unit-тесты формата экспорта (app-data-screen, design Decisions 2–3):
@@ -254,5 +256,26 @@ class ExportBackupUseCaseTest {
                 "Ошибка БД проходит в Result как есть, не оборачивается"
             )
             verify(exactly = 0) { contentResolver.openOutputStream(any()) }
+        }
+
+    @Test
+    fun invoke_when_cancelled_then_rethrows_cancellation() =
+        runTest {
+            // Given — SAF-поток записи прерывается отменой корутины
+            // (спека «Отмена корутины не является ошибкой»)
+            val repository = mockk<WorkoutDataRepository>(relaxed = true)
+            coEvery { repository.getAllExercises() } returns Result.success(listOf(pullUps))
+            coEvery { repository.getAllEntries() } returns Result.success(listOf(repsEntry))
+            val contentResolver = mockk<ContentResolver>(relaxed = true)
+            val context = mockk<Context>(relaxed = true)
+            every { context.contentResolver } returns contentResolver
+            every { contentResolver.openOutputStream(any()) } throws
+                CancellationException("Операция отменена")
+            val uri = mockk<Uri>()
+            val useCase = ExportBackupUseCase(repository, context)
+
+            // When / Then — CancellationException прокидывается дальше,
+            // не превращаясь в Result.failure
+            assertThrows<CancellationException> { useCase(uri) }
         }
 }

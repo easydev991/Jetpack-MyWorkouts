@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.AnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.ui.state.ArchivedExercisesUiState
@@ -30,9 +33,11 @@ private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
  * это и есть счётчик (design Decision 8).
  *
  * @property repository Репозиторий данных тренировок
+ * @property analyticsProvider Провайдер аналитики
  */
 class ArchivedExercisesViewModel(
-    private val repository: WorkoutDataRepository
+    private val repository: WorkoutDataRepository,
+    private val analyticsProvider: AnalyticsProvider
 ) : ViewModel() {
     /**
      * UI State экрана: `Loading` до первой эмиссии репозитория, затем
@@ -63,6 +68,8 @@ class ArchivedExercisesViewModel(
      * @param item Архивное упражнение
      */
     fun unarchive(item: Exercise) {
+        // Действие на вызове операции, до/независимо от исхода (design D10)
+        analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.UNARCHIVE))
         viewModelScope.launch { repository.setArchived(item.id, false) }
     }
 
@@ -73,11 +80,15 @@ class ArchivedExercisesViewModel(
          * [MainViewModel.factory].
          *
          * @param repository Репозиторий данных тренировок
+         * @param analyticsProvider Провайдер аналитики
          * @return Factory для создания ViewModel
          */
-        fun factory(repository: WorkoutDataRepository): ViewModelProvider.Factory =
+        fun factory(
+            repository: WorkoutDataRepository,
+            analyticsProvider: AnalyticsProvider
+        ): ViewModelProvider.Factory =
             viewModelFactory {
-                initializer { ArchivedExercisesViewModel(repository) }
+                initializer { ArchivedExercisesViewModel(repository, analyticsProvider) }
             }
     }
 }

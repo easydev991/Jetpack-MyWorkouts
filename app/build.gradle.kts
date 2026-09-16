@@ -5,6 +5,8 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
     alias(libs.plugins.ksp)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
@@ -62,6 +64,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Телеметрия выключена в debug (design D5): обе meta-data в
+            // манифесте читают один placeholder.
+            manifestPlaceholders["crashlyticsCollectionEnabled"] = false
+        }
         release {
             // R8: вырезает неиспользуемый код (иначе material-icons-extended
             // добавляет ~4 МБ неиспользуемых иконок в APK).
@@ -72,6 +79,7 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
+            manifestPlaceholders["crashlyticsCollectionEnabled"] = true
         }
     }
     compileOptions {
@@ -102,6 +110,9 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.analytics)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)

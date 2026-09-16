@@ -1,5 +1,8 @@
 package com.myworkouts.ui.viewmodel
 
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.FakeAnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
@@ -129,8 +132,35 @@ class ArchivedExercisesViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private val fakeAnalytics = FakeAnalyticsProvider()
+
     private fun createViewModel(repository: ArchivedExercisesFakeRepository): ArchivedExercisesViewModel =
-        ArchivedExercisesViewModel(repository)
+        ArchivedExercisesViewModel(repository, fakeAnalytics)
+
+    /**
+     * `unarchive` эмитит `UserAction(UNARCHIVE)` — на вызове операции,
+     * до/независимо от исхода (design D10).
+     */
+    @Test
+    fun unarchive_logs_user_action_unarchive() =
+        runTest(testDispatcher) {
+            // Given
+            val repository = ArchivedExercisesFakeRepository(initialArchived = listOf(pullups))
+            val viewModel = createViewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.unarchive(pullups)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.UNARCHIVE)),
+                fakeAnalytics.events,
+                "unarchive логирует UserAction(UNARCHIVE)"
+            )
+        }
 
     /**
      * До первой эмиссии `repository.archivedExercises()` (без активной

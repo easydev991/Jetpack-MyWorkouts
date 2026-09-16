@@ -1,6 +1,10 @@
 package com.myworkouts.ui.viewmodel
 
 import android.util.Log
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.AppErrorOperation
+import com.myworkouts.analytics.FakeAnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.LinkedEntriesDeletionException
 import com.myworkouts.data.repository.WorkoutDataRepository
@@ -31,6 +35,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -169,6 +174,9 @@ class ExercisesViewModelTest {
 
     private lateinit var repository: ExercisesViewModelFakeRepository
 
+    /** Перехватчик событий аналитики (design D9). */
+    private val analyticsProvider = FakeAnalyticsProvider()
+
     /** Mock [AppSettingsDataStore] для VM (archive-alert-hide, tasks §1.2).
      *  На этом этапе используется только чтобы компилировались тесты;
      *  реальные stub'ы для `dontShowArchiveDialog` / `setDontShowArchiveDialog`
@@ -199,7 +207,7 @@ class ExercisesViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(): ExercisesViewModel = ExercisesViewModel(repository, dataStore)
+    private fun createViewModel(): ExercisesViewModel = ExercisesViewModel(repository, dataStore, analyticsProvider)
 
     @Test
     fun state_initial_before_subscription_then_loading() =
@@ -350,6 +358,11 @@ class ExercisesViewModelTest {
                 repository.lastDeletedExerciseId,
                 "confirmDelete вызвал deleteExercise(id)"
             )
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.DELETE)),
+                analyticsProvider.events,
+                "Подтверждённое удаление — user_action DELETE"
+            )
         }
 
     /**
@@ -364,8 +377,8 @@ class ExercisesViewModelTest {
     fun confirmDelete_onLinkedEntriesFailure_setsHasLinkedEntriesError_andAllowsRetry() =
         runTest(testDispatcher) {
             // Given
-            repository.deleteExerciseResult =
-                Result.failure(LinkedEntriesDeletionException())
+            val failure = LinkedEntriesDeletionException()
+            repository.deleteExerciseResult = Result.failure(failure)
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             advanceUntilIdle()
@@ -384,6 +397,14 @@ class ExercisesViewModelTest {
                 afterConfirm.deleteError,
                 "FK → DeleteExerciseError.HasLinkedEntries"
             )
+            val appError =
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().single()
+            assertEquals(
+                AppErrorOperation.DELETE_EXERCISE,
+                appError.operation,
+                "Сбой удаления — событие AppError(DELETE_EXERCISE)"
+            )
+            assertSame(failure, appError.throwable, "В событии — итоговое исключение")
 
             // When — повторный requestDelete после ошибки (т.е. ошибка не
             // «блокирует» дальнейшие действия; design Decision 3 — pending
@@ -501,6 +522,11 @@ class ExercisesViewModelTest {
                 repository.setArchivedCalls,
                 "confirmArchive вызвал setArchived(id, true)"
             )
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.ARCHIVE)),
+                analyticsProvider.events,
+                "Подтверждённая архивация — user_action ARCHIVE"
+            )
         }
 
     /**
@@ -545,6 +571,10 @@ class ExercisesViewModelTest {
                 plank.id,
                 retryState.pendingArchiveId,
                 "Повторный requestArchive открывает новый pending после failure"
+            )
+            assertTrue(
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().isEmpty(),
+                "Архивация вне канона ошибок (design D9) — AppError не эмитится"
             )
         }
 
@@ -640,6 +670,11 @@ class ExercisesViewModelTest {
                 repository.setArchivedCalls,
                 "setArchived(id, true) вызван сразу при requestArchive"
             )
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.ARCHIVE)),
+                analyticsProvider.events,
+                "Прямая архивация без диалога — user_action ARCHIVE (design D10)"
+            )
         }
 
     /**
@@ -672,6 +707,10 @@ class ExercisesViewModelTest {
             assertTrue(
                 repository.setArchivedCalls.isEmpty(),
                 "setArchived НЕ вызван на requestArchive (default-поведение — диалог)"
+            )
+            assertTrue(
+                analyticsProvider.events.isEmpty(),
+                "Открытие диалога не логируется (design D10)"
             )
         }
 

@@ -21,10 +21,12 @@ import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Named
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.io.ByteArrayInputStream
+import java.util.concurrent.CancellationException
 
 /**
  * Unit-тесты восстановления из резервной копии (app-data-screen, design
@@ -452,6 +454,24 @@ class ImportBackupUseCaseTest {
                     .iconNumber,
                 "Существующее упражнение остаётся со своим прежним iconNumber"
             )
+        }
+
+    @Test
+    fun import_when_cancelled_then_rethrows_cancellation() =
+        runTest {
+            // Given — чтение файла прерывается отменой корутины
+            // (спека «Отмена корутины не является ошибкой»)
+            val repository = repository()
+            val contentResolver = mockk<ContentResolver>()
+            every { contentResolver.openInputStream(any()) } throws
+                CancellationException("Операция отменена")
+            val context = mockk<Context>(relaxed = true)
+            every { context.contentResolver } returns contentResolver
+            val useCase = ImportBackupUseCase(repository, context)
+
+            // When / Then — CancellationException прокидывается дальше,
+            // не превращаясь в Result.failure
+            assertThrows<CancellationException> { useCase(uri) }
         }
 
     @ParameterizedTest(name = "[{index}] {0}")

@@ -8,6 +8,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.AnalyticsProvider
+import com.myworkouts.analytics.AppErrorOperation
+import com.myworkouts.analytics.UserActionType
+import com.myworkouts.crash.CrashlyticsHelper
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.usecase.BackupError
 import com.myworkouts.domain.usecase.BackupException
@@ -40,11 +45,14 @@ private const val LOG_TAG = "AppDataViewModel"
  *   вызов, без use-case: единственная строка без собственной логики)
  * @property exportUseCase экспорт резервной копии
  * @property importUseCase восстановление из резервной копии
+ * @property analyticsProvider провайдер аналитики: user_action на вызовах
+ *   операций и AppError в failure-ветках (design D4, D10)
  */
 class AppDataViewModel(
     private val repository: WorkoutDataRepository,
     private val exportUseCase: ExportBackupUseCase,
-    private val importUseCase: ImportBackupUseCase
+    private val importUseCase: ImportBackupUseCase,
+    private val analyticsProvider: AnalyticsProvider
 ) : ViewModel() {
     companion object {
         /**
@@ -55,11 +63,13 @@ class AppDataViewModel(
          * @param repository репозиторий данных тренировок
          * @param context контекст для SAF-потоков (замыкается
          *   `applicationContext` — Activity-контекст в ViewModel нельзя)
+         * @param analyticsProvider провайдер аналитики
          * @return Factory для создания [AppDataViewModel]
          */
         fun factory(
             repository: WorkoutDataRepository,
-            context: Context
+            context: Context,
+            analyticsProvider: AnalyticsProvider
         ): ViewModelProvider.Factory =
             viewModelFactory {
                 initializer {
@@ -67,7 +77,8 @@ class AppDataViewModel(
                     AppDataViewModel(
                         repository,
                         ExportBackupUseCase(repository, appContext),
-                        ImportBackupUseCase(repository, appContext)
+                        ImportBackupUseCase(repository, appContext),
+                        analyticsProvider
                     )
                 }
             }
@@ -104,12 +115,21 @@ class AppDataViewModel(
             initialValue = AppDataUiState()
         )
 
-    /** Экспорт резервной копии в файл `uri`. */
+    /**
+     * Экспорт резервной копии в файл `uri`. Действие логируется
+     * независимо от исхода; сбой — в Crashlytics и `AppError`
+     * (design D8, D10).
+     */
     fun exportBackup(uri: Uri) {
+        analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.CREATE_BACKUP))
         launchOperation {
             exportUseCase(uri).fold(
                 onSuccess = { AppDataResult.EXPORTED },
                 onFailure = {
+                    CrashlyticsHelper.logException(it, "Экспорт резервной копии")
+                    analyticsProvider.log(
+                        AnalyticsEvent.AppError(AppErrorOperation.CREATE_BACKUP, it)
+                    )
                     it.toAppDataResult(
                         operation = "экспорт",
                         fallback = AppDataResult.ERROR_EXPORT
@@ -119,12 +139,21 @@ class AppDataViewModel(
         }
     }
 
-    /** Восстановление данных из копии `uri` слиянием. */
+    /**
+     * Восстановление данных из копии `uri` слиянием. Действие логируется
+     * независимо от исхода; сбой — в Crashlytics и `AppError`
+     * (design D8, D10).
+     */
     fun restoreFromBackup(uri: Uri) {
+        analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.RESTORE_BACKUP))
         launchOperation {
             importUseCase(uri).fold(
                 onSuccess = { AppDataResult.RESTORED },
                 onFailure = {
+                    CrashlyticsHelper.logException(it, "Восстановление резервной копии")
+                    analyticsProvider.log(
+                        AnalyticsEvent.AppError(AppErrorOperation.RESTORE_BACKUP, it)
+                    )
                     it.toAppDataResult(
                         operation = "импорт",
                         fallback = AppDataResult.ERROR_IMPORT
@@ -134,12 +163,21 @@ class AppDataViewModel(
         }
     }
 
-    /** Удаление всех данных с восстановлением стандартного набора. */
+    /**
+     * Удаление всех данных с восстановлением стандартного набора.
+     * Действие логируется независимо от исхода; сбой — в Crashlytics
+     * и `AppError` (design D8, D10).
+     */
     fun deleteAllData() {
+        analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.DELETE_ALL_DATA))
         launchOperation {
             repository.deleteAllData().fold(
                 onSuccess = { AppDataResult.DELETED },
                 onFailure = {
+                    CrashlyticsHelper.logException(it, "Удаление всех данных")
+                    analyticsProvider.log(
+                        AnalyticsEvent.AppError(AppErrorOperation.DELETE_ALL_DATA, it)
+                    )
                     it.toAppDataResult(
                         operation = "удаление",
                         fallback = AppDataResult.ERROR_DELETE

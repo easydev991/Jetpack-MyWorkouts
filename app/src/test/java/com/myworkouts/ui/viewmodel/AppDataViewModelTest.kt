@@ -2,6 +2,10 @@ package com.myworkouts.ui.viewmodel
 
 import android.net.Uri
 import android.util.Log
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.AppErrorOperation
+import com.myworkouts.analytics.FakeAnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
@@ -36,6 +40,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -120,6 +125,9 @@ class AppDataViewModelTest {
     private lateinit var exportUseCase: ExportBackupUseCase
     private lateinit var importUseCase: ImportBackupUseCase
 
+    /** Перехватчик событий аналитики (design D9). */
+    private val analyticsProvider = FakeAnalyticsProvider()
+
     private val standardExercise =
         Exercise(
             id = 1L,
@@ -176,7 +184,7 @@ class AppDataViewModelTest {
     }
 
     private fun viewModel(repository: AppDataViewModelFakeRepository): AppDataViewModel =
-        AppDataViewModel(repository, exportUseCase, importUseCase)
+        AppDataViewModel(repository, exportUseCase, importUseCase, analyticsProvider)
 
     @Test
     fun hasData_false_when_only_standard_exercises() =
@@ -286,8 +294,8 @@ class AppDataViewModelTest {
     fun exportBackup_whenUseCaseFails_thenErrorExport() =
         runTest(testDispatcher) {
             // Given — use-case вернул типизированную ошибку экспорта
-            coEvery { exportUseCase.invoke(any()) } returns
-                Result.failure(BackupException("SAF не отдал поток", BackupError.EXPORT))
+            val failure = BackupException("SAF не отдал поток", BackupError.EXPORT)
+            coEvery { exportUseCase.invoke(any()) } returns Result.failure(failure)
             val repository = AppDataViewModelFakeRepository()
             val viewModel = viewModel(repository)
             backgroundScope.launch { viewModel.uiState.collect {} }
@@ -300,14 +308,22 @@ class AppDataViewModelTest {
             // Then
             assertEquals(AppDataResult.ERROR_EXPORT, viewModel.uiState.value.result)
             assertFalse(viewModel.uiState.value.isBusy)
+            val appError =
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().single()
+            assertEquals(
+                AppErrorOperation.CREATE_BACKUP,
+                appError.operation,
+                "Сбой экспорта — событие AppError(CREATE_BACKUP)"
+            )
+            assertSame(failure, appError.throwable, "В событии — итоговое исключение")
         }
 
     @Test
     fun restoreBackup_whenInvalidFile_thenErrorInvalidFile() =
         runTest(testDispatcher) {
             // Given — use-case отверг файл копии
-            coEvery { importUseCase.invoke(any()) } returns
-                Result.failure(BackupException("Файл не является JSON", BackupError.INVALID_FILE))
+            val failure = BackupException("Файл не является JSON", BackupError.INVALID_FILE)
+            coEvery { importUseCase.invoke(any()) } returns Result.failure(failure)
             val repository = AppDataViewModelFakeRepository()
             val viewModel = viewModel(repository)
             backgroundScope.launch { viewModel.uiState.collect {} }
@@ -320,14 +336,22 @@ class AppDataViewModelTest {
             // Then
             assertEquals(AppDataResult.ERROR_INVALID_FILE, viewModel.uiState.value.result)
             assertFalse(viewModel.uiState.value.isBusy)
+            val appError =
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().single()
+            assertEquals(
+                AppErrorOperation.RESTORE_BACKUP,
+                appError.operation,
+                "Сбой восстановления — событие AppError(RESTORE_BACKUP)"
+            )
+            assertSame(failure, appError.throwable, "В событии — итоговое исключение")
         }
 
     @Test
     fun restoreBackup_whenRepositoryFails_thenErrorImport() =
         runTest(testDispatcher) {
             // Given — файл валиден, но вставка в БД падает ошибкой «как есть»
-            coEvery { importUseCase.invoke(any()) } returns
-                Result.failure(IllegalStateException("БД недоступна"))
+            val failure = IllegalStateException("БД недоступна")
+            coEvery { importUseCase.invoke(any()) } returns Result.failure(failure)
             val repository = AppDataViewModelFakeRepository()
             val viewModel = viewModel(repository)
             backgroundScope.launch { viewModel.uiState.collect {} }
@@ -340,6 +364,14 @@ class AppDataViewModelTest {
             // Then — нетипизированная ошибка мапится в ошибку импорта
             assertEquals(AppDataResult.ERROR_IMPORT, viewModel.uiState.value.result)
             assertFalse(viewModel.uiState.value.isBusy)
+            val appError =
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().single()
+            assertEquals(
+                AppErrorOperation.RESTORE_BACKUP,
+                appError.operation,
+                "Сбой восстановления — событие AppError(RESTORE_BACKUP)"
+            )
+            assertSame(failure, appError.throwable, "В событии — итоговое исключение")
         }
 
     @Test
@@ -384,8 +416,8 @@ class AppDataViewModelTest {
         runTest(testDispatcher) {
             // Given — репозиторий не смог выполнить массовый сброс
             val repository = AppDataViewModelFakeRepository()
-            repository.deleteAllDataResult =
-                Result.failure(IllegalStateException("БД недоступна"))
+            val failure = IllegalStateException("БД недоступна")
+            repository.deleteAllDataResult = Result.failure(failure)
             val viewModel = viewModel(repository)
             backgroundScope.launch { viewModel.uiState.collect {} }
             advanceUntilIdle()
@@ -397,6 +429,14 @@ class AppDataViewModelTest {
             // Then
             assertEquals(AppDataResult.ERROR_DELETE, viewModel.uiState.value.result)
             assertFalse(viewModel.uiState.value.isBusy)
+            val appError =
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().single()
+            assertEquals(
+                AppErrorOperation.DELETE_ALL_DATA,
+                appError.operation,
+                "Сбой массового удаления — событие AppError(DELETE_ALL_DATA)"
+            )
+            assertSame(failure, appError.throwable, "В событии — итоговое исключение")
         }
 
     @Test
@@ -417,5 +457,77 @@ class AppDataViewModelTest {
 
             // Then — одноразовое событие сброшено
             assertNull(viewModel.uiState.value.result)
+        }
+
+    // ---------- Телеметрия (firebase-crashlytics-mvp, задачи 6.1/6.2) ----------
+
+    /**
+     * Экспорт копии эмитит `UserAction(CREATE_BACKUP)` независимо от
+     * исхода — на вызове операции, после выбора файла в SAF
+     * (design D10). На успехе других событий нет.
+     */
+    @Test
+    fun exportBackup_emits_user_action_create_backup() =
+        runTest(testDispatcher) {
+            // Given
+            val repository = AppDataViewModelFakeRepository()
+            val viewModel = viewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // When
+            viewModel.exportBackup(uri)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.CREATE_BACKUP)),
+                analyticsProvider.events,
+                "Экспорт копии — user_action CREATE_BACKUP"
+            )
+        }
+
+    /** Восстановление из копии эмитит `UserAction(RESTORE_BACKUP)` (design D10). */
+    @Test
+    fun restoreBackup_emits_user_action_restore_backup() =
+        runTest(testDispatcher) {
+            // Given
+            val repository = AppDataViewModelFakeRepository()
+            val viewModel = viewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // When
+            viewModel.restoreFromBackup(uri)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.RESTORE_BACKUP)),
+                analyticsProvider.events,
+                "Восстановление копии — user_action RESTORE_BACKUP"
+            )
+        }
+
+    /** Удаление всех данных эмитит `UserAction(DELETE_ALL_DATA)` (design D10). */
+    @Test
+    fun deleteAllData_emits_user_action_delete_all_data() =
+        runTest(testDispatcher) {
+            // Given
+            val repository = AppDataViewModelFakeRepository()
+            val viewModel = viewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // When
+            viewModel.deleteAllData()
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.DELETE_ALL_DATA)),
+                analyticsProvider.events,
+                "Удаление всех данных — user_action DELETE_ALL_DATA"
+            )
         }
 }

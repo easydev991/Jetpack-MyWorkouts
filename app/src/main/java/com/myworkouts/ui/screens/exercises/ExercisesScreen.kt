@@ -63,6 +63,9 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.AnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.domain.model.DeleteExerciseError
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseMeasuredBy
@@ -100,12 +103,14 @@ import com.myworkouts.ui.viewmodel.ExercisesViewModel
  * @param modifier внешний модификатор
  */
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList")
 @Composable
 fun ExercisesScreen(
     viewModel: ExercisesViewModel,
     onAddExerciseClick: () -> Unit,
     onEditExercise: (Long) -> Unit = {},
     onArchivedExercisesClick: () -> Unit,
+    analyticsProvider: AnalyticsProvider,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -154,7 +159,13 @@ fun ExercisesScreen(
             ExercisesScreenState(
                 uiState = uiState,
                 contextMenu = contextMenu,
-                onAddExerciseClick = onAddExerciseClick,
+                onAddExerciseClick = {
+                    // FAB-событие в точке нажатия (design D10)
+                    analyticsProvider.log(
+                        AnalyticsEvent.UserAction(UserActionType.OPEN_EXERCISE_CREATE)
+                    )
+                    onAddExerciseClick()
+                },
                 onContextMenuItemChange = { contextMenu = it },
                 onRequestEdit = { item ->
                     // Паттерн MainScreen.kt:90–95 — обёртка закрывает

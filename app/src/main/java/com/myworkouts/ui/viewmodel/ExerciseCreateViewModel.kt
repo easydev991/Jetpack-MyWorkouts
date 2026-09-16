@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.AnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
@@ -36,10 +39,12 @@ private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
  * @param exerciseId Id редактируемого упражнения;
  * [Screen.ExerciseCreate.NO_EXERCISE_ID] — режим создания
  * (edit-delete-exercise, design Decision 1)
+ * @property analyticsProvider Провайдер аналитики
  */
 class ExerciseCreateViewModel(
     private val repository: WorkoutDataRepository,
-    exerciseId: Long = Screen.ExerciseCreate.NO_EXERCISE_ID
+    exerciseId: Long = Screen.ExerciseCreate.NO_EXERCISE_ID,
+    private val analyticsProvider: AnalyticsProvider
 ) : ViewModel() {
     /**
      * Загруженное упражнение edit-режима: `null` — режим создания
@@ -126,6 +131,9 @@ class ExerciseCreateViewModel(
         val exercise =
             draftOf(state, original)
                 ?: return // name/category не заполнены — canSave уже отсёк
+        // CREATE/EDIT — по наличию оригинала; на вызове операции (design D10)
+        val action = if (original != null) UserActionType.EDIT else UserActionType.CREATE
+        analyticsProvider.log(AnalyticsEvent.UserAction(action))
         viewModelScope.launch {
             val result =
                 if (original != null) repository.updateExercise(exercise) else repository.addExercise(exercise)
@@ -194,15 +202,17 @@ class ExerciseCreateViewModel(
          * @param repository Репозиторий данных тренировок
          * @param exerciseId Id редактируемого упражнения;
          * [Screen.ExerciseCreate.NO_EXERCISE_ID] — режим создания
+         * @param analyticsProvider Провайдер аналитики
          * @return Factory для создания ViewModel
          */
         fun factory(
             repository: WorkoutDataRepository,
-            exerciseId: Long = Screen.ExerciseCreate.NO_EXERCISE_ID
+            exerciseId: Long = Screen.ExerciseCreate.NO_EXERCISE_ID,
+            analyticsProvider: AnalyticsProvider
         ): ViewModelProvider.Factory =
             viewModelFactory {
                 initializer {
-                    ExerciseCreateViewModel(repository, exerciseId)
+                    ExerciseCreateViewModel(repository, exerciseId, analyticsProvider)
                 }
             }
     }

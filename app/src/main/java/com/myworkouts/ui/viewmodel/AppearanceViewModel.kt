@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.AnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.domain.model.AppTheme
 import com.myworkouts.ui.state.AppearanceUiState
@@ -25,9 +28,11 @@ private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
  * запуске приложения выбор пользователя не сбрасывался.
  *
  * @property dataStore DataStore для сохранения настроек
+ * @property analyticsProvider Провайдер аналитики
  */
 class AppearanceViewModel(
-    private val dataStore: AppSettingsDataStore
+    private val dataStore: AppSettingsDataStore,
+    private val analyticsProvider: AnalyticsProvider
 ) : ViewModel() {
     companion object {
         /**
@@ -35,11 +40,15 @@ class AppearanceViewModel(
          * вместо Hilt.
          *
          * @param dataStore DataStore для настроек приложения
+         * @param analyticsProvider Провайдер аналитики
          * @return Factory для создания ViewModel
          */
-        fun factory(dataStore: AppSettingsDataStore): ViewModelProvider.Factory =
+        fun factory(
+            dataStore: AppSettingsDataStore,
+            analyticsProvider: AnalyticsProvider
+        ): ViewModelProvider.Factory =
             viewModelFactory {
-                initializer { AppearanceViewModel(dataStore) }
+                initializer { AppearanceViewModel(dataStore, analyticsProvider) }
             }
     }
 
@@ -72,6 +81,10 @@ class AppearanceViewModel(
      * @param theme Новая тема приложения
      */
     fun updateTheme(theme: AppTheme) {
+        // value — wire-имя темы в lowercase: light/dark/system (design D10)
+        analyticsProvider.log(
+            AnalyticsEvent.UserAction(UserActionType.SELECT_THEME, theme.name.lowercase())
+        )
         viewModelScope.launch { dataStore.setTheme(theme) }
     }
 
@@ -82,6 +95,13 @@ class AppearanceViewModel(
      * @param useDynamicColors Использовать динамические цвета
      */
     fun updateDynamicColors(useDynamicColors: Boolean) {
+        // value — on/off (design D10)
+        analyticsProvider.log(
+            AnalyticsEvent.UserAction(
+                UserActionType.TOGGLE_DYNAMIC_COLORS,
+                if (useDynamicColors) "on" else "off"
+            )
+        )
         viewModelScope.launch { dataStore.setUseDynamicColors(useDynamicColors) }
     }
 }

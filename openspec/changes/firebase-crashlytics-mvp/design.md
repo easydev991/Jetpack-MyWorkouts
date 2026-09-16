@@ -107,17 +107,28 @@ Crashlytics дважды (первопричина и итог) — принят
 стек-трейсам, контекст стадии важнее уникальности записи. `CancellationException`
 rethrow строго до любого логирования (уже так в use-cases — сохраняем).
 
-### D9. Тесты: Fake-провайдер, FirebaseAnalyticsProvider на JVM не тестируем
+### D9. Тесты: Fake-провайдер в ViewModel-тестах, FirebaseAnalyticsProvider без JVM-теста
 
 `FakeAnalyticsProvider` (копит события в списке) в проектном стиле Fake —
-инъекция в `AppDataViewModel` / `ExercisesViewModel`, проверка `AppError(operation)`
-в failure-сценариях. `FirebaseAnalyticsProvider` на JVM не тестируется:
-`FirebaseAnalytics` и `Bundle` — Android API; стабильность wire-значений
-проверяем assert'ами на enum'ы (`screenName`, `value`). Канонические значения
-`AppErrorOperation` (специфичные операции — для группировки ошибок):
-`CREATE_BACKUP`, `RESTORE_BACKUP`, `DELETE_ALL_DATA`, `DELETE_EXERCISE`;
-канон действий `UserActionType` — в D10. Существующий
-`mockkStatic(Log::class)` в тестах не трогаем.
+инъекция в `AppDataViewModel` / `ExercisesViewModel` / `EntryCreateViewModel` /
+`ExerciseCreateViewModel` / `MainViewModel` / `ArchivedExercisesViewModel` /
+`AppearanceViewModel`, проверка `AppError(operation)` / `UserAction(action, value?)`
+в failure- и action-сценариях. `FirebaseAnalyticsProvider` на JVM не тестируется:
+`FirebaseAnalytics` и `Bundle` — Android API.
+
+Wire-стабильность enum'ов отдельным JVM-тестом **не прикрываем**: wire-имя
+совпадает с Kotlin-идентификатором (`event.screen.name` / `event.action.name`),
+а это runtime-invariant языка — изменение регистрируется через code review и
+openspec-цикл (новые экраны/действия приходят как задачи, не тихими коммитами).
+Отдельный «assertEquals по списку литералов» был бы mirror-of-source: падает
+только когда кто-то одинаково редактирует обе копии, и при тихом rename enum'а
+не защищает. Дополнительная страховка — мониторинг счётчика событий в
+Firebase console: падение числа событий за день = алерт.
+
+Канонические значения `AppErrorOperation` (специфичные операции — для
+группировки ошибок): `CREATE_BACKUP`, `RESTORE_BACKUP`, `DELETE_ALL_DATA`,
+`DELETE_EXERCISE`; канон действий `UserActionType` — в D10.
+Существующий `mockkStatic(Log::class)` в тестах не трогаем.
 
 ### D10. Точки эмиссии user_action: нажатие элемента, совершающего действие
 

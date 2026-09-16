@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.AnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
@@ -43,11 +46,13 @@ private const val MINUTES_PER_HOUR: Int = 60
  * @property nowProvider Провайдер текущего момента (epoch millis) —
  *   внедряется для детерминированных JVM-тестов
  * @property entryId Id редактируемой записи; [Screen.EntryCreate.NO_ENTRY_ID] — режим создания
+ * @property analyticsProvider Провайдер аналитики
  */
 class EntryCreateViewModel(
     private val repository: WorkoutDataRepository,
     private val nowProvider: () -> Long,
-    private val entryId: Long = Screen.EntryCreate.NO_ENTRY_ID
+    private val entryId: Long = Screen.EntryCreate.NO_ENTRY_ID,
+    private val analyticsProvider: AnalyticsProvider
 ) : ViewModel() {
     /**
      * Загруженная запись режима редактирования: `null` — режим создания
@@ -203,6 +208,9 @@ class EntryCreateViewModel(
         val entry =
             draftOf(state, original)
                 ?: return // selectedExercise == null — canSave уже отсёк
+        // CREATE/EDIT — по наличию оригинала; на вызове операции (design D10)
+        val action = if (original != null) UserActionType.EDIT else UserActionType.CREATE
+        analyticsProvider.log(AnalyticsEvent.UserAction(action))
         viewModelScope.launch {
             val result =
                 if (original != null) repository.updateEntry(entry) else repository.addEntry(entry)
@@ -339,15 +347,22 @@ class EntryCreateViewModel(
          *
          * @param repository Репозиторий данных тренировок
          * @param entryId Id редактируемой записи; дефолт — режим создания
+         * @param analyticsProvider Провайдер аналитики
          * @return Factory для создания ViewModel
          */
         fun factory(
             repository: WorkoutDataRepository,
-            entryId: Long = Screen.EntryCreate.NO_ENTRY_ID
+            entryId: Long = Screen.EntryCreate.NO_ENTRY_ID,
+            analyticsProvider: AnalyticsProvider
         ): ViewModelProvider.Factory =
             viewModelFactory {
                 initializer {
-                    EntryCreateViewModel(repository, { System.currentTimeMillis() }, entryId)
+                    EntryCreateViewModel(
+                        repository,
+                        { System.currentTimeMillis() },
+                        entryId,
+                        analyticsProvider
+                    )
                 }
             }
     }

@@ -1,5 +1,8 @@
 package com.myworkouts.ui.viewmodel
 
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.FakeAnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
@@ -124,6 +127,8 @@ class ExerciseCreateViewModelTest {
 
     private val repository = FakeExerciseRepository()
 
+    private val fakeAnalytics = FakeAnalyticsProvider()
+
     @BeforeEach
     fun setUp() {
         testDispatcher = StandardTestDispatcher()
@@ -136,7 +141,60 @@ class ExerciseCreateViewModelTest {
     }
 
     private fun createViewModel(exerciseId: Long = Screen.ExerciseCreate.NO_EXERCISE_ID): ExerciseCreateViewModel =
-        ExerciseCreateViewModel(repository, exerciseId)
+        ExerciseCreateViewModel(repository, exerciseId, fakeAnalytics)
+
+    /**
+     * `save` в режиме создания эмитит `UserAction(CREATE)` — на вызове
+     * операции (design D10).
+     */
+    @Test
+    fun save_in_create_mode_logs_user_action_create() =
+        runTest(testDispatcher) {
+            // Given — заполненная форма в режиме создания
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            viewModel.onNameChange("Жим")
+            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            advanceUntilIdle()
+
+            // When
+            viewModel.save { }
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.CREATE)),
+                fakeAnalytics.events,
+                "save в режиме создания логирует UserAction(CREATE)"
+            )
+        }
+
+    /**
+     * `save` в режиме редактирования эмитит `UserAction(EDIT)` — различение
+     * создания и правки по наличию `exerciseId` (design D10).
+     */
+    @Test
+    fun save_in_edit_mode_logs_user_action_edit() =
+        runTest(testDispatcher) {
+            // Given — edit-режим, изменено имя
+            repository.exerciseById = editExercise
+            val viewModel = createViewModel(exerciseId = editExercise.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onNameChange("Тяга")
+            advanceUntilIdle()
+
+            // When
+            viewModel.save { }
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.EDIT)),
+                fakeAnalytics.events,
+                "save в режиме редактирования логирует UserAction(EDIT)"
+            )
+        }
 
     /** Кастомное упражнение, отдаваемое fake-репозиторием в edit-тестах. */
     private val editExercise =

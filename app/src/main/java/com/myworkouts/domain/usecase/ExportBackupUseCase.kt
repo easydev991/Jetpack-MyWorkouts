@@ -2,6 +2,7 @@ package com.myworkouts.domain.usecase
 
 import android.content.Context
 import android.net.Uri
+import com.myworkouts.crash.CrashlyticsHelper
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
@@ -67,10 +68,14 @@ class ExportBackupUseCase(
             }
             Result.success(Unit)
         } catch (e: CancellationException) {
+            // Отмена корутины — не ошибка: rethrow строго до логирования
+            // (спека «Отмена корутины не является ошибкой»).
             throw e
         } catch (e: BackupException) {
+            CrashlyticsHelper.logException(e, "Экспорт резервной копии: сбой записи файла")
             Result.failure(e)
         } catch (e: Exception) {
+            CrashlyticsHelper.logException(e, "Экспорт резервной копии: сбой записи файла")
             Result.failure(
                 BackupException(
                     "Сбой записи резервной копии: ${e.message}",

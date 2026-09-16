@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.AnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.ui.state.MainUiState
@@ -37,9 +40,11 @@ private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
  * идентификатор открытого алерта до явного подтверждения/отмены.
  *
  * @property repository Репозиторий данных тренировок
+ * @property analyticsProvider Провайдер аналитики
  */
 class MainViewModel(
-    private val repository: WorkoutDataRepository
+    private val repository: WorkoutDataRepository,
+    private val analyticsProvider: AnalyticsProvider
 ) : ViewModel() {
     /** Транзитное: id записи, для которой открыт алерт удаления. */
     private val pendingDeleteId = MutableStateFlow<Long?>(null)
@@ -79,6 +84,8 @@ class MainViewModel(
      */
     fun confirmDelete() {
         val id = pendingDeleteId.value ?: return
+        // Действие на вызове операции, до/независимо от исхода (design D10)
+        analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.DELETE))
         viewModelScope.launch {
             repository.deleteEntry(id).onSuccess {
                 pendingDeleteId.update { null }
@@ -97,11 +104,15 @@ class MainViewModel(
          * по образцу [EntryCreateViewModel.factory].
          *
          * @param repository Репозиторий данных тренировок
+         * @param analyticsProvider Провайдер аналитики
          * @return Factory для создания ViewModel
          */
-        fun factory(repository: WorkoutDataRepository): ViewModelProvider.Factory =
+        fun factory(
+            repository: WorkoutDataRepository,
+            analyticsProvider: AnalyticsProvider
+        ): ViewModelProvider.Factory =
             viewModelFactory {
-                initializer { MainViewModel(repository) }
+                initializer { MainViewModel(repository, analyticsProvider) }
             }
     }
 }

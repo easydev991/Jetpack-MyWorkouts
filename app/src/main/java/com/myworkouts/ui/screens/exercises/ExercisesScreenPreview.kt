@@ -205,6 +205,7 @@ internal fun ExerciseContextMenuPreview() {
  * диалога. Ограничение: M3-хром окна (реальные отступы и раскладка
  * кнопок) в превью не воспроизводится.
  */
+@Suppress("LongParameterList")
 @Composable
 private fun ExerciseConfirmDialogSample(
     itemName: String,

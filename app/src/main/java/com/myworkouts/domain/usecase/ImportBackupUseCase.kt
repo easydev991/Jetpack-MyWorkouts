@@ -7,6 +7,7 @@ package com.myworkouts.domain.usecase
 
 import android.content.Context
 import android.net.Uri
+import com.myworkouts.crash.CrashlyticsHelper
 import com.myworkouts.data.repository.EntryValidator
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
@@ -64,10 +65,14 @@ class ImportBackupUseCase(
                     stream.use { it.readBytes().toString(Charsets.UTF_8) }
                 }
             } catch (e: CancellationException) {
+                // Отмена корутины — не ошибка: rethrow строго до
+                // логирования (спека «Отмена корутины не является ошибкой»).
                 throw e
             } catch (e: BackupException) {
+                CrashlyticsHelper.logException(e, "Восстановление резервной копии: сбой чтения файла")
                 return Result.failure(e)
             } catch (e: Exception) {
+                CrashlyticsHelper.logException(e, "Восстановление резервной копии: сбой чтения файла")
                 return Result.failure(
                     BackupException(
                         "Не удалось прочитать файл: ${e.message}",
@@ -79,6 +84,7 @@ class ImportBackupUseCase(
             try {
                 parseBackupJson(raw)
             } catch (e: BackupException) {
+                CrashlyticsHelper.logException(e, "Восстановление резервной копии: некорректный файл копии")
                 return Result.failure(e)
             }
         val existingExercises =

@@ -43,6 +43,9 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.AnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.ui.state.MainUiState
 import com.myworkouts.ui.viewmodel.MainViewModel
@@ -64,6 +67,8 @@ import java.time.format.DateTimeFormatter
  * @param onEditEntryClick Выбор пункта «Изменить» в long-press меню:
  *   открыть экран редактирования записи с этим id (entry-edit-mode).
  *   Дефолт-заглушка — как у [onAddEntryClick], навигация не здесь.
+ * @param analyticsProvider Провайдер аналитики (FAB-событие в точке
+ *   нажатия, design D10)
  * @param modifier внешний модификатор
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,6 +77,7 @@ fun MainScreen(
     viewModel: MainViewModel,
     onAddEntryClick: () -> Unit,
     onEditEntryClick: (Long) -> Unit = {},
+    analyticsProvider: AnalyticsProvider,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -85,7 +91,13 @@ fun MainScreen(
             MainScreenState(
                 uiState = uiState,
                 contextMenu = contextMenu,
-                onAddEntryClick = onAddEntryClick,
+                onAddEntryClick = {
+                    // FAB-событие в точке нажатия (design D10)
+                    analyticsProvider.log(
+                        AnalyticsEvent.UserAction(UserActionType.OPEN_ENTRY_CREATE)
+                    )
+                    onAddEntryClick()
+                },
                 onContextMenuItemChange = { newState -> contextMenu = newState },
                 onRequestEdit = { item ->
                     // Паттерн onRequestDelete: обёртка закрывает меню,

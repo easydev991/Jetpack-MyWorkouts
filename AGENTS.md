@@ -77,7 +77,12 @@ DataStore, Room. Manual DI — без Hilt.
   «рядом» допустимо только для мелких компонентов вроде строки списка
   или контекстного меню).
   Превью могут жить в соседнем `*Preview.kt`-файле рядом с экраном.
-- **Offline-only**: никаких сетевых зависимостей (Retrofit/OkHttp/Ktor).
+- **Offline-only**: приложение не ходит в сеть за данными — никаких
+  фича-сетевых библиотек (Retrofit/OkHttp/Ktor). Телеметрия Firebase
+  (Crashlytics, Analytics) разрешена: SDK ставится как зависимость,
+  провайдер выбирается в `MainActivity` по `BuildConfig.DEBUG`
+  (Noop в debug, Firebase в release), пакеты `analytics/` и `crash/`
+  живут рядом с `data/` и `domain/` и не считаются фича-сетью.
 
 ---
 
@@ -115,6 +120,13 @@ DataStore, Room. Manual DI — без Hilt.
 - `domain/model/` — `AppTheme`, `Exercise`, `ExerciseCategory`, `ExerciseEntry`,
   `EntryListItem`, `ExerciseMeasuredBy`
 - `domain/usecase/` — `ExportBackupUseCase`, `ImportBackupUseCase` (бэкап в JSON)
+- `analytics/` — событийная модель и провайдеры: sealed interface
+  `AnalyticsEvent` (`ScreenView`/`UserAction`/`AppError`), enum'ы
+  `AppScreen`/`UserActionType`/`AppErrorOperation`, интерфейс
+  `AnalyticsProvider` и реализации `FirebaseAnalyticsProvider`
+  (релизный маппинг в `Bundle`) и `NoopAnalyticsProvider` (debug)
+- `crash/` — `CrashlyticsHelper` (object, `logException` в `try/catch`,
+  `setCustomKey` для контекста; используется из use-cases и VM)
 - `navigation/Screen.kt` (только `route`) + `BottomTab` + `BottomTabs`
 - `ui/screens/{main,entry,more,root,appearance,appdata,exercises}/`
 - `ui/state/` — UiState-класс, по одному на экран

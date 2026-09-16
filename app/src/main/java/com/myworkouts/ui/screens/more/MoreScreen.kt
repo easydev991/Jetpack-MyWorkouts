@@ -36,6 +36,9 @@ import androidx.core.net.toUri
 import androidx.navigation.NavHostController
 import com.myworkouts.BuildConfig
 import com.myworkouts.R
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.AnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.navigation.Screen
 
 /**
@@ -62,9 +65,9 @@ fun MoreScreen(
     navController: NavHostController,
     showExercisesTab: Boolean,
     onShowExercisesTabChange: (Boolean) -> Unit,
+    analyticsProvider: AnalyticsProvider,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     Scaffold(
         modifier = modifier,
         // System nav bar inset уже учтён NavigationBar в RootScreen;
@@ -74,6 +77,7 @@ fun MoreScreen(
             TopAppBar(title = { Text(stringResource(R.string.more_title)) })
         }
     ) { paddingValues ->
+        val context = LocalContext.current
         Box(
             modifier =
                 Modifier
@@ -97,11 +101,26 @@ fun MoreScreen(
                 // до feedback.
                 ExercisesTabToggle(
                     showExercisesTab = showExercisesTab,
-                    onShowExercisesTabChange = onShowExercisesTabChange
+                    onShowExercisesTabChange = { show ->
+                        // Действие на тапе; value — итоговое состояние
+                        // вкладки: show/hide (design D10)
+                        analyticsProvider.log(
+                            AnalyticsEvent.UserAction(
+                                UserActionType.TOGGLE_EXERCISES_TAB,
+                                if (show) "show" else "hide"
+                            )
+                        )
+                        onShowExercisesTabChange(show)
+                    }
                 )
 
                 FilledTonalButton(
-                    onClick = { sendFeedback(context) },
+                    onClick = {
+                        analyticsProvider.log(
+                            AnalyticsEvent.UserAction(UserActionType.SEND_FEEDBACK)
+                        )
+                        sendFeedback(context)
+                    },
                     contentPadding =
                         PaddingValues(
                             horizontal = dimensionResource(R.dimen.button_horizontal_padding)

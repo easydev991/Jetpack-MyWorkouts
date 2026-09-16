@@ -8,6 +8,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -15,12 +16,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.AnalyticsProvider
+import com.myworkouts.analytics.AppScreen
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.navigation.BottomTab
@@ -58,10 +63,40 @@ import kotlinx.coroutines.launch
 fun RootScreen(
     dataStore: AppSettingsDataStore,
     repository: WorkoutDataRepository,
+    analyticsProvider: AnalyticsProvider,
     modifier: Modifier = Modifier
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
+    // Breadcrumbs навигации (design D3): один слушатель на
+    // navController эмитит ScreenView на каждое изменение destination
+    // (старт, переход, back). Маппинг route-template → AppScreen;
+    // для экранов с аргументами destination.route возвращает шаблон
+    // с placeholder ({entryId}, {exerciseId}), поэтому сравниваем с
+    // Screen.*.route как есть. Снятие в onDispose — иначе при
+    // рекомпозиции RootScreen регистрация дублируется.
+    DisposableEffect(navController) {
+        val listener =
+            NavController.OnDestinationChangedListener { _, destination, _ ->
+                val screen =
+                    when (destination.route) {
+                        Screen.Main.route -> AppScreen.MainScreen
+                        Screen.Exercises.route -> AppScreen.ExercisesScreen
+                        Screen.More.route -> AppScreen.MoreScreen
+                        Screen.Appearance.route -> AppScreen.AppearanceScreen
+                        Screen.AppData.route -> AppScreen.AppDataScreen
+                        Screen.ArchivedExercises.route -> AppScreen.ArchivedExercisesScreen
+                        Screen.EntryCreate.route -> AppScreen.EntryCreateScreen
+                        Screen.ExerciseCreate.route -> AppScreen.ExerciseCreateScreen
+                        else -> null
+                    }
+                if (screen != null) {
+                    analyticsProvider.log(AnalyticsEvent.ScreenView(screen))
+                }
+            }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose { navController.removeOnDestinationChangedListener(listener) }
+    }
     val currentRoute = navBackStackEntry?.destination?.route
     // Настройка видимости вкладки «Упражнения» (exercises-tab, design
     // Decision 8): единая подписка здесь — значение уходит и в бар, и
@@ -102,6 +137,7 @@ fun RootScreen(
             dataStore = dataStore,
             showExercisesTab = showExercisesTab,
             repository = repository,
+            analyticsProvider = analyticsProvider,
             modifier = Modifier.padding(paddingValues)
         )
     }
@@ -122,6 +158,7 @@ private fun AppNavHost(
     dataStore: AppSettingsDataStore,
     showExercisesTab: Boolean,
     repository: WorkoutDataRepository,
+    analyticsProvider: AnalyticsProvider,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
@@ -132,15 +169,16 @@ private fun AppNavHost(
     ) {
         composable(Screen.Main.route) {
             MainScreen(
-                viewModel = viewModel(factory = MainViewModel.factory(repository)),
+                viewModel = viewModel(factory = MainViewModel.factory(repository, analyticsProvider)),
                 onAddEntryClick = { navController.navigate(Screen.EntryCreate.createRoute()) },
                 onEditEntryClick = { entryId ->
                     navController.navigate(Screen.EntryCreate.createRoute(entryId))
-                }
+                },
+                analyticsProvider = analyticsProvider
             )
         }
         composable(Screen.Exercises.route) {
-            ExercisesNavDestination(repository, dataStore, navController)
+            ExercisesNavDestination(repository, dataStore, analyticsProvider, navController)
         }
         composable(Screen.More.route) {
             MoreScreen(
@@ -148,19 +186,20 @@ private fun AppNavHost(
                 showExercisesTab = showExercisesTab,
                 onShowExercisesTabChange = { show ->
                     scope.launch { dataStore.setShowExercisesTab(show) }
-                }
+                },
+                analyticsProvider = analyticsProvider
             )
         }
         composable(Screen.Appearance.route) {
             AppearanceScreen(
-                viewModel = viewModel(factory = AppearanceViewModel.factory(dataStore)),
+                viewModel = viewModel(factory = AppearanceViewModel.factory(dataStore, analyticsProvider)),
                 onBackClick = { navController.popBackStack() }
             )
         }
         composable(Screen.AppData.route) {
             val context = LocalContext.current
             AppDataScreen(
-                viewModel = viewModel(factory = AppDataViewModel.factory(repository, context)),
+                viewModel = viewModel(factory = AppDataViewModel.factory(repository, context, analyticsProvider)),
                 onBackClick = { navController.popBackStack() }
             )
         }
@@ -169,7 +208,7 @@ private fun AppNavHost(
                 backStackEntry.arguments?.getLong(Screen.EntryCreate.ARG_ENTRY_ID)
                     ?: Screen.EntryCreate.NO_ENTRY_ID
             EntryCreateScreen(
-                viewModel = viewModel(factory = EntryCreateViewModel.factory(repository, entryId)),
+                viewModel = viewModel(factory = EntryCreateViewModel.factory(repository, entryId, analyticsProvider)),
                 onBackClick = { navController.popBackStack() }
             )
         }
@@ -184,13 +223,14 @@ private fun AppNavHost(
                 )
                     ?: Screen.ExerciseCreate.NO_EXERCISE_ID
             ExerciseCreateScreen(
-                viewModel = viewModel(factory = ExerciseCreateViewModel.factory(repository, exerciseId)),
+                viewModel = viewModel(factory = ExerciseCreateViewModel.factory(repository, exerciseId, analyticsProvider)),
                 onBackClick = { navController.popBackStack() }
             )
         }
         composable(Screen.ArchivedExercises.route) {
             ArchivedExercisesNavDestination(
                 repository = repository,
+                analyticsProvider = analyticsProvider,
                 navController = navController
             )
         }
@@ -207,17 +247,22 @@ private fun AppNavHost(
 private fun ExercisesNavDestination(
     repository: WorkoutDataRepository,
     dataStore: AppSettingsDataStore,
+    analyticsProvider: AnalyticsProvider,
     navController: NavHostController
 ) {
     ExercisesScreen(
-        viewModel = viewModel(factory = ExercisesViewModel.factory(repository, dataStore)),
+        viewModel =
+            viewModel(
+                factory = ExercisesViewModel.factory(repository, dataStore, analyticsProvider)
+            ),
         onAddExerciseClick = { navController.navigate(Screen.ExerciseCreate.createRoute()) },
         onEditExercise = { exerciseId ->
             navController.navigate(Screen.ExerciseCreate.createRoute(exerciseId))
         },
         onArchivedExercisesClick = {
             navController.navigate(Screen.ArchivedExercises.route)
-        }
+        },
+        analyticsProvider = analyticsProvider
     )
 }
 
@@ -229,12 +274,13 @@ private fun ExercisesNavDestination(
 @Composable
 private fun ArchivedExercisesNavDestination(
     repository: WorkoutDataRepository,
+    analyticsProvider: AnalyticsProvider,
     navController: NavHostController
 ) {
     ArchivedExercisesScreen(
         viewModel =
             viewModel(
-                factory = ArchivedExercisesViewModel.factory(repository)
+                factory = ArchivedExercisesViewModel.factory(repository, analyticsProvider)
             ),
         onBackClick = { navController.popBackStack() }
     )

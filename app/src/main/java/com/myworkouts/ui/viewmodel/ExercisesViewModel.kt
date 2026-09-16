@@ -6,6 +6,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.AnalyticsProvider
+import com.myworkouts.analytics.AppErrorOperation
+import com.myworkouts.analytics.UserActionType
+import com.myworkouts.crash.CrashlyticsHelper
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.LinkedEntriesDeletionException
 import com.myworkouts.data.repository.StandardExerciseDeletionException
@@ -49,10 +54,13 @@ private const val LOG_TAG: String = "ExercisesViewModel"
  * @property repository Репозиторий данных тренировок
  * @property dataStore Настройки приложения (используется для opt-out
  *   диалога подтверждения архивации; archive-alert-hide, tasks §1.2)
+ * @property analyticsProvider Провайдер аналитики: user_action на
+ *   подтверждённых действиях, AppError на сбое удаления (design D4, D10)
  */
 class ExercisesViewModel(
     private val repository: WorkoutDataRepository,
-    private val dataStore: AppSettingsDataStore
+    private val dataStore: AppSettingsDataStore,
+    private val analyticsProvider: AnalyticsProvider
 ) : ViewModel() {
     /**
      * Id упражнения, для которого сейчас показан алерт подтверждения
@@ -193,6 +201,7 @@ class ExercisesViewModel(
      */
     fun confirmDelete() {
         val id = pendingDeleteId.value ?: return
+        analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.DELETE))
         viewModelScope.launch {
             val result = repository.deleteExercise(id)
             pendingDeleteId.value = null
@@ -206,6 +215,10 @@ class ExercisesViewModel(
                             is StandardExerciseDeletionException -> DeleteExerciseError.StandardExercise
                             else -> DeleteExerciseError.Other
                         }
+                    CrashlyticsHelper.logException(error, "Удаление упражнения")
+                    analyticsProvider.log(
+                        AnalyticsEvent.AppError(AppErrorOperation.DELETE_EXERCISE, error)
+                    )
                     Log.e(LOG_TAG, "deleteExercise failed for id=$id: ${error.message}", error)
                     deleteError.value = mapped
                 }
@@ -239,6 +252,9 @@ class ExercisesViewModel(
         viewModelScope.launch {
             val dontShow = dataStore.dontShowArchiveDialog.first()
             if (dontShow) {
+                // Диалог не показывается: фактическое действие — здесь
+                // (design D10 — user_action на точке действия).
+                analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.ARCHIVE))
                 repository.setArchived(item.id, true)
             } else {
                 pendingArchiveId.value = item.id
@@ -272,6 +288,7 @@ class ExercisesViewModel(
      */
     fun confirmArchive(suppress: Boolean = false) {
         val id = pendingArchiveId.value ?: return
+        analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.ARCHIVE))
         viewModelScope.launch {
             repository.setArchived(id, true)
             pendingArchiveId.value = null
@@ -289,14 +306,16 @@ class ExercisesViewModel(
          * @param repository Репозиторий данных тренировок
          * @param dataStore Настройки приложения (для opt-out диалога
          *   архивации, archive-alert-hide, tasks §1.2)
+         * @param analyticsProvider Провайдер аналитики
          * @return Factory для создания ViewModel
          */
         fun factory(
             repository: WorkoutDataRepository,
-            dataStore: AppSettingsDataStore
+            dataStore: AppSettingsDataStore,
+            analyticsProvider: AnalyticsProvider
         ): ViewModelProvider.Factory =
             viewModelFactory {
-                initializer { ExercisesViewModel(repository, dataStore) }
+                initializer { ExercisesViewModel(repository, dataStore, analyticsProvider) }
             }
     }
 }

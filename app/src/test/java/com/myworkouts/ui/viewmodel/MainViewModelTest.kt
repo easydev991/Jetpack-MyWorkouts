@@ -1,5 +1,8 @@
 package com.myworkouts.ui.viewmodel
 
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.FakeAnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
@@ -138,6 +141,7 @@ class MainViewModelTest {
         )
 
     private lateinit var repository: MainViewModelFakeRepository
+    private val fakeAnalytics = FakeAnalyticsProvider()
 
     @BeforeEach
     fun setUp() {
@@ -151,7 +155,7 @@ class MainViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(): MainViewModel = MainViewModel(repository)
+    private fun createViewModel(): MainViewModel = MainViewModel(repository, fakeAnalytics)
 
     @Test
     fun state_initial_before_subscription_then_loading() =
@@ -294,6 +298,32 @@ class MainViewModelTest {
                 listOf(item2),
                 success.entries,
                 "Список реактивно обновился: удалённой записи нет"
+            )
+        }
+
+    /**
+     * `confirmDelete` эмитит `UserAction(DELETE)` — на вызове операции,
+     * до/независимо от исхода (design D10).
+     */
+    @Test
+    fun confirm_delete_logs_user_action_delete() =
+        runTest(testDispatcher) {
+            // Given — открыт алерт удаления
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestDelete(item1)
+            advanceUntilIdle()
+
+            // When
+            viewModel.confirmDelete()
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.DELETE)),
+                fakeAnalytics.events,
+                "confirmDelete логирует UserAction(DELETE)"
             )
         }
 }

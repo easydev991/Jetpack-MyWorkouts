@@ -1,5 +1,8 @@
 package com.myworkouts.ui.viewmodel
 
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.FakeAnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
@@ -235,6 +238,8 @@ class EntryCreateViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private val fakeAnalytics = FakeAnalyticsProvider()
+
     private fun createViewModel(
         entryId: Long = -1L,
         nowProvider: () -> Long = { fixedNowMillis }
@@ -242,8 +247,64 @@ class EntryCreateViewModelTest {
         EntryCreateViewModel(
             repository = repository,
             nowProvider = nowProvider,
-            entryId = entryId
+            entryId = entryId,
+            analyticsProvider = fakeAnalytics
         )
+
+    /**
+     * `save` в режиме создания эмитит `UserAction(CREATE)` — на вызове
+     * операции (design D10).
+     */
+    @Test
+    fun save_in_create_mode_logs_user_action_create() =
+        runTest(testDispatcher) {
+            // Given — валидная REPS-запись в режиме создания
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onExerciseChange(repsExercise)
+            advanceUntilIdle()
+            viewModel.onRepsChange("10")
+            advanceUntilIdle()
+
+            // When
+            viewModel.save { }
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.CREATE)),
+                fakeAnalytics.events,
+                "save в режиме создания логирует UserAction(CREATE)"
+            )
+        }
+
+    /**
+     * `save` в режиме редактирования эмитит `UserAction(EDIT)` — различение
+     * создания и правки по наличию `entryId` (design D10).
+     */
+    @Test
+    fun save_in_edit_mode_logs_user_action_edit() =
+        runTest(testDispatcher) {
+            // Given — загруженная запись с изменёнными повторами
+            repository.entryById = originalEntry
+            val viewModel = createViewModel(entryId = originalEntry.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onRepsChange("12")
+            advanceUntilIdle()
+
+            // When
+            viewModel.save { }
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.EDIT)),
+                fakeAnalytics.events,
+                "save в режиме редактирования логирует UserAction(EDIT)"
+            )
+        }
 
     @Test
     fun initial_state_should_load_catalog_prefill_sets_and_disable_save() =

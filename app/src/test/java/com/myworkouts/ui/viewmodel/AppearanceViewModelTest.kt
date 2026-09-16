@@ -1,5 +1,8 @@
 package com.myworkouts.ui.viewmodel
 
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.FakeAnalyticsProvider
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.domain.model.AppTheme
 import com.myworkouts.ui.state.AppearanceUiState
@@ -26,6 +29,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.EnumSource
 import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.ValueSource
 
 /**
  * Unit-тесты для [AppearanceViewModel].
@@ -33,6 +37,7 @@ import org.junit.jupiter.params.provider.MethodSource
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppearanceViewModelTest {
     private lateinit var mockDataStore: AppSettingsDataStore
+    private val fakeAnalytics = FakeAnalyticsProvider()
     private lateinit var testDispatcher: TestDispatcher
 
     @BeforeEach
@@ -53,7 +58,7 @@ class AppearanceViewModelTest {
         runTest(testDispatcher) {
             // Given
             coEvery { mockDataStore.setTheme(any()) } coAnswers { }
-            val viewModel = AppearanceViewModel(mockDataStore)
+            val viewModel = AppearanceViewModel(mockDataStore, fakeAnalytics)
 
             // When
             viewModel.updateTheme(theme)
@@ -68,7 +73,7 @@ class AppearanceViewModelTest {
         runTest(testDispatcher) {
             // Given
             coEvery { mockDataStore.setUseDynamicColors(any()) } coAnswers { }
-            val viewModel = AppearanceViewModel(mockDataStore)
+            val viewModel = AppearanceViewModel(mockDataStore, fakeAnalytics)
 
             // When
             viewModel.updateDynamicColors(true)
@@ -83,7 +88,7 @@ class AppearanceViewModelTest {
         runTest(testDispatcher) {
             // Given
             coEvery { mockDataStore.setUseDynamicColors(any()) } coAnswers { }
-            val viewModel = AppearanceViewModel(mockDataStore)
+            val viewModel = AppearanceViewModel(mockDataStore, fakeAnalytics)
 
             // When
             viewModel.updateDynamicColors(false)
@@ -102,7 +107,7 @@ class AppearanceViewModelTest {
         // Given
         every { mockDataStore.theme } returns flowOf(theme)
         every { mockDataStore.useDynamicColors } returns flowOf(useDynamicColors)
-        val viewModel = AppearanceViewModel(mockDataStore)
+        val viewModel = AppearanceViewModel(mockDataStore, fakeAnalytics)
 
         // When — подписка через backgroundScope запускает WhileSubscribed,
         // advanceUntilIdle дожидается эмиссии upstream; после этого читаем .value
@@ -119,6 +124,64 @@ class AppearanceViewModelTest {
             actual
         )
     }
+
+    /**
+     * `updateTheme` эмитит `UserAction(SELECT_THEME)` со value —
+     * wire-имя темы в lowercase: light/dark/system (design D10).
+     */
+    @ParameterizedTest(name = "[{0}]")
+    @EnumSource(AppTheme::class)
+    fun update_theme_logs_user_action_select_theme_with_value(theme: AppTheme) =
+        runTest(testDispatcher) {
+            // Given
+            coEvery { mockDataStore.setTheme(any()) } coAnswers { }
+            val viewModel = AppearanceViewModel(mockDataStore, fakeAnalytics)
+
+            // When
+            viewModel.updateTheme(theme)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(
+                    AnalyticsEvent.UserAction(
+                        UserActionType.SELECT_THEME,
+                        theme.name.lowercase()
+                    )
+                ),
+                fakeAnalytics.events,
+                "updateTheme логирует UserAction(SELECT_THEME, light/dark/system)"
+            )
+        }
+
+    /**
+     * `updateDynamicColors` эмитит `UserAction(TOGGLE_DYNAMIC_COLORS)`
+     * со value on/off (design D10).
+     */
+    @ParameterizedTest(name = "[{0}]")
+    @ValueSource(booleans = [true, false])
+    fun update_dynamic_colors_logs_user_action_toggle_with_value(enabled: Boolean) =
+        runTest(testDispatcher) {
+            // Given
+            coEvery { mockDataStore.setUseDynamicColors(any()) } coAnswers { }
+            val viewModel = AppearanceViewModel(mockDataStore, fakeAnalytics)
+
+            // When
+            viewModel.updateDynamicColors(enabled)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(
+                    AnalyticsEvent.UserAction(
+                        UserActionType.TOGGLE_DYNAMIC_COLORS,
+                        if (enabled) "on" else "off"
+                    )
+                ),
+                fakeAnalytics.events,
+                "updateDynamicColors логирует UserAction(TOGGLE_DYNAMIC_COLORS, on/off)"
+            )
+        }
 
     companion object {
         @JvmStatic

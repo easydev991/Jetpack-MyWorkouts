@@ -10,6 +10,9 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.myworkouts.analytics.AnalyticsProvider
+import com.myworkouts.analytics.FirebaseAnalyticsProvider
+import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.domain.model.AppTheme
 import com.myworkouts.domain.model.isDark
 import com.myworkouts.ui.screens.root.RootScreen
@@ -43,6 +46,15 @@ class MainActivity : ComponentActivity() {
         val dataStore = app.dataStore
         val repository = app.repository
 
+        // Провайдер аналитики по типу сборки (design D4): Noop в debug —
+        // телеметрия молчит, Firebase в release.
+        val analyticsProvider: AnalyticsProvider =
+            if (BuildConfig.DEBUG) {
+                NoopAnalyticsProvider()
+            } else {
+                FirebaseAnalyticsProvider(applicationContext)
+            }
+
         setContent {
             val theme by dataStore.theme.collectAsState(initial = AppTheme.SYSTEM)
             val useDynamicColors by dataStore.useDynamicColors.collectAsState(initial = true)
@@ -66,7 +78,11 @@ class MainActivity : ComponentActivity() {
                 appTheme = theme,
                 dynamicColor = useDynamicColors
             ) {
-                RootScreen(dataStore = dataStore, repository = repository)
+                RootScreen(
+                    dataStore = dataStore,
+                    repository = repository,
+                    analyticsProvider = analyticsProvider
+                )
             }
         }
     }
