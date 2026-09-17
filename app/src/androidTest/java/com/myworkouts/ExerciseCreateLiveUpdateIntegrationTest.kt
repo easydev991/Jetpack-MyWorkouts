@@ -89,7 +89,9 @@ class ExerciseCreateLiveUpdateIntegrationTest {
         insertExerciseIntoAppDatabase()
 
         composeTestRule.runOnIdle {
-            composeTestRule.activityRule.scenario.onActivity { activity -> activity.onBackPressedDispatcher.onBackPressed() }
+            composeTestRule.activityRule.scenario.onActivity { activity ->
+                activity.onBackPressedDispatcher.onBackPressed()
+            }
         }
 
         // Then — каталог показывает новое упражнение без перезапуска.

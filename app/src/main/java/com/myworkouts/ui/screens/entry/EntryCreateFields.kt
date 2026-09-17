@@ -170,7 +170,9 @@ internal fun DurationDropdownField(
  */
 internal fun entrySelectableDates(openLocalDate: LocalDate): SelectableDates =
     object : SelectableDates {
-        override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis <= localDateToPickerMillis(openLocalDate)
+        override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+            utcTimeMillis <=
+                localDateToPickerMillis(openLocalDate)
     }
 
 /**

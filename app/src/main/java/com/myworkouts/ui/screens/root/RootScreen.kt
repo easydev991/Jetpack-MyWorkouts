@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -78,18 +79,11 @@ fun RootScreen(
     DisposableEffect(navController) {
         val listener =
             NavController.OnDestinationChangedListener { _, destination, _ ->
-                val screen =
-                    when (destination.route) {
-                        Screen.Main.route -> AppScreen.MainScreen
-                        Screen.Exercises.route -> AppScreen.ExercisesScreen
-                        Screen.More.route -> AppScreen.MoreScreen
-                        Screen.Appearance.route -> AppScreen.AppearanceScreen
-                        Screen.AppData.route -> AppScreen.AppDataScreen
-                        Screen.ArchivedExercises.route -> AppScreen.ArchivedExercisesScreen
-                        Screen.EntryCreate.route -> AppScreen.EntryCreateScreen
-                        Screen.ExerciseCreate.route -> AppScreen.ExerciseCreateScreen
-                        else -> null
-                    }
+                // Маппинг route-template → AppScreen; для экранов с
+                // аргументами destination.route возвращает шаблон
+                // с placeholder ({entryId}, {exerciseId}), поэтому
+                // сравниваем с Screen.*.route как есть.
+                val screen = screenForRoute(destination.route)
                 if (screen != null) {
                     analyticsProvider.log(AnalyticsEvent.ScreenView(screen))
                 }
@@ -152,6 +146,7 @@ fun RootScreen(
  * Decision 7): скрытие настройкой убирает только `NavigationBarItem`,
  * включение таба мгновенное и без перестройки графа.
  */
+@Suppress("LongParameterList")
 @Composable
 private fun AppNavHost(
     navController: NavHostController,
@@ -204,27 +199,19 @@ private fun AppNavHost(
             )
         }
         composable(Screen.EntryCreate.route, arguments = Screen.EntryCreate.arguments) { backStackEntry ->
-            val entryId =
-                backStackEntry.arguments?.getLong(Screen.EntryCreate.ARG_ENTRY_ID)
-                    ?: Screen.EntryCreate.NO_ENTRY_ID
-            EntryCreateScreen(
-                viewModel = viewModel(factory = EntryCreateViewModel.factory(repository, entryId, analyticsProvider)),
-                onBackClick = { navController.popBackStack() }
+            EntryCreateNavDestination(
+                backStackEntry = backStackEntry,
+                repository = repository,
+                analyticsProvider = analyticsProvider,
+                navController = navController
             )
         }
-        // ExerciseCreate: фабрика строится в composable-блоке; query-аргумент
-        // exerciseId выбирает режим create/edit (edit-delete-exercise,
-        // design Decision 1), FAB «Упражнений» ведёт на createRoute().
         composable(Screen.ExerciseCreate.route, arguments = Screen.ExerciseCreate.arguments) { backStackEntry ->
-            val exerciseId =
-                backStackEntry.arguments?.getLong(
-                    Screen.ExerciseCreate.ARG_EXERCISE_ID,
-                    Screen.ExerciseCreate.NO_EXERCISE_ID
-                )
-                    ?: Screen.ExerciseCreate.NO_EXERCISE_ID
-            ExerciseCreateScreen(
-                viewModel = viewModel(factory = ExerciseCreateViewModel.factory(repository, exerciseId, analyticsProvider)),
-                onBackClick = { navController.popBackStack() }
+            ExerciseCreateNavDestination(
+                backStackEntry = backStackEntry,
+                repository = repository,
+                analyticsProvider = analyticsProvider,
+                navController = navController
             )
         }
         composable(Screen.ArchivedExercises.route) {
@@ -235,6 +222,83 @@ private fun AppNavHost(
             )
         }
     }
+}
+
+/**
+ * Маппинг route-шаблона destination в элемент аналитики [AppScreen]
+ * (design D3). Экраны с аргументами имеют в route placeholder
+ * ({entryId}, {exerciseId}) — сравниваем с `Screen.*.route` как есть.
+ * `null` — route вне таблицы (например, системные destination).
+ */
+private fun screenForRoute(route: String?): AppScreen? =
+    when (route) {
+        Screen.Main.route -> AppScreen.MainScreen
+        Screen.Exercises.route -> AppScreen.ExercisesScreen
+        Screen.More.route -> AppScreen.MoreScreen
+        Screen.Appearance.route -> AppScreen.AppearanceScreen
+        Screen.AppData.route -> AppScreen.AppDataScreen
+        Screen.ArchivedExercises.route -> AppScreen.ArchivedExercisesScreen
+        Screen.EntryCreate.route -> AppScreen.EntryCreateScreen
+        Screen.ExerciseCreate.route -> AppScreen.ExerciseCreateScreen
+        else -> null
+    }
+
+/**
+ * `composable(Screen.EntryCreate.route) { ... }` — вынесено из
+ * `AppNavHost` ради соблюдения detekt `LongMethod`. Аргумент entryId
+ * выбирает режим create/edit (edit-entry): `NO_ENTRY_ID` — создание.
+ */
+@Composable
+private fun EntryCreateNavDestination(
+    backStackEntry: NavBackStackEntry,
+    repository: WorkoutDataRepository,
+    analyticsProvider: AnalyticsProvider,
+    navController: NavHostController
+) {
+    val entryId =
+        backStackEntry.arguments?.getLong(Screen.EntryCreate.ARG_ENTRY_ID)
+            ?: Screen.EntryCreate.NO_ENTRY_ID
+    EntryCreateScreen(
+        viewModel =
+            viewModel(
+                factory =
+                    EntryCreateViewModel.factory(repository, entryId, analyticsProvider)
+            ),
+        onBackClick = { navController.popBackStack() }
+    )
+}
+
+/**
+ * `composable(Screen.ExerciseCreate.route) { ... }` — вынесено из
+ * `AppNavHost` ради соблюдения detekt `LongMethod`. Query-аргумент
+ * exerciseId выбирает режим create/edit (edit-delete-exercise,
+ * design Decision 1), FAB «Упражнений» ведёт на createRoute().
+ */
+@Composable
+private fun ExerciseCreateNavDestination(
+    backStackEntry: NavBackStackEntry,
+    repository: WorkoutDataRepository,
+    analyticsProvider: AnalyticsProvider,
+    navController: NavHostController
+) {
+    val exerciseId =
+        backStackEntry.arguments?.getLong(
+            Screen.ExerciseCreate.ARG_EXERCISE_ID,
+            Screen.ExerciseCreate.NO_EXERCISE_ID
+        )
+            ?: Screen.ExerciseCreate.NO_EXERCISE_ID
+    ExerciseCreateScreen(
+        viewModel =
+            viewModel(
+                factory =
+                    ExerciseCreateViewModel.factory(
+                        repository,
+                        exerciseId,
+                        analyticsProvider
+                    )
+            ),
+        onBackClick = { navController.popBackStack() }
+    )
 }
 
 /**

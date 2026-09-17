@@ -114,20 +114,10 @@ fun MoreScreen(
                     }
                 )
 
-                FilledTonalButton(
-                    onClick = {
-                        analyticsProvider.log(
-                            AnalyticsEvent.UserAction(UserActionType.SEND_FEEDBACK)
-                        )
-                        sendFeedback(context)
-                    },
-                    contentPadding =
-                        PaddingValues(
-                            horizontal = dimensionResource(R.dimen.button_horizontal_padding)
-                        )
-                ) {
-                    Text(stringResource(R.string.feedback_send))
-                }
+                FeedbackButton(
+                    context = context,
+                    analyticsProvider = analyticsProvider
+                )
             }
 
             Text(
@@ -205,6 +195,32 @@ private fun NavigationButtons(navController: NavHostController) {
             )
     ) {
         Text(stringResource(R.string.app_data))
+    }
+}
+
+/**
+ * Кнопка «Отправить обратную связь» (more-screen): тап логируется
+ * (design D10) и письмо уходит через почтовый клиент устройства.
+ * Вынесено из [MoreScreen] ради лимита detekt `LongMethod: 60`.
+ */
+@Composable
+private fun FeedbackButton(
+    context: Context,
+    analyticsProvider: AnalyticsProvider
+) {
+    FilledTonalButton(
+        onClick = {
+            analyticsProvider.log(
+                AnalyticsEvent.UserAction(UserActionType.SEND_FEEDBACK)
+            )
+            sendFeedback(context)
+        },
+        contentPadding =
+            PaddingValues(
+                horizontal = dimensionResource(R.dimen.button_horizontal_padding)
+            )
+    ) {
+        Text(stringResource(R.string.feedback_send))
     }
 }
 

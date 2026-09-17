@@ -168,8 +168,9 @@ class ExerciseCreateViewModel(
         state: ExerciseCreateUiState,
         original: Exercise?
     ): Exercise? {
-        val name = state.name?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        val category = state.category ?: return null
+        val name = state.name?.trim()?.takeIf { it.isNotEmpty() }
+        val category = state.category
+        if (name == null || category == null) return null
         return Exercise(
             id = original?.id ?: 0L,
             name = name,

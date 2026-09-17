@@ -97,7 +97,13 @@ class ExercisesDeleteFlowTest {
                 }
             }
 
-        override suspend fun getExercise(id: Long): Result<Exercise?> = Result.success(catalog.value.firstOrNull { it.id == id })
+        override suspend fun getExercise(id: Long): Result<Exercise?> =
+            Result.success(
+                catalog.value.firstOrNull {
+                    it.id ==
+                        id
+                }
+            )
 
         override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = linkedEntries
 
@@ -132,7 +138,12 @@ class ExercisesDeleteFlowTest {
                 ExercisesScreen(
                     viewModel =
                         viewModel(
-                            factory = ExercisesViewModel.factory(repository, AppSettingsDataStore.create(context), NoopAnalyticsProvider())
+                            factory =
+                                ExercisesViewModel.factory(
+                                    repository,
+                                    AppSettingsDataStore.create(context),
+                                    NoopAnalyticsProvider()
+                                )
                         ),
                     onAddExerciseClick = {},
                     onArchivedExercisesClick = {},
@@ -245,7 +256,13 @@ class ExercisesErrorSnackbarTest(
 
         override suspend fun deleteExercise(id: Long): Result<Unit> = deleteResult
 
-        override suspend fun getExercise(id: Long): Result<Exercise?> = Result.success(catalog.value.firstOrNull { it.id == id })
+        override suspend fun getExercise(id: Long): Result<Exercise?> =
+            Result.success(
+                catalog.value.firstOrNull {
+                    it.id ==
+                        id
+                }
+            )
 
         override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = linkedEntries
 
@@ -285,7 +302,12 @@ class ExercisesErrorSnackbarTest(
                 ExercisesScreen(
                     viewModel =
                         viewModel(
-                            factory = ExercisesViewModel.factory(fake, AppSettingsDataStore.create(context), NoopAnalyticsProvider())
+                            factory =
+                                ExercisesViewModel.factory(
+                                    fake,
+                                    AppSettingsDataStore.create(context),
+                                    NoopAnalyticsProvider()
+                                )
                         ),
                     onAddExerciseClick = {},
                     onArchivedExercisesClick = {},
@@ -418,7 +440,13 @@ class ExercisesPreCheckSnackbarTest {
 
         override suspend fun deleteExercise(id: Long): Result<Unit> = deleteResult
 
-        override suspend fun getExercise(id: Long): Result<Exercise?> = Result.success(catalog.value.firstOrNull { it.id == id })
+        override suspend fun getExercise(id: Long): Result<Exercise?> =
+            Result.success(
+                catalog.value.firstOrNull {
+                    it.id ==
+                        id
+                }
+            )
 
         override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = linkedEntries
 
@@ -459,7 +487,12 @@ class ExercisesPreCheckSnackbarTest {
                 ExercisesScreen(
                     viewModel =
                         viewModel(
-                            factory = ExercisesViewModel.factory(fake, AppSettingsDataStore.create(context), NoopAnalyticsProvider())
+                            factory =
+                                ExercisesViewModel.factory(
+                                    fake,
+                                    AppSettingsDataStore.create(context),
+                                    NoopAnalyticsProvider()
+                                )
                         ),
                     onAddExerciseClick = {},
                     onArchivedExercisesClick = {},

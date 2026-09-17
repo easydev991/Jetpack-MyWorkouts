@@ -199,7 +199,10 @@ class EntryCreateScreenTest {
 
         // Then — порядок: подходы → длительность → вес → дата
         val weightLabel = context.getString(R.string.entry_field_weight)
-        assertDisplayedAbove(context.getString(R.string.entry_field_sets), context.getString(R.string.entry_field_duration))
+        assertDisplayedAbove(
+            context.getString(R.string.entry_field_sets),
+            context.getString(R.string.entry_field_duration)
+        )
         assertDisplayedAbove(context.getString(R.string.entry_field_duration), weightLabel)
         assertDisplayedAbove(weightLabel, context.getString(R.string.entry_field_date))
     }

@@ -230,7 +230,10 @@ class ExerciseCreateScreenTest {
 
         // Then — диалог подтверждения с заголовком и кнопками, экран не закрыт
         composeTestRule.onNodeWithText(context.getString(R.string.entry_confirm_close_dialog_title)).assertIsDisplayed()
-        composeTestRule.onNodeWithText(context.getString(R.string.entry_confirm_close_dialog_message)).assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                context.getString(R.string.entry_confirm_close_dialog_message)
+            ).assertIsDisplayed()
         composeTestRule.onNodeWithText(context.getString(R.string.entry_confirm_close)).assertIsDisplayed()
         composeTestRule.onNodeWithText(context.getString(R.string.cancel)).assertIsDisplayed()
         assertEquals("Диалог показан — экран не должен закрыться сразу", 0, backClickedCount)
@@ -363,7 +366,13 @@ class ExerciseCreateScreenTest {
 
         override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
 
-        override suspend fun getExercise(id: Long): Result<Exercise?> = Result.success(catalog.value.firstOrNull { it.id == id })
+        override suspend fun getExercise(id: Long): Result<Exercise?> =
+            Result.success(
+                catalog.value.firstOrNull {
+                    it.id ==
+                        id
+                }
+            )
 
         override fun exerciseIdsWithLinkedEntries(): Flow<Set<Long>> = MutableStateFlow(emptySet())
 
@@ -415,7 +424,10 @@ class ExerciseCreateScreenTest {
                         ?.getLong(Screen.ExerciseCreate.ARG_EXERCISE_ID, Screen.ExerciseCreate.NO_EXERCISE_ID)
                         ?: Screen.ExerciseCreate.NO_EXERCISE_ID
                 ExerciseCreateScreen(
-                    viewModel = viewModel(factory = ExerciseCreateViewModel.factory(repository, exerciseId, NoopAnalyticsProvider())),
+                    viewModel =
+                        viewModel(
+                            factory = ExerciseCreateViewModel.factory(repository, exerciseId, NoopAnalyticsProvider())
+                        ),
                     onBackClick = { navController.popBackStack() }
                 )
             }

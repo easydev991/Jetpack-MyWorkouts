@@ -250,9 +250,15 @@ class RoomWorkoutDataRepository(
         }
     }
 
-    override suspend fun getAllExercises(): Result<List<Exercise>> = runCatching { exerciseDao.getAll().map { it.toDomain() } }
+    override suspend fun getAllExercises(): Result<List<Exercise>> =
+        runCatching {
+            exerciseDao.getAll().map { it.toDomain() }
+        }
 
-    override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = runCatching { exerciseEntryDao.getAll().map { it.toDomain() } }
+    override suspend fun getAllEntries(): Result<List<ExerciseEntry>> =
+        runCatching {
+            exerciseEntryDao.getAll().map { it.toDomain() }
+        }
 
     override suspend fun importData(
         exercises: List<Exercise>,

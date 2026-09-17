@@ -4,6 +4,7 @@ context: |
   Language: ru
   All artifacts must be written in ru.
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  Implementation tasks are complete only with green `make format && make lint && make test` (kotlin and markdown lint); run them before the commit.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

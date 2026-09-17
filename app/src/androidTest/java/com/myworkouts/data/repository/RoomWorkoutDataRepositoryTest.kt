@@ -1221,7 +1221,13 @@ class RoomWorkoutDataRepositoryTest {
             // Then — успех; пропало из каталога, появилось в архиве
             assertTrue(result.isSuccess)
             val catalog = repository.exercises("").first()
-            assertNull("Заархивированное упражнение не должно попадать в каталог", catalog.firstOrNull { it.id == pullupsId })
+            assertNull(
+                "Заархивированное упражнение не должно попадать в каталог",
+                catalog.firstOrNull {
+                    it.id ==
+                        pullupsId
+                }
+            )
             assertEquals(
                 pullupsId,
                 repository

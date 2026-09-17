@@ -3,7 +3,6 @@ package com.myworkouts.ui.screens.exercises
 import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,10 +49,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -126,17 +123,7 @@ fun ExercisesScreen(
     val errorMessage: String? =
         when (val s = uiState) {
             ExercisesUiState.Loading -> null
-            is ExercisesUiState.Success ->
-                s.deleteError?.let { error ->
-                    when (error) {
-                        DeleteExerciseError.HasLinkedEntries ->
-                            stringResource(R.string.exercise_delete_error_used_in_workouts)
-                        DeleteExerciseError.StandardExercise ->
-                            stringResource(R.string.exercise_delete_error_standard)
-                        DeleteExerciseError.Other ->
-                            stringResource(R.string.exercise_delete_error_generic)
-                    }
-                }
+            is ExercisesUiState.Success -> s.deleteError?.let { deleteErrorText(it) }
         }
 
     // One-shot snackbar для ошибки удаления (design Decision 6):
@@ -470,55 +457,6 @@ private fun ExercisesList(
 }
 
 /**
- * Вычисляет `DpOffset` для `DropdownMenu` относительно я-коря списка:
- * позиция long-press в корне минус позиция списка в корне, по высоте
- * дополнительно учитывается высота контейнера (long-press-меню
- * привязывается к нижней границе строки; паттерн MainScreen.kt).
- * Общий хелпер для `ExercisesScreen` и `ArchivedExercisesScreen` —
- * вынесен ради соблюдения detekt `LongMethod`.
- */
-@Composable
-internal fun contextMenuDpOffset(
-    offsetInRoot: Offset,
-    anchorOrigin: IntOffset,
-    anchorHeight: Int
-): DpOffset {
-    val density = LocalDensity.current
-    return DpOffset(
-        x = with(density) { (offsetInRoot.x - anchorOrigin.x).toDp() },
-        y = with(density) { (offsetInRoot.y - anchorOrigin.y - anchorHeight).toDp() }
-    )
-}
-
-/**
- * Подключает `detectTapGestures(onLongPress)` для строки упражнения.
- * Long-press активен для всех упражнений каталога: для кастомных —
- * меню из трёх пунктов (Изменить/Архивировать/Удалить), для стандартных —
- * единственный пункт «Архивировать». `ExerciseContextMenu` выбирает пункты
- * по `isCustom` сам (exercises-archive Decision 4). Общая функция для
- * `ExercisesScreen` и `ArchivedExercisesScreen`.
- *
- * `positionInRootProvider` — лямбда, возвращающая актуальную позицию
- * строки в корне: closure ссылается на `mutableStateOf<Offset>`, чтобы
- * избежать пересоздания `pointerInput` при каждом изменении позиции
- * (иначе long-press отваливался бы на скролле).
- */
-internal fun Modifier.applyLongPress(
-    item: Exercise,
-    positionInRootProvider: () -> Offset,
-    onItemLongPress: (ExerciseContextMenuState) -> Unit
-): Modifier =
-    this.pointerInput(item.id) {
-        detectTapGestures(
-            onLongPress = { localOffset ->
-                onItemLongPress(
-                    ExerciseContextMenuState(item, positionInRootProvider() + localOffset)
-                )
-            }
-        )
-    }
-
-/**
  * Строка каталога: название + лейбл типа измерения, комментарий
  * ниже при наличии (spec «Строка списка ExerciseListItemRow»;
  * образец — `EntryListItemRow` главного экрана). Фон анимируется
@@ -778,8 +716,20 @@ internal fun exerciseConfirmButtonColors(confirmInError: Boolean): ButtonColors 
     }
 
 /**
- * Локализованный лейбл типа измерения и маппинг типизированной
- * ошибки удаления — инлайнены в места использования (`ExerciseListItemRow`
- * и VM-обёртка `ExercisesScreen`) ради соблюдения detekt
- * `TooManyFunctions` для файла.
+ * Локализованный текст типизированной ошибки удаления для снекбара
+ * (спека «Ошибка удаления — типизированные причины в снекбаре»).
+ * Резолвится на уровне композиции: `stringResource` — `@Composable`.
+ * Вынесено из VM-обёртки [ExercisesScreen] ради лимита detekt
+ * `LongMethod: 60` (место инлайна возвращено после выноса общих
+ * long-press хелперов в `ExerciseMenuHelpers.kt`).
  */
+@Composable
+private fun deleteErrorText(error: DeleteExerciseError): String =
+    when (error) {
+        DeleteExerciseError.HasLinkedEntries ->
+            stringResource(R.string.exercise_delete_error_used_in_workouts)
+        DeleteExerciseError.StandardExercise ->
+            stringResource(R.string.exercise_delete_error_standard)
+        DeleteExerciseError.Other ->
+            stringResource(R.string.exercise_delete_error_generic)
+    }
