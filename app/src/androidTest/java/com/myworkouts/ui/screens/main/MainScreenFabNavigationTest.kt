@@ -12,6 +12,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
+import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
@@ -32,7 +33,7 @@ import org.junit.runner.RunWith
  * `entry_create` (NavHost-обёртка по образцу `MoreScreenTest`).
  *
  * `MainScreen` теперь принимает [MainViewModel] — конструкция через
- * `MainViewModel.factory(repository)` с in-memory репозиторием
+ * `MainViewModel.factory(repository, NoopAnalyticsProvider())` с in-memory репозиторием
  * (workout-entries-list, задача 5.5).
  */
 @RunWith(AndroidJUnit4::class)
@@ -113,9 +114,10 @@ class MainScreenFabNavigationTest {
                 MainScreen(
                     viewModel =
                         viewModel(
-                            factory = MainViewModel.factory(repository)
+                            factory = MainViewModel.factory(repository, NoopAnalyticsProvider())
                         ),
-                    onAddEntryClick = { navController.navigate(EntryCreate.createRoute()) }
+                    onAddEntryClick = { navController.navigate(EntryCreate.createRoute()) },
+                    analyticsProvider = NoopAnalyticsProvider()
                 )
             }
             composable(Screen.EntryCreate.route, arguments = Screen.EntryCreate.arguments) {

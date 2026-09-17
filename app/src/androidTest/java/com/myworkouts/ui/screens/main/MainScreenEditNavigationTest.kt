@@ -16,6 +16,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
+import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
@@ -150,12 +151,13 @@ class MainScreenEditNavigationTest {
                 MainScreen(
                     viewModel =
                         viewModel(
-                            factory = MainViewModel.factory(repository)
+                            factory = MainViewModel.factory(repository, NoopAnalyticsProvider())
                         ),
                     onAddEntryClick = {},
                     onEditEntryClick = { entryId ->
                         navController.navigate(Screen.EntryCreate.createRoute(entryId))
-                    }
+                    },
+                    analyticsProvider = NoopAnalyticsProvider()
                 )
             }
             composable(Screen.EntryCreate.route, arguments = Screen.EntryCreate.arguments) { backStackEntry ->
@@ -165,7 +167,7 @@ class MainScreenEditNavigationTest {
                 EntryCreateScreen(
                     viewModel =
                         viewModel(
-                            factory = EntryCreateViewModel.factory(repository, entryId)
+                            factory = EntryCreateViewModel.factory(repository, entryId, NoopAnalyticsProvider())
                         ),
                     onBackClick = {}
                 )

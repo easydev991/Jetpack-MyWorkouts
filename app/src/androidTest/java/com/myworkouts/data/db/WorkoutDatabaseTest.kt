@@ -1,6 +1,7 @@
 package com.myworkouts.data.db
 
 import android.content.Context
+import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.domain.model.ExerciseCategory
@@ -27,6 +28,10 @@ import java.util.Locale
  * БД создаётся под русской локалью, чтобы состав упражнений читался
  * предсказуемо (AVD по умолчанию может иметь английскую локаль).
  * Локализация как таковая покрыта [StandardExercisesLocalizationTest].
+ *
+ * Исключение — тест деструктивной миграции: он работает с файловой БД
+ * на production-имени [WorkoutDatabase.DATABASE_NAME] (см. KDoc теста),
+ * файл удаляется в [tearDown].
  */
 @RunWith(AndroidJUnit4::class)
 class WorkoutDatabaseTest {
@@ -55,6 +60,9 @@ class WorkoutDatabaseTest {
     @After
     fun tearDown() {
         database.close()
+        // Файловый тест деструктивной миграции работает на production-имени —
+        // не оставляем после себя изменённый файл данных приложения
+        ruContext().deleteDatabase(WorkoutDatabase.DATABASE_NAME)
     }
 
     @Test
@@ -228,4 +236,71 @@ class WorkoutDatabaseTest {
             assertEquals(13, second.size)
             assertFalse(second.any { it.isCustom })
         }
+
+    @Test
+    fun destructiveMigration_whenUserVersionDowngraded_thenReseedsThirteenStandardExercises() {
+        val ctx = ruContext()
+
+        // Given — файловая БД без prepopulate. Имя файла — production-имя:
+        // WorkoutDatabase.create(...) открывает DATABASE_NAME и не принимает
+        // имени в параметрах, изолированное имя тесту недоступно. Гигиена —
+        // удаление файла в tearDown. Схема создаётся сразу в v3 (без
+        // seed-callback), в неё вставляется пользовательская строка, затем
+        // версия файла занижается до 2.
+        database.close()
+        ctx.deleteDatabase(WorkoutDatabase.DATABASE_NAME)
+        val plain =
+            Room
+                .databaseBuilder(ctx, WorkoutDatabase::class.java, WorkoutDatabase.DATABASE_NAME)
+                .build()
+        plain.openHelper.writableDatabase.execSQL(
+            "INSERT INTO exercises " +
+                "(name, category, is_custom, comment, created_at, measured_by, icon_number) " +
+                "VALUES ('Пользовательское до миграции', 'PUSH', 1, NULL, 1, 'REPS', NULL)"
+        )
+        plain.openHelper.writableDatabase.execSQL("PRAGMA user_version = 2")
+        plain.close()
+
+        // When — переоткрытие production-путём: schema v3, файл в v2 →
+        // fallbackToDestructiveMigration, tables пересоздаются; Room вызывает
+        // onDestructiveMigration, но НЕ onCreate — до фикса каталог пустой
+        database =
+            WorkoutDatabase.create(
+                context = ctx,
+                standardExercises = standardExercises(ctx)
+            )
+
+        // Then — после деструктивной миграции стандартный набор восстановлен:
+        // ровно 13 строк с is_custom = 0 (spec-сценарий «Деструктивная
+        // миграция восстанавливает стандартный набор»)
+        val standardCount = countExercisesByCustomFlag(isCustom = false)
+        assertEquals(
+            "После деструктивной миграции каталог должен содержать 13 стандартных упражнений",
+            13L,
+            standardCount
+        )
+
+        // Then — пользовательские данные до миграции не восстанавливаются
+        // (AND-условие сценария: миграция остаётся деструктивной)
+        val customCount = countExercisesByCustomFlag(isCustom = true)
+        assertEquals(
+            "Пользовательские упражнения не должны восстанавливаться после деструктивной миграции",
+            0L,
+            customCount
+        )
+    }
+
+    /** Считает строки `exercises` с заданным значением `is_custom`. */
+    private fun countExercisesByCustomFlag(isCustom: Boolean): Long =
+        database
+            .openHelper
+            .readableDatabase
+            .query(
+                "SELECT count(*) FROM exercises WHERE is_custom = " +
+                    if (isCustom) "1" else "0"
+            )
+            .use { cursor ->
+                assertTrue("Ожидается строка результата count(*)", cursor.moveToFirst())
+                cursor.getLong(0)
+            }
 }

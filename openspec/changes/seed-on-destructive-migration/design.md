@@ -28,28 +28,48 @@ proposal.md (Why). Существующая спека `workout-data` (сцен�
 
 ## Decisions
 
-### 1. `onDestructiveMigration` в существующем `seedCallback`
+### 1. Обработка деструктивной миграции в существующем `seedCallback`
 
-Добавить в анонимный `Callback` переопределение:
+Room 2.8 (`RoomOpenHelper.onUpgrade`) в деструктивном пути вызывает
+пользовательский `Callback.onDestructiveMigration` **после**
+`dropAllTables`, но **до** `createAllTables` — прямой seed в момент
+вызова падает с «no such table» (подтверждено байткодом room-runtime
+2.8.5 и красным прогоном теста). Поэтому переопределение
+`onDestructiveMigration` только выставляет флаг, а seed откладывается в
+`onOpen`, который Room вызывает уже после создания таблиц:
 
 ```kotlin
 override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
     super.onDestructiveMigration(db)
-    seedStandardExercises(db)
+    needsSeed = true
+}
+
+override fun onOpen(db: SupportSQLiteDatabase) {
+    super.onOpen(db)
+    if (needsSeed) {
+        needsSeed = false
+        seedStandardExercises(db)
+    }
 }
 ```
 
+Флаг — plain `var`: колбэки одного `Callback`-объекта сериализованы
+lock'ом открытия БД (androidx.sqlite `ProcessLock` + монитор
+`SQLiteOpenHelper`), атомарность не нужна.
+
 Альтернативы: отдельный `Callback` для миграций — отвергнуто: два
-объекта на одну заботу, порядок вызова не гарантирован; другой механизм
-(например, `addMigrations` с пустой миграцией) —
-отвергнуто: меняет контракт деструктивного фоллбека, зафиксированный
-спекой до релиза.
+объекта на одну заботу, порядок вызова не гарантирован; seed «если
+каталог пуст» в `onOpen` без флага — отвергнуто: воскресил бы удалённые
+пользователем стандартные упражнения; другой механизм (например,
+`addMigrations` с пустой миграцией) — отвергнуто: меняет контракт
+деструктивного фоллбека, зафиксированный спекой до релиза.
 
 ### 2. Извлечение общего `seedStandardExercises(db)`
 
 Тело `onCreate` (транзакция + INSERT-цикл по `standardExercises`)
 выносится в private-метод `seedStandardExercises(db: SupportSQLiteDatabase)`
-внутри `seedCallback`; оба колбэка вызывают его. Замыкание на
+внутри `seedCallback`; его вызывают `onCreate` и `onOpen` (под флагом из
+Decision 1). Замыкание на
 `standardExercises` сохраняется — имена по-прежнему резолвятся до
 регистрации callback'а, поскольку у callback нет доступа к `Context`
 (решение зафиксировано в KDoc `WorkoutDatabase`/`StandardExercises`).
@@ -57,11 +77,18 @@ override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
 ### 3. Тест — файловая БД с заниженным `user_version` в `WorkoutDatabaseTest`
 
 Инструментальный тест (JUnit 4, `WorkoutDatabaseTest`): создать файловую
-БД (context.getDatabasePath + `Room.databaseBuilder` без prepopulate),
+БД на production-имени `DATABASE_NAME` (простой `Room.databaseBuilder`
+без prepopulate — `WorkoutDatabase.create(...)` не принимает имени,
+изолированный файл недоступен),
 открыть/закрыть, выставить `PRAGMA user_version = 2` через
 `SupportSQLiteOpenHelper` или raw `SQLiteDatabase`, затем переоткрыть
 через `WorkoutDatabase.create(...)` (schema v3) и посчитать строки
-`exercises` с `is_custom = 0` — ожидается ровно 13. До фикса тест красный
+`exercises` с `is_custom = 0` — ожидается ровно 13. В фикстуру до
+занижения версии вставляется одна пользовательская строка
+(`is_custom = 1`); после переоткрытия она SHALL отсутствовать
+(`count(*) WHERE is_custom = 1` — 0), фиксируя AND-условие сценария
+«Деструктивная миграция восстанавливает стандартный набор»: миграция
+остаётся деструктивной. До фикса тест красный
 (0 строк). In-memory не подходит — у неё нет файла и деструктивный путь
 по версии не срабатывает.
 
@@ -87,14 +114,17 @@ restore дедуплицирует по именам — записи привя
 - **Потеря пользовательских данных при деструктивной миграции остаётся** →
   вне scope: фикс закрывает только пустой каталог; переход на миграции —
   перед первым релизом (зафиксировано в спеке и KDoc `WorkoutDatabase`).
-- **`onDestructiveMigration` вызывается вне пользовательской транзакции** →
-  seed сам оборачивается в `db.beginTransaction()/setTransactionSuccessful/`
-  `endTransaction` (переносится без изменений из `onCreate`); сбой вставки
+- **`onDestructiveMigration` вызывается вне пользовательской транзакции и
+  до создания таблиц** → seed оборачивается в
+  `db.beginTransaction()/setTransactionSuccessful/`
+  `endTransaction` (переносится без изменений из `onCreate`) и
+  откладывается до `onOpen` (Decision 1); сбой вставки
   откатит seed, но не миграцию — таблицы останутся пустыми, как до фикса,
   регресса нет.
 - **Тест с raw-файлом может конфликтовать с in-memory-тестами в классе** →
-  файл теста изолируется по `context.getDatabasePath("workout_database_test_…")`
-  и удаляется в `@After`.
+  тест работает на production-имени `DATABASE_NAME` (`create(...)` не
+  принимает имени): файл удаляется перед созданием фикстуры и в
+  `@After` — изменённый файл не остаётся после прогона.
 
 ## Migration Plan
 

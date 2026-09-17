@@ -20,6 +20,7 @@ import androidx.core.os.LocaleListCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
+import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
@@ -77,7 +78,7 @@ class MainScreenSectionsTest {
                         entry(id = 101L, name = "Приседания", date = today.minusDays(1), hour = 19) +
                         entry(id = 201L, name = "Планка", date = today.minusDays(5), hour = 8)
             )
-        viewModel = MainViewModel(repository = repository)
+        viewModel = MainViewModel(repository = repository, analyticsProvider = NoopAnalyticsProvider())
     }
 
     /** Двенадцать записей сегодняшней секции — контент заведомо выше экрана. */
@@ -96,7 +97,11 @@ class MainScreenSectionsTest {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalContext provides localizedContext(languageTag)) {
                 JetpackMyWorkoutsTheme {
-                    MainScreen(viewModel = viewModel, onAddEntryClick = {})
+                    MainScreen(
+                        viewModel = viewModel,
+                        onAddEntryClick = {},
+                        analyticsProvider = NoopAnalyticsProvider()
+                    )
                 }
             }
         }

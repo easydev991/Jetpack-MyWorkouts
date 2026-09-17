@@ -18,6 +18,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.BuildConfig
 import com.myworkouts.R
+import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.navigation.BottomTabs
 import com.myworkouts.navigation.Screen
 import org.junit.Assert.assertEquals
@@ -56,7 +57,8 @@ class MoreScreenTest {
                 MoreScreen(
                     navController = navController,
                     showExercisesTab = false,
-                    onShowExercisesTabChange = {}
+                    onShowExercisesTabChange = {},
+                    analyticsProvider = NoopAnalyticsProvider()
                 )
             }
             composable(Screen.Appearance.route) {
@@ -249,7 +251,8 @@ class MoreScreenTest {
         MoreScreen(
             navController = rememberNavController(),
             showExercisesTab = showExercisesTab,
-            onShowExercisesTabChange = onShowExercisesTabChange
+            onShowExercisesTabChange = onShowExercisesTabChange,
+            analyticsProvider = NoopAnalyticsProvider()
         )
     }
 

@@ -12,6 +12,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
+import com.myworkouts.analytics.NoopAnalyticsProvider
+import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.LinkedEntriesDeletionException
 import com.myworkouts.data.repository.StandardExerciseDeletionException
 import com.myworkouts.data.repository.WorkoutDataRepository
@@ -130,10 +132,11 @@ class ExercisesDeleteFlowTest {
                 ExercisesScreen(
                     viewModel =
                         viewModel(
-                            factory = ExercisesViewModel.factory(repository)
+                            factory = ExercisesViewModel.factory(repository, AppSettingsDataStore.create(context), NoopAnalyticsProvider())
                         ),
                     onAddExerciseClick = {},
-                    onArchivedExercisesClick = {}
+                    onArchivedExercisesClick = {},
+                    analyticsProvider = NoopAnalyticsProvider()
                 )
             }
         }
@@ -282,10 +285,11 @@ class ExercisesErrorSnackbarTest(
                 ExercisesScreen(
                     viewModel =
                         viewModel(
-                            factory = ExercisesViewModel.factory(fake)
+                            factory = ExercisesViewModel.factory(fake, AppSettingsDataStore.create(context), NoopAnalyticsProvider())
                         ),
                     onAddExerciseClick = {},
-                    onArchivedExercisesClick = {}
+                    onArchivedExercisesClick = {},
+                    analyticsProvider = NoopAnalyticsProvider()
                 )
             }
         }
@@ -455,10 +459,11 @@ class ExercisesPreCheckSnackbarTest {
                 ExercisesScreen(
                     viewModel =
                         viewModel(
-                            factory = ExercisesViewModel.factory(fake)
+                            factory = ExercisesViewModel.factory(fake, AppSettingsDataStore.create(context), NoopAnalyticsProvider())
                         ),
                     onAddExerciseClick = {},
-                    onArchivedExercisesClick = {}
+                    onArchivedExercisesClick = {},
+                    analyticsProvider = NoopAnalyticsProvider()
                 )
             }
         }

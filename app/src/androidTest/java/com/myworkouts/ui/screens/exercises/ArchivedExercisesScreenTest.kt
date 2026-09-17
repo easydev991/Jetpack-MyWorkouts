@@ -16,6 +16,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
+import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
@@ -148,7 +149,7 @@ class ArchivedExercisesScreenTest {
             ArchivedExercisesScreen(
                 viewModel =
                     androidx.lifecycle.viewmodel.compose.viewModel(
-                        factory = ArchivedExercisesViewModel.factory(fake)
+                        factory = ArchivedExercisesViewModel.factory(fake, NoopAnalyticsProvider())
                     ),
                 onBackClick = {}
             )

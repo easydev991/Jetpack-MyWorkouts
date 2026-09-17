@@ -47,7 +47,8 @@ abstract class WorkoutDatabase : RoomDatabase() {
          * к [Context], design.md Decision 4): `standardExercises(context)`
          * возвращает готовые записи «название + категория + тип измерения»,
          * которые замыкаются в callback и вставляются одной транзакцией
-         * при первом создании БД.
+         * при первом создании БД и после каждого деструктивного
+         * пересоздания таблиц (см. [seedCallback]).
          *
          * @param context Контекст приложения (должен быть `applicationContext`,
          *   иначе Room ругнётся на утечку при уничтожении Activity)
@@ -84,13 +85,47 @@ abstract class WorkoutDatabase : RoomDatabase() {
                 .build()
 
         /**
-         * Prepopulate стандартного набора при первом создании БД
-         * (design.md Decision 4).
+         * Prepopulate стандартного набора при первом создании БД и после
+         * каждого деструктивного пересоздания таблиц (design.md
+         * seed-on-destructive-migration Decision 1/2): Room вызывает
+         * [Callback.onCreate] только при первом создании файла, поэтому
+         * деструктивная миграция без обработки оставляла каталог пустым.
          */
         private fun seedCallback(standardExercises: List<StandardExercise>): Callback =
             object : Callback() {
+                // Room 2.8 (RoomOpenHelper.onUpgrade) вызывает
+                // onDestructiveMigration ПОСЛЕ dropAllTables, но ДО
+                // createAllTables — прямой seed в момент вызова падает с
+                // «no such table». Переносим его в onOpen, который Room
+                // вызывает уже после создания таблиц. Колбэки одного
+                // Callback-объекта сериализованы lock'ом открытия БД —
+                // plain var достаточен, атомарность не нужна.
+                private var needsSeed = false
+
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
+                    seedStandardExercises(db)
+                }
+
+                override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
+                    super.onDestructiveMigration(db)
+                    needsSeed = true
+                }
+
+                override fun onOpen(db: SupportSQLiteDatabase) {
+                    super.onOpen(db)
+                    if (needsSeed) {
+                        needsSeed = false
+                        seedStandardExercises(db)
+                    }
+                }
+
+                /**
+                 * Вставляет стандартный набор одной транзакцией. Имена
+                 * резолвятся до регистрации callback'а (замыкание на
+                 * [standardExercises]) — callback не имеет доступа к Context.
+                 */
+                private fun seedStandardExercises(db: SupportSQLiteDatabase) {
                     val now = System.currentTimeMillis()
                     db.beginTransaction()
                     try {

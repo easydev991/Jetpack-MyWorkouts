@@ -27,6 +27,7 @@ import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
+import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
@@ -414,7 +415,7 @@ class ExerciseCreateScreenTest {
                         ?.getLong(Screen.ExerciseCreate.ARG_EXERCISE_ID, Screen.ExerciseCreate.NO_EXERCISE_ID)
                         ?: Screen.ExerciseCreate.NO_EXERCISE_ID
                 ExerciseCreateScreen(
-                    viewModel = viewModel(factory = ExerciseCreateViewModel.factory(repository, exerciseId)),
+                    viewModel = viewModel(factory = ExerciseCreateViewModel.factory(repository, exerciseId, NoopAnalyticsProvider())),
                     onBackClick = { navController.popBackStack() }
                 )
             }

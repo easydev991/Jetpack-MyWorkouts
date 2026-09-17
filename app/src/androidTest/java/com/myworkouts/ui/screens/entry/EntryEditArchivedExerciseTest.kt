@@ -14,6 +14,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
+import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.domain.model.Exercise
@@ -143,7 +144,8 @@ class EntryEditArchivedExerciseTest {
             EntryCreateViewModel(
                 repository = repository,
                 nowProvider = { System.currentTimeMillis() },
-                entryId = entryId
+                entryId = entryId,
+                analyticsProvider = NoopAnalyticsProvider()
             )
         composeTestRule.setContent {
             JetpackMyWorkoutsTheme {
@@ -200,7 +202,8 @@ class EntryEditArchivedExerciseTest {
             EntryCreateViewModel(
                 repository = repository,
                 nowProvider = { System.currentTimeMillis() },
-                entryId = entryId
+                entryId = entryId,
+                analyticsProvider = NoopAnalyticsProvider()
             )
         composeTestRule.setContent {
             JetpackMyWorkoutsTheme {

@@ -14,8 +14,10 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
+import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.data.db.StandardExercise
 import com.myworkouts.data.db.WorkoutDatabase
+import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
@@ -113,10 +115,16 @@ class ExercisesLiveUpdateTest {
                         ExercisesScreen(
                             viewModel =
                                 viewModel(
-                                    factory = ExercisesViewModel.factory(repository)
+                                    factory =
+                                        ExercisesViewModel.factory(
+                                            repository,
+                                            AppSettingsDataStore.create(context),
+                                            NoopAnalyticsProvider()
+                                        )
                                 ),
                             onAddExerciseClick = { navController.navigate("stub") },
-                            onArchivedExercisesClick = {}
+                            onArchivedExercisesClick = {},
+                            analyticsProvider = NoopAnalyticsProvider()
                         )
                     }
                     composable("stub") {
@@ -168,10 +176,16 @@ class ExercisesLiveUpdateTest {
                         ExercisesScreen(
                             viewModel =
                                 viewModel(
-                                    factory = ExercisesViewModel.factory(repository)
+                                    factory =
+                                        ExercisesViewModel.factory(
+                                            repository,
+                                            AppSettingsDataStore.create(context),
+                                            NoopAnalyticsProvider()
+                                        )
                                 ),
                             onAddExerciseClick = { navController.navigate("stub") },
-                            onArchivedExercisesClick = {}
+                            onArchivedExercisesClick = {},
+                            analyticsProvider = NoopAnalyticsProvider()
                         )
                     }
                     composable("stub") {
@@ -230,10 +244,16 @@ class ExercisesLiveUpdateTest {
                         ExercisesScreen(
                             viewModel =
                                 viewModel(
-                                    factory = ExercisesViewModel.factory(repository)
+                                    factory =
+                                        ExercisesViewModel.factory(
+                                            repository,
+                                            AppSettingsDataStore.create(context),
+                                            NoopAnalyticsProvider()
+                                        )
                                 ),
                             onAddExerciseClick = {},
-                            onArchivedExercisesClick = {}
+                            onArchivedExercisesClick = {},
+                            analyticsProvider = NoopAnalyticsProvider()
                         )
                     }
                 }
