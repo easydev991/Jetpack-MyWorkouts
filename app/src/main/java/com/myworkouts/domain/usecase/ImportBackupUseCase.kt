@@ -251,7 +251,8 @@ private fun parseExercise(obj: JSONObject): Exercise =
         comment = obj.optionalString("comment"),
         iconNumber = obj.optionalInt("iconNumber"),
         createdAt = obj.requiredLong("createdAt"),
-        measuredBy = obj.requiredEnum("measuredBy", ExerciseMeasuredBy.entries)
+        measuredBy = obj.requiredEnum("measuredBy", ExerciseMeasuredBy.entries),
+        isArchived = obj.optionalBoolean("isArchived") ?: false
     )
 
 private fun parseEntry(obj: JSONObject): BackupEntry =
@@ -276,19 +277,23 @@ private fun JSONObject.requiredString(key: String): String {
     return value
 }
 
-private fun JSONObject.requiredLong(key: String): Long =
-    when (val value = opt(key)) {
-        is Long -> value
-        is Int -> value.toLong()
+private fun JSONObject.requiredLong(key: String): Long {
+    val value = opt(key)
+    return when {
+        value is Long -> value
+        value is Int -> value.toLong()
         else -> throw invalidFile("Поле $key отсутствует или не целое число")
     }
+}
 
-private fun JSONObject.requiredInt(key: String): Int =
-    when (val value = opt(key)) {
-        is Int -> value
-        is Long -> value.toInt()
+private fun JSONObject.requiredInt(key: String): Int {
+    val value = opt(key)
+    return when {
+        value is Int -> value
+        value is Long -> value.toInt()
         else -> throw invalidFile("Поле $key отсутствует или не целое число")
     }
+}
 
 private fun <T : Enum<T>> JSONObject.requiredEnum(
     key: String,
@@ -299,24 +304,39 @@ private fun <T : Enum<T>> JSONObject.requiredEnum(
         ?: throw invalidFile("Поле $key отсутствует или имеет неизвестное значение: $raw")
 }
 
-private fun JSONObject.optionalString(key: String): String? =
-    when (val value = opt(key)) {
-        null, JSONObject.NULL -> null
-        is String -> value
+private fun JSONObject.optionalString(key: String): String? {
+    val value = opt(key)
+    return when {
+        value == null || value === JSONObject.NULL -> null
+        value is String -> value
         else -> throw invalidFile("Поле $key не строка")
     }
+}
 
-private fun JSONObject.optionalInt(key: String): Int? =
-    when (val value = opt(key)) {
-        null, JSONObject.NULL -> null
-        is Int -> value
-        is Long -> value.toInt()
+private fun JSONObject.optionalInt(key: String): Int? {
+    val value = opt(key)
+    return when {
+        value == null || value === JSONObject.NULL -> null
+        value is Int -> value
+        value is Long -> value.toInt()
         else -> throw invalidFile("Поле $key не целое число")
     }
+}
 
-private fun JSONObject.optionalDouble(key: String): Double? =
-    when (val value = opt(key)) {
-        null, JSONObject.NULL -> null
-        is Double -> value
+private fun JSONObject.optionalDouble(key: String): Double? {
+    val value = opt(key)
+    return when {
+        value == null || value === JSONObject.NULL -> null
+        value is Double -> value
         else -> throw invalidFile("Поле $key не число")
     }
+}
+
+private fun JSONObject.optionalBoolean(key: String): Boolean? {
+    val value = opt(key)
+    return when {
+        value == null || value === JSONObject.NULL -> null
+        value is Boolean -> value
+        else -> throw invalidFile("Поле $key не Boolean")
+    }
+}

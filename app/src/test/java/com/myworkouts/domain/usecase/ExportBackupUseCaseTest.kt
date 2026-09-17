@@ -218,6 +218,51 @@ class ExportBackupUseCaseTest {
     }
 
     @Test
+    fun buildBackupJson_when_exerciseArchived_then_isArchivedSerializedAsTrue() {
+        // Given — архивное упражнение (spec-сценарий «Признак архивации в файле»)
+        val archived = pullUps.copy(isArchived = true)
+
+        // When
+        val exported =
+            JSONObject(buildBackupJson(listOf(archived), emptyList()))
+                .getJSONArray("exercises")
+                .getJSONObject(0)
+
+        // Then
+        assertTrue(
+            exported.has("isArchived"),
+            "Поле isArchived пишется всегда, даже для архивных — стабильная форма файла"
+        )
+        assertTrue(
+            exported.getBoolean("isArchived"),
+            "Архивное упражнение сериализуется как isArchived = true"
+        )
+    }
+
+    @Test
+    fun buildBackupJson_when_exerciseActive_then_isArchivedSerializedAsFalse() {
+        // Given — активное упражнение (isArchived = false по умолчанию,
+        // spec-сценарий «Признак архивации в файле»)
+        val active = pullUps.copy(isArchived = false)
+
+        // When
+        val exported =
+            JSONObject(buildBackupJson(listOf(active), emptyList()))
+                .getJSONArray("exercises")
+                .getJSONObject(0)
+
+        // Then
+        assertTrue(
+            exported.has("isArchived"),
+            "Поле isArchived пишется всегда, и для активных"
+        )
+        assertFalse(
+            exported.getBoolean("isArchived"),
+            "Активное упражнение сериализуется как isArchived = false"
+        )
+    }
+
+    @Test
     fun buildBackupJson_when_empty_data_then_valid_file_with_empty_arrays() {
         // Given
         val exercises = emptyList<Exercise>()

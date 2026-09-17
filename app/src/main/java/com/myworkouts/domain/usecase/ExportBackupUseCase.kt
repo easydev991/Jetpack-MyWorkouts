@@ -110,6 +110,7 @@ internal fun buildBackupJson(
                 .put("comment", exercise.comment ?: JSONObject.NULL)
                 .put("iconNumber", exercise.iconNumber ?: JSONObject.NULL)
                 .put("createdAt", exercise.createdAt)
+                .put("isArchived", exercise.isArchived)
         )
     }
     val fileEntries = JSONArray()

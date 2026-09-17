@@ -457,6 +457,128 @@ class ImportBackupUseCaseTest {
         }
 
     @Test
+    fun import_when_newExercise_then_isArchivedKeptFromBackup() =
+        runTest {
+            // Given: в каталоге нет «Планки», файл содержит её с isArchived = true
+            // (spec-сценарий «Признак архивации вставленного упражнения
+            // сохраняется» + design Decision 4: «файл недоверенный → isCustom = true»)
+            val file =
+                """
+                {
+                  "version": 1,
+                  "exercises": [
+                    {"name": "Планка", "category": "CORE", "measuredBy": "TIME",
+                     "isCustom": false, "comment": null, "createdAt": 1757371150000,
+                     "isArchived": true}
+                  ],
+                  "entries": []
+                }
+                """.trimIndent()
+            val repository = repository()
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then — вставленное упражнение попадает в архив и помечается isCustom
+            assertTrue(result.isSuccess, "Импорт архивного упражнения проходит")
+            val exercisesSlot = slot<List<Exercise>>()
+            coVerify { repository.importData(capture(exercisesSlot), any()) }
+            val inserted = exercisesSlot.captured.single()
+            assertTrue(
+                inserted.isArchived,
+                "Вставленное упражнение сохраняет isArchived = true из файла"
+            )
+            assertTrue(
+                inserted.isCustom,
+                "Решение Decision 4: вставленному всегда isCustom = true " +
+                    "поверх пользовательского isArchived"
+            )
+        }
+
+    @Test
+    fun import_when_isArchivedAbsent_then_defaultFalse() =
+        runTest {
+            // Given: старый файл v1 без isArchived в упражнениях
+            // (spec-сценарий «Старый файл без признака архивации импортируется»)
+            val repository = repository()
+            val file =
+                """
+                {
+                  "version": 1,
+                  "exercises": [
+                    {"name": "Планка", "category": "CORE", "measuredBy": "TIME",
+                     "isCustom": true, "comment": null, "createdAt": 1757371150000}
+                  ],
+                  "entries": []
+                }
+                """.trimIndent()
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then — импорт успешен, isArchived по умолчанию = false
+            assertTrue(result.isSuccess, "Старый файл без isArchived остаётся валидным")
+            val exercisesSlot = slot<List<Exercise>>()
+            coVerify { repository.importData(capture(exercisesSlot), any()) }
+            assertFalse(
+                exercisesSlot.captured.single().isArchived,
+                "Отсутствующее поле даёт isArchived = false (обратная совместимость)"
+            )
+        }
+
+    @Test
+    fun import_when_duplicateExercise_then_existingIsArchivedUnchanged() =
+        runTest {
+            // Given: в каталоге «Планка» активна (isArchived = false), файл
+            // содержит «Планка» с isArchived = true — дедупликация по имени
+            // (spec-сценарий «Признак архивации существующего упражнения при
+            // дедупликации не меняется»)
+            val existingActivePlank =
+                pullUps.copy(
+                    name = "Планка",
+                    category = ExerciseCategory.CORE,
+                    createdAt = 1_757_371_150_000L,
+                    measuredBy = ExerciseMeasuredBy.TIME
+                )
+            val file =
+                """
+                {
+                  "version": 1,
+                  "exercises": [
+                    {"name": "Планка", "category": "CORE", "measuredBy": "TIME",
+                     "isCustom": true, "comment": null, "createdAt": 1757371150000,
+                     "isArchived": true}
+                  ],
+                  "entries": []
+                }
+                """.trimIndent()
+            val repository = repository(exercises = listOf(existingActivePlank))
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then — дубликат не вставляется, существующее остаётся активным
+            assertTrue(result.isSuccess, "Дедупликация не ломает импорт")
+            val exercisesSlot = slot<List<Exercise>>()
+            coVerify { repository.importData(capture(exercisesSlot), any()) }
+            assertTrue(
+                exercisesSlot.captured.isEmpty(),
+                "Дубликат имени не создаёт новое упражнение"
+            )
+            assertFalse(
+                repository
+                    .getAllExercises()
+                    .getOrThrow()
+                    .single()
+                    .isArchived,
+                "Существующее упражнение остаётся со своим прежним isArchived = false"
+            )
+        }
+
+    @Test
     fun import_when_cancelled_then_rethrows_cancellation() =
         runTest {
             // Given — чтение файла прерывается отменой корутины
