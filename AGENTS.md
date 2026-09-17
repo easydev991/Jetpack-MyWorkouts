@@ -111,15 +111,19 @@ DataStore, Room. Manual DI — без Hilt.
 - `MainActivity.kt`
 - `MyWorkoutsApplication.kt` — композиционный корень manual DI
   (process-singleton `AppSettingsDataStore`, `WorkoutDatabase`,
-  `RoomWorkoutDataRepository`; добавлен `fix-entry-list-live-update`)
+  `RoomWorkoutDataRepository`)
 - `data/db/` — Room: entities, DAOs, `Mappers`, `WorkoutDatabase`,
-  стандартные упражнения
+  стандартные упражнения. Смена схемы — bump `version` + коммит
+  экспортированного JSON из `app/schemas/`; до первого релиза
+  `fallbackToDestructiveMigration` пересоздаёт БД с повторным prepopulate
+  стандартного набора (тот же список используется и в `deleteAllData`)
 - `data/preferences/AppSettingsDataStore.kt`
 - `data/repository/` — `WorkoutDataRepository`, `RoomWorkoutDataRepository`,
-  `EntryValidator`
+  `EntryValidator`, `DeletionExceptions`
 - `domain/model/` — `AppTheme`, `Exercise`, `ExerciseCategory`, `ExerciseEntry`,
-  `EntryListItem`, `ExerciseMeasuredBy`
-- `domain/usecase/` — `ExportBackupUseCase`, `ImportBackupUseCase` (бэкап в JSON)
+  `EntryListItem`, `ExerciseMeasuredBy`, `BackupEntry`, `DeleteExerciseError`
+- `domain/usecase/` — `ExportBackupUseCase`, `ImportBackupUseCase` (бэкап в JSON),
+  `BackupException`
 - `analytics/` — событийная модель и провайдеры: sealed interface
   `AnalyticsEvent` (`ScreenView`/`UserAction`/`AppError`), enum'ы
   `AppScreen`/`UserActionType`/`AppErrorOperation`, интерфейс

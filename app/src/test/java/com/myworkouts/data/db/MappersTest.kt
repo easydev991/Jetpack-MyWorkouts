@@ -100,16 +100,19 @@ class MappersTest {
         assertEquals(null, restored.iconNumber)
     }
 
-    private fun sampleListItemEntity(weightKg: Double?) =
-        EntryListItemEntity(
-            id = 1L,
-            exerciseName = "Подтягивания",
-            sets = 4,
-            reps = 10,
-            durationSec = null,
-            date = 1_700_000_000_000L,
-            weightKg = weightKg
-        )
+    private fun sampleListItemEntity(
+        weightKg: Double?,
+        comment: String? = null
+    ) = EntryListItemEntity(
+        id = 1L,
+        exerciseName = "Подтягивания",
+        sets = 4,
+        reps = 10,
+        durationSec = null,
+        date = 1_700_000_000_000L,
+        weightKg = weightKg,
+        comment = comment
+    )
 
     @Test
     fun toListItem_when_weightKg_present_then_maps_to_domain() {
@@ -142,5 +145,29 @@ class MappersTest {
 
         // Then — 0 проходит без искажений, решение о скрытии — на стороне UI
         assertEquals(0.0, item.weightKg)
+    }
+
+    @Test
+    fun toListItem_when_comment_present_then_maps_to_domain() {
+        // Given — проекция с непустым комментарием
+
+        // When
+        val item =
+            sampleListItemEntity(weightKg = null, comment = "сразу после сна")
+                .toListItem()
+
+        // Then — комментарий проброшен в доменную модель как есть
+        assertEquals("сразу после сна", item.comment)
+    }
+
+    @Test
+    fun toListItem_when_comment_null_then_maps_null() {
+        // Given — проекция без комментария
+
+        // When
+        val item = sampleListItemEntity(weightKg = null, comment = null).toListItem()
+
+        // Then
+        assertEquals(null, item.comment)
     }
 }

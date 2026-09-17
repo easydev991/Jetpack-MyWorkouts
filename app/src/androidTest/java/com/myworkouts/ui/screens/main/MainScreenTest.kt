@@ -36,7 +36,9 @@ import org.junit.runner.RunWith
  *   «1 час» (change update-entry-list-duration-format, spec «Формат
  *   значения записи»);
  * - пустое состояние при `entries = emptyList()` (5.1);
- * - long-press → меню «Удалить» → алерт подтверждения → отмена/подтверждение (5.3).
+ * - long-press → меню «Удалить» → алерт подтверждения → отмена/подтверждение (5.3);
+ * - комментарий в строке записи: показ текста / скрытие при null-blank
+ *   (mainscreen-itemrow-comment).
  *
  * Позиция DropdownMenu относительно точки касания покрывается ручной
  * проверкой на эмуляторе (задача 5.5): `offset` меню не имеет семантики
@@ -396,6 +398,61 @@ class MainScreenTest {
         composeTestRule
             .onAllNodesWithText(context.getString(R.string.entry_list_weight_value, "0"))
             .assertCountEquals(0)
+    }
+
+    /**
+     * Spec «Комментарий в строке записи» (mainscreen-itemrow-comment):
+     * запись с непустым комментарием показывает его текст отдельной
+     * строкой после блока веса.
+     */
+    @Test
+    fun row_when_comment_then_shows_comment_text() {
+        // Given — запись с комментарием
+        setContent(success(listOf(repsItem.copy(comment = "сразу после сна"))))
+
+        // Then — текст комментария отображается
+        composeTestRule
+            .onNodeWithText("сразу после сна")
+            .assertIsDisplayed()
+    }
+
+    /**
+     * Spec «Пустой комментарий не отображается»: `null` и blank («   »)
+     * скрывают блок комментария — вид строки как до изменения, включая
+     * Selected-семантику (accessibility не ломается).
+     */
+    @Test
+    fun row_when_no_comment_then_hides_comment_line() {
+        // Given — записи без комментария (null) и с blank («   »)
+        setContent(
+            success(
+                listOf(
+                    repsItem.copy(comment = null),
+                    timeItem.copy(id = 3L, comment = "   ")
+                )
+            )
+        )
+
+        // Then — строки списка отображаются
+        composeTestRule.onNodeWithText(repsItem.exerciseName).assertIsDisplayed()
+        composeTestRule.onNodeWithText(timeItem.exerciseName).assertIsDisplayed()
+
+        // Then — блока комментария нет: blank-текст не отрисован
+        composeTestRule
+            .onAllNodesWithText("   ")
+            .assertCountEquals(0)
+
+        // Then — Selected-семантика обеих строк доступна и false
+        composeTestRule
+            .onNodeWithText(repsItem.exerciseName)
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.Selected, false)
+            )
+        composeTestRule
+            .onNodeWithText(timeItem.exerciseName)
+            .assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.Selected, false)
+            )
     }
 
     /**

@@ -36,6 +36,8 @@ interface ExerciseEntryDao {
      * Название упражнения (`exerciseName`) подтягивается из `exercises`,
      * сортировка — по `date DESC` (новые первыми, design Decision 1).
      * Проекция [EntryListItemEntity] — не `@Entity`, схема БД не меняется.
+     * Комментарий записи (`comment`) включён в проекцию
+     * (mainscreen-itemrow-comment).
      */
     @Query(
         "SELECT e.id AS id, " +
@@ -44,6 +46,7 @@ interface ExerciseEntryDao {
             "e.reps AS reps, " +
             "e.duration_sec AS durationSec, " +
             "e.weight_kg AS weightKg, " +
+            "e.comment AS comment, " +
             "e.date AS date " +
             "FROM exercise_entries e " +
             "JOIN exercises x ON x.id = e.exercise_id " +

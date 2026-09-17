@@ -15,6 +15,8 @@ package com.myworkouts.data.db
  * @property reps Повторы в подходе (`null` для упражнений «на время»)
  * @property durationSec Длительность в секундах (`null` для упражнений «на повторы»)
  * @property weightKg Дополнительный вес (`null` — без веса; 0 — данные, не «нет веса»)
+ * @property comment Комментарий к записи (`null` — без комментария;
+ *   mainscreen-itemrow-comment)
  * @property date Дата/время записи (epoch millis)
  */
 data class EntryListItemEntity(
@@ -24,5 +26,6 @@ data class EntryListItemEntity(
     val reps: Int?,
     val durationSec: Int?,
     val weightKg: Double?,
+    val comment: String?,
     val date: Long
 )

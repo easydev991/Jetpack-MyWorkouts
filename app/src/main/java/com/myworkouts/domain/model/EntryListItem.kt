@@ -4,10 +4,10 @@ package com.myworkouts.domain.model
  * Доменный элемент списка записей на главном экране.
  *
  * Содержит плоскую проекцию: id, название упражнения, подходы, одно
- * из значений (повторы или длительность), дополнительный вес и
- * дату/время. Без `comment`/`createdAt` — строке списка они не нужны
- * (design Decision 2). Маппинг из
- * [com.myworkouts.data.db.EntryListItemEntity] — `toListItem()`.
+ * из значений (повторы или длительность), дополнительный вес,
+ * комментарий к записи и дату/время. Без `createdAt` — строке списка
+ * он не нужен (design Decision 2 change workout-entries-list). Маппинг
+ * из [com.myworkouts.data.db.EntryListItemEntity] — `toListItem()`.
  *
  * @property id Идентификатор записи
  * @property exerciseName Название упражнения каталога
@@ -16,6 +16,9 @@ package com.myworkouts.domain.model
  * @property durationSec Длительность в секундах (`null` для упражнений «на повторы»)
  * @property weightKg Дополнительный вес (`null` — без веса; дефолт держит
  *   фикстуры тестов/превью компилируемыми, design Decision 5)
+ * @property comment Комментарий к записи (`null` — без комментария; дефолт
+ *   держит фикстуры тестов/превью компилируемыми, design Decision 2 change
+ *   mainscreen-itemrow-comment)
  * @property date Дата/время записи (epoch millis)
  */
 data class EntryListItem(
@@ -25,5 +28,6 @@ data class EntryListItem(
     val reps: Int?,
     val durationSec: Int?,
     val weightKg: Double? = null,
+    val comment: String? = null,
     val date: Long
 )

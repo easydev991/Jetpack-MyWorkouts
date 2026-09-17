@@ -200,6 +200,38 @@ class ExerciseEntryDaoTest {
             collectJob.cancel()
         }
 
+    /**
+     * Спецификация «Комментарий в строке записи» (mainscreen-itemrow-comment):
+     * проекция observeEntries доносит `comment` из таблицы записей —
+     * непустой переносится, `null` остаётся `null`. Соответствие id →
+     * комментарий проверяем по id: ORDER BY date DESC при равных датах
+     * не гарантирует стабильный порядок строк.
+     */
+    @Test
+    fun observeEntries_whenEntriesWithAndWithoutComment_thenProjectionCarriesComment() =
+        runBlocking {
+            // Given — запись с комментарием и запись без
+            val idWithComment =
+                entryDao.insert(
+                    sampleEntry(existingExerciseId).copy(comment = "сразу после сна")
+                )
+            val idWithoutComment =
+                entryDao.insert(sampleEntry(existingExerciseId).copy(comment = null))
+
+            // When
+            val items = entryDao.observeEntries().first()
+
+            // Then — обе записи в проекции, комментарий у своего id
+            assertEquals(2, items.size)
+            val byId = items.associateBy { it.id }
+            assertEquals(
+                "Проекция должна содержать комментарий записи",
+                "сразу после сна",
+                byId[idWithComment]?.comment
+            )
+            assertNull(byId[idWithoutComment]?.comment)
+        }
+
     @Test
     fun getAll_returnsSnapshotOfAllEntries() =
         runBlocking {

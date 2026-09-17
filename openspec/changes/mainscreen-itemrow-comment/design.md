@@ -46,7 +46,9 @@
 
 4. **UI-блок после блока веса, без отдельной Row.** В `EntryListItemRow`
    после `if (weightKg != null && weightKg > 0.0) { WeightRow(...) }`
-   добавляется `if (!comment.isNullOrBlank()) { Text(...) }`. Параметры:
+   добавляется `if (!comment.isNullOrBlank()) { CommentRow(comment) }` —
+   одиночный `Text(...)` вынесен в приватный composable `CommentRow`
+   ради лимита detekt `LongMethod: 60`, как `WeightRow`. Параметры Text:
    `bodyMedium` + `onSurfaceVariant`, `maxLines = 2`,
    `overflow = TextOverflow.Ellipsis`. Расстояние — существующий
    `Arrangement.spacedBy(4.dp)` у Column, ничего добавлять не нужно.

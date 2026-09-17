@@ -298,8 +298,7 @@ class WorkoutDatabaseTest {
             .query(
                 "SELECT count(*) FROM exercises WHERE is_custom = " +
                     if (isCustom) "1" else "0"
-            )
-            .use { cursor ->
+            ).use { cursor ->
                 assertTrue("Ожидается строка результата count(*)", cursor.moveToFirst())
                 cursor.getLong(0)
             }

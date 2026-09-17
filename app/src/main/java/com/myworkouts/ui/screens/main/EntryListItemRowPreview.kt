@@ -13,14 +13,17 @@ import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 
 /**
- * Превью строки записи с доп. весом (конвенция проекта: светлая + тёмная
- * темы, `showBackground`, `locale = "ru"`, обёртка в `JetpackMyWorkoutsTheme`).
+ * Превью строки записи: доп. вес и комментарий (конвенция проекта:
+ * светлая + тёмная темы, `showBackground`, `locale = "ru"`, обёртка в
+ * `JetpackMyWorkoutsTheme`).
  *
- * Ключевые состояния компонента (spec «Дополнительный вес в строке
- * записи»): целый вес (5.0 → «5 кг»), дробный (2.5 → «2.5 кг») и без
- * веса — строка выглядит как одна «название — значение». Отдельно от
- * `EntryListItemRowPreview` в `MainScreenPreview.kt`, который покрывает
- * форматы значения.
+ * Ключевые состояния веса (spec «Дополнительный вес в строке записи»):
+ * целый (5.0 → «5 кг»), дробный (2.5 → «2.5 кг») и без веса — строка
+ * выглядит как одна «название — значение». Ключевые состояния
+ * комментария (spec «Комментарий в строке записи», change
+ * mainscreen-itemrow-comment) — в [EntryListItemRowCommentPreview]
+ * ниже. Отдельно от `EntryListItemRowPreview` в `MainScreenPreview.kt`,
+ * который покрывает форматы значения.
  */
 
 private val previewWholeWeightItem =
@@ -55,6 +58,42 @@ private val previewNoWeightItem =
         date = 1_721_200_000_000L
     )
 
+private val previewShortCommentItem =
+    EntryListItem(
+        id = 4L,
+        exerciseName = "Подтягивания",
+        sets = 4,
+        reps = 10,
+        durationSec = null,
+        comment = "сразу после сна",
+        date = 1_721_400_000_000L
+    )
+
+private val previewLongCommentWithWeightItem =
+    EntryListItem(
+        id = 5L,
+        exerciseName = "Становая тяга",
+        sets = 5,
+        reps = 5,
+        durationSec = null,
+        weightKg = 80.0,
+        // Длиннее двух строк: в превью видно «…» (обрезка по maxLines)
+        comment =
+            "Держал спину прямо, лопатки сведены, темп медленный; " +
+                "в следующий раз добавить вес и отдохнуть подольше между подходами",
+        date = 1_721_500_000_000L
+    )
+
+private val previewNoCommentItem =
+    EntryListItem(
+        id = 6L,
+        exerciseName = "Планка",
+        sets = 1,
+        reps = null,
+        durationSec = 20,
+        date = 1_721_600_000_000L
+    )
+
 @Preview(showBackground = true, locale = "ru")
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
 @Composable
@@ -80,6 +119,46 @@ internal fun EntryListItemRowWeightPreview() {
                 // 20 без веса — одна строка, как до изменения
                 EntryListItemRow(
                     item = previewNoWeightItem,
+                    separator = " х ",
+                    isSelected = false
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Ключевые состояния комментария (spec «Комментарий в строке записи»,
+ * change mainscreen-itemrow-comment): короткий — целиком под «название —
+ * значение»; длинный — обрезается в 2 строки с многоточием и идёт после
+ * строки веса (заодно показывает «комментарий вместе с весом»); без
+ * комментария — вид как до изменения.
+ */
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun EntryListItemRowCommentPreview() {
+    JetpackMyWorkoutsTheme {
+        Surface {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Короткий комментарий без веса — под «название — значение»
+                EntryListItemRow(
+                    item = previewShortCommentItem,
+                    separator = " х ",
+                    isSelected = false
+                )
+                // Длинный комментарий с весом — после строки веса, «…»
+                EntryListItemRow(
+                    item = previewLongCommentWithWeightItem,
+                    separator = " х ",
+                    isSelected = false
+                )
+                // Без комментария — как до изменения
+                EntryListItemRow(
+                    item = previewNoCommentItem,
                     separator = " х ",
                     isSelected = false
                 )

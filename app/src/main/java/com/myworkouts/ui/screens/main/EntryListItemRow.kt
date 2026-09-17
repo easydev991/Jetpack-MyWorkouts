@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
 import com.myworkouts.domain.model.EntryListItem
@@ -34,7 +35,10 @@ import com.myworkouts.ui.util.formatDurationResource
  * вес» цветом `onSurfaceVariant`, справа значение («5 кг» через
  * [formatWeightKg] и ресурс `entry_list_weight_value`). Строка веса
  * рендерится только при `weightKg > 0.0`; без веса вид строки
- * идентичен предыдущему.
+ * идентичен предыдущему. Третья строка — комментарий к записи без
+ * ведущей метки ([CommentRow]: `bodyMedium`, `onSurfaceVariant`,
+ * максимум 2 строки с многоточием — design Decision 4 change
+ * mainscreen-itemrow-comment); при `null`/blank блок не рендерится.
  *
  * Фон анимируется между `colorScheme.surface` и `surfaceVariant` в
  * зависимости от [isSelected] — пока открыто контекстное меню
@@ -95,27 +99,45 @@ internal fun EntryListItemRow(
                 },
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = item.exerciseName,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.End
-            )
-        }
+        TitleValueRow(exerciseName = item.exerciseName, value = value)
         if (weightKg != null && weightKg > 0.0) {
             WeightRow(weightKg = weightKg)
         }
+        val comment = item.comment
+        if (!comment.isNullOrBlank()) {
+            CommentRow(comment = comment)
+        }
+    }
+}
+
+/**
+ * Первая строка [EntryListItemRow]: «название — значение», оба текста
+ * `bodyLarge` с `FontWeight.Medium` (design Decision 4). Вынесено из
+ * [EntryListItemRow] ради лимита detekt `LongMethod: 60` — как
+ * [WeightRow] и [CommentRow].
+ */
+@Composable
+private fun TitleValueRow(
+    exerciseName: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = exerciseName,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.End
+        )
     }
 }
 
@@ -145,4 +167,22 @@ private fun WeightRow(weightKg: Double) {
             style = MaterialTheme.typography.bodyMedium
         )
     }
+}
+
+/**
+ * Третья строка [EntryListItemRow]: комментарий к записи без ведущей
+ * метки — `bodyMedium` с цветом `onSurfaceVariant`, максимум 2 строки,
+ * переполнение — многоточие (design Decision 4 change
+ * mainscreen-itemrow-comment). Вынесено из [EntryListItemRow] ради
+ * лимита detekt `LongMethod: 60` — как [WeightRow].
+ */
+@Composable
+private fun CommentRow(comment: String) {
+    Text(
+        text = comment,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis
+    )
 }
