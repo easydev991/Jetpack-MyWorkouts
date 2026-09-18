@@ -20,6 +20,7 @@ if not xml_files:
 
 total = 0
 failed = 0
+skipped = 0
 failed_tests = []
 class_stats = {}
 
@@ -31,15 +32,28 @@ for xml_file in xml_files:
         continue
     for testcase in root.findall(".//testcase"):
         class_name = testcase.get("classname") or root.get("name") or xml_file.stem
-        stats = class_stats.setdefault(class_name, {"total": 0, "failed": 0})
+        stats = class_stats.setdefault(
+            class_name, {"total": 0, "failed": 0, "skipped": 0}
+        )
         stats["total"] += 1
         total += 1
-        if testcase.find("failure") is not None or testcase.find("error") is not None:
+        # Явные is not None: у Element без детей truthiness = False
+        failure = testcase.find("failure")
+        if failure is None:
+            failure = testcase.find("error")
+        if failure is not None:
+            # JUnit-семантика Assume: AssumptionViolatedException — это
+            # пропуск теста (например, флейвор-гейт в androidTest), а не
+            # провал. AGP пишет её в XML элементом <failure>.
+            if "AssumptionViolatedException" in (failure.text or ""):
+                skipped += 1
+                stats["skipped"] += 1
+                continue
             failed += 1
             stats["failed"] += 1
             failed_tests.append(f"{class_name}::{testcase.get('name', 'Unknown')}")
 
-passed = total - failed
+passed = total - failed - skipped
 
 print("=" * 80)
 print(
@@ -52,6 +66,8 @@ print()
 print("Статистика тестов:")
 print(f"Всего тестов: {total}")
 print(f"{GREEN}Успешные: {passed}{RESET}")
+if skipped > 0:
+    print(f"Пропущенные (Assume): {skipped}")
 if failed > 0:
     print(f"{RED}Упавшие: {failed}{RESET}")
     print(f"{RED}Список упавших тестов:{RESET}")
@@ -76,7 +92,7 @@ for class_name, stats in sorted(
     reverse=True,
 ):
     failed_str = str(stats["failed"]).center(8)
-    passed_str = str(stats["total"] - stats["failed"]).center(10)
+    passed_str = str(stats["total"] - stats["failed"] - stats["skipped"]).center(10)
     if stats["failed"] > 0:
         failed_str = f"{RED}{failed_str}{RESET}"
     if stats["total"] > stats["failed"]:

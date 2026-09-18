@@ -42,6 +42,11 @@
     <string name="feedback_body">Android version: %1$s\nApp version: %2$s\n---\nWhat can be improved in the app?\n\n</string>
     <string name="feedback_no_email_client">No email client found</string>
 
+    <!-- Rate / share (rustore flavor only) -->
+    <string name="rate_the_app">Rate app</string>
+    <string name="share_the_app">Share app</string>
+    <string name="share_text">%1$s - workout tracking app</string>
+
     <!-- Standard exercises (prepopulate catalog, see design.md Decision 4) -->
     <string name="exercise_pullups">Pull-ups</string>
     <string name="exercise_australian_pullups">Australian pull-ups</string>

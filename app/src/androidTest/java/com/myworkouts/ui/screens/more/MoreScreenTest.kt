@@ -22,6 +22,7 @@ import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.navigation.BottomTabs
 import com.myworkouts.navigation.Screen
 import org.junit.Assert.assertEquals
+import org.junit.Assume
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -318,5 +319,51 @@ class MoreScreenTest {
         composeTestRule
             .onNodeWithText(context.getString(R.string.more_exercises_tab_hide))
             .assertIsDisplayed()
+    }
+
+    /**
+     * Проверяет, что кнопки «Оценить приложение» и «Поделиться
+     * приложением» отображаются при `BuildConfig.RUSTORE_FEATURES = true`
+     * (flavor rustore). На flavor github тест пропускается через Assume.
+     */
+    @Test
+    fun more_screen_when_rustore_features_true_then_shows_rate_and_share_buttons() {
+        Assume.assumeTrue(BuildConfig.RUSTORE_FEATURES)
+
+        // Given
+        composeTestRule.setContent {
+            MoreScreenWithNavHost()
+        }
+
+        // Then — обе кнопки видны после кнопки обратной связи
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.rate_the_app))
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.share_the_app))
+            .assertIsDisplayed()
+    }
+
+    /**
+     * Проверяет, что кнопки «Оценить приложение» и «Поделиться
+     * приложением» отсутствуют при `BuildConfig.RUSTORE_FEATURES = false`
+     * (flavor github). На flavor rustore тест пропускается через Assume.
+     */
+    @Test
+    fun more_screen_when_rustore_features_false_then_hides_rate_and_share_buttons() {
+        Assume.assumeFalse(BuildConfig.RUSTORE_FEATURES)
+
+        // Given
+        composeTestRule.setContent {
+            MoreScreenWithNavHost()
+        }
+
+        // Then — ни одной из кнопок нет в иерархии
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.rate_the_app))
+            .assertDoesNotExist()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.share_the_app))
+            .assertDoesNotExist()
     }
 }

@@ -4,9 +4,10 @@
 
 Порт готового решения из JetpackDays (`/Users/Oleg991/Documents/GitHub/JetpackDays`):
 кнопки rate/share уже реализованы и протестированы там, портируем 1:1 с
-адаптацией под наш проект. У нас флейворы уже объявлены
-(`app/build.gradle.kts`, `create("github")` / `create("rustore")`, оба
-пустые), `buildConfig = true` включён. MoreScreen — `Box` + `Column` с
+адаптацией под наш проект. На момент планирования флейворы были объявлены
+(`app/build.gradle.kts`, `create("github")` / `create("rustore")`) пустыми,
+`buildConfig = true` был включён; наполнение флейворов этим изменением —
+D1. MoreScreen — `Box` + `Column` с
 единым `Arrangement.spacedBy`, кнопки без layout-обёрток; у экрана нет
 ViewModel.
 
@@ -39,15 +40,19 @@ ViewModel.
   поэтому URL не копируем, а пересобираем). В `util/AppConstants` не
   выносим — константы нужны только MoreScreen.
 - **D3. UI-расположение**: две `FilledTonalButton` после `FeedbackButton`
-  внутри той же `Column` (интервалы — родительский `spacedBy`, спейсеры
-  не нужны), `contentPadding = PaddingValues(horizontal =
-  button_horizontal_padding)` — как у соседних кнопок. Гейт —
-  `if (BuildConfig.RUSTORE_FEATURES) { ... }` прямо в `Column` блока.
-  Порядок: сначала «Оценить приложение», затем «Поделиться приложением».
+внутри той же `Column` (интервалы — родительский `spacedBy`, спейсеры
+не нужны), `contentPadding = PaddingValues(horizontal =
+button_horizontal_padding)` — как у соседних кнопок. Гейт —
+`if (BuildConfig.RUSTORE_FEATURES) { ... }` прямо в `Column` блока,
+кнопки обёрнуты в приватные composables `RateAppButton`/`ShareAppButton`
+(тем же приёмом, что `FeedbackButton`, — ради detekt `LongMethod`).
+Порядок: сначала «Оценить приложение», затем «Поделиться приложением».
 - **D4. Intent-обработчики**: `rateApp(context)` — `ACTION_VIEW` на
   rate-URL; `shareApp(context)` — `ACTION_SEND`, `type = "text/plain"`,
   `EXTRA_TEXT = share_text(app_name) + "\n" + share-URL`,
-  `EXTRA_TITLE = share_chooser_title`, запуск через
+  `EXTRA_TITLE = share_the_app` (переиспользуем подпись кнопки — тексты
+  совпадают байт-в-байт; ARG: `EXTRA_TITLE` реально рисует заголовок
+  превью в шите, не удалять), запуск через
   `Intent.createChooser(intent, chooserTitle)`. Оба обработчика —
   `try/catch (e: ActivityNotFoundException) { Log.e("MoreScreen", ..., e) }`
   с разными сообщениями: `rateApp` → «Не удалось открыть страницу
@@ -55,7 +60,7 @@ ViewModel.
   JetpackDays). По образцу `sendFeedback` (там catch + Toast; здесь
   только Log.e). Функции `private fun`, вынесены из composable ради
   detekt `LongMethod` — тем же приёмом, что `sendFeedback`.
-- **D5. Строки**: `rate_the_app`, `share_the_app`, `share_chooser_title`,
+- **D5. Строки**: `rate_the_app`, `share_the_app`,
   `share_text` (с `%1$s`) в `values/strings.xml` (ru, дефолт) и
   `values-en/strings.xml`. Название приложения берём из существующего
   `app_name` — аналог `app_display_name` из JetpackDays не заводим.
@@ -65,7 +70,11 @@ ViewModel.
   обеих кнопках) и `more_screen_when_rustore_features_false_then_hides_rate_and_share_buttons`
   (`assumeFalse(...)`, `assertDoesNotExist`). Имена — snake_case, как
   уже в существующих тестах этого файла. На github-прогоне первый
-  тест пропускается, второй выполняется; на rustore — наоборот. Прогон:
+  тест пропускается, второй выполняется; на rustore — наоборот.
+  Пропуск работает только потому, что `scripts/test_report.py` считает
+  `AssumptionViolatedException` пропуском, а не провалом (AGP пишет её
+  в XML как `<failure>`; без этого `make android-test` красный на
+  «чужом» флейворе). Прогон:
   `make android-test FLAVOR=rustore` и `make android-test FLAVOR=github`.
 - **D7. Preview**: `MoreScreenPreview` остаётся валидным на flavor по
   умолчанию (github — кнопки скрыты). Превью с rate/share теоретически

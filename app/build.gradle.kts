@@ -38,13 +38,18 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Флейворы дистрибуции: пока различий нет, оба пустые — содержательное
-    // наполнение rustore отложено (план, «Вне скоупа»). Без суффиксов
-    // applicationId/versionName: один package для всех каналов, как в JetpackDays.
+    // Флейворы дистрибуции (план flavors-implementation.md): без суффиксов
+    // applicationId/versionName — один package для всех каналов, как в
+    // JetpackDays. RUSTORE_FEATURES — компайл-тайм-гейт для кнопок
+    // «Оценить приложение»/«Поделиться приложением» (more-screen).
     flavorDimensions += "distribution"
     productFlavors {
-        create("github")
-        create("rustore")
+        create("github") {
+            buildConfigField("Boolean", "RUSTORE_FEATURES", "false")
+        }
+        create("rustore") {
+            buildConfigField("Boolean", "RUSTORE_FEATURES", "true")
+        }
     }
 
     signingConfigs {

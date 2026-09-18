@@ -41,12 +41,19 @@ import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.navigation.Screen
 
+/** URL страницы отзывов о приложении в RuStore (кнопка «Оценить приложение»). */
+private const val APP_RATE_URL = "https://apps.rustore.ru/app/com.myworkouts/reviews"
+
+/** URL страницы приложения в RuStore (ссылка в share-тексте). */
+private const val APP_SHARE_URL = "https://apps.rustore.ru/app/com.myworkouts"
+
 /**
  * Экран «Ещё» — точка входа в дополнительные настройки приложения.
  *
  * Содержит кнопку переключения видимости вкладки «Упражнения»
  * (exercises-tab), кнопки перехода к экрану «Оформление приложения»,
- * «Данные приложения» и «Отправить обратную связь». По мере появления
+ * «Данные приложения», «Отправить обратную связь», а на flavor rustore
+ * — «Оценить приложение» и «Поделиться приложением». По мере появления
  * новых кнопок структура экрана — `Box` + `Column` с единым интервалом
  * через `Arrangement.spacedBy`. Версия приложения прижата к низу через
  * `Box.BottomCenter`.
@@ -118,6 +125,13 @@ fun MoreScreen(
                     context = context,
                     analyticsProvider = analyticsProvider
                 )
+
+                // Кнопки «Оценить приложение» и «Поделиться приложением»
+                // (more-screen) — только на flavor rustore
+                if (BuildConfig.RUSTORE_FEATURES) {
+                    RateAppButton(context = context)
+                    ShareAppButton(context = context)
+                }
             }
 
             Text(
@@ -246,5 +260,75 @@ private fun sendFeedback(context: Context) {
     } catch (e: ActivityNotFoundException) {
         Log.e("MoreScreen", "Почтовый клиент не найден", e)
         Toast.makeText(context, R.string.feedback_no_email_client, Toast.LENGTH_LONG).show()
+    }
+}
+
+/**
+ * Кнопка «Оценить приложение» (more-screen): открывает страницу отзывов
+ * приложения в RuStore. Рисуется только на flavor rustore — вызов
+ * обёрнут в гейт `BuildConfig.RUSTORE_FEATURES` в [MoreScreen].
+ */
+@Composable
+private fun RateAppButton(context: Context) {
+    FilledTonalButton(
+        onClick = { rateApp(context) },
+        contentPadding =
+            PaddingValues(
+                horizontal = dimensionResource(R.dimen.button_horizontal_padding)
+            )
+    ) {
+        Text(stringResource(R.string.rate_the_app))
+    }
+}
+
+/**
+ * Кнопка «Поделиться приложением» (more-screen): открывает системный
+ * chooser с текстом и ссылкой на приложение в RuStore. Рисуется только
+ * на flavor rustore — гейт в [MoreScreen].
+ */
+@Composable
+private fun ShareAppButton(context: Context) {
+    FilledTonalButton(
+        onClick = { shareApp(context) },
+        contentPadding =
+            PaddingValues(
+                horizontal = dimensionResource(R.dimen.button_horizontal_padding)
+            )
+    ) {
+        Text(stringResource(R.string.share_the_app))
+    }
+}
+
+/** Открывает страницу отзывов приложения в RuStore. */
+private fun rateApp(context: Context) {
+    val intent = Intent(Intent.ACTION_VIEW, APP_RATE_URL.toUri())
+
+    try {
+        context.startActivity(intent)
+    } catch (e: ActivityNotFoundException) {
+        Log.e("MoreScreen", "Не удалось открыть страницу приложения", e)
+    }
+}
+
+/** Делится ссылкой на приложение через системный ShareSheet. */
+private fun shareApp(context: Context) {
+    val appName = context.getString(R.string.app_name)
+    val shareText = context.getString(R.string.share_text, appName)
+    val intent =
+        Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, "$shareText\n$APP_SHARE_URL")
+            putExtra(Intent.EXTRA_TITLE, context.getString(R.string.share_the_app))
+        }
+
+    try {
+        context.startActivity(
+            Intent.createChooser(
+                intent,
+                context.getString(R.string.share_the_app)
+            )
+        )
+    } catch (e: ActivityNotFoundException) {
+        Log.e("MoreScreen", "Не удалось открыть ShareSheet", e)
     }
 }

@@ -18,7 +18,8 @@
   (`Intent.createChooser`) для `ACTION_SEND` с `type = "text/plain"`,
   `EXTRA_TEXT` = `share_text(app_name)` + `"\n"` +
   `https://apps.rustore.ru/app/com.myworkouts`, `EXTRA_TITLE` =
-  `R.string.share_chooser_title`.
+  `R.string.share_the_app` (отдельный `share_chooser_title` не заводится —
+  текст совпадает с подписью кнопки байт-в-байт).
 - Запуск каждого intent SHALL быть обёрнут в `try/catch
   ActivityNotFoundException` с логированием ошибки (`Log.e`, без падения
   приложения): для `rateApp` — сообщение «Не удалось открыть страницу
@@ -27,7 +28,6 @@
   `res/values-en/strings.xml`:
   - `rate_the_app`: «Оценить приложение» / "Rate app"
   - `share_the_app`: «Поделиться приложением» / "Share app"
-  - `share_chooser_title`: «Поделиться приложением» / "Share app"
   - `share_text`: «%1$s — приложение-дневник тренировок» /
     "%1$s - workout tracking app" (плейсхолдер — название приложения из
     существующего `app_name`)
@@ -58,7 +58,7 @@
 - **WHEN** пользователь на rustore-сборке нажимает «Поделиться
   приложением»
 - **THEN** открывается системный chooser с заголовком
-  `share_chooser_title`
+  `share_the_app`
 - **AND** текст Share содержит название приложения (текст `share_text` с
   подставленным `app_name`) и ссылку на страницу приложения в RuStore
 

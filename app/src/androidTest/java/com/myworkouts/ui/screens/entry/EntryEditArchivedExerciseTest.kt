@@ -1,5 +1,9 @@
 package com.myworkouts.ui.screens.entry
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -74,6 +78,37 @@ class EntryEditArchivedExerciseTest {
         database.close()
     }
 
+    /**
+     * Ждёт закрытия экрана после сохранения: `onSaved` вызывается строго
+     * после успешной записи в Room (EntryCreateViewModel.save), так что
+     * `backClicked` — видимый сигнал приземлившейся записи. Поллинг
+     * репозитория (runBlocking-запросы в waitUntil) конкурировал за
+     * main-поток с самой сохраняющей coroutine и изредка не укладывался
+     * в таймаут (ComposeTimeoutException).
+     *
+     * Таймаут ≠ «медленно»: [EntryCreateViewModel.save] молча выходит при
+     * `!canSave`, а неудачное сохранение ставит `isSaveError` без навигации
+     * — в обоих случаях сигнал не придёт никогда. Падаем сразу со снимком
+     * состояния, чтобы причина была в сообщении, а не гаданием по логам.
+     */
+    private fun awaitSaved(
+        viewModel: EntryCreateViewModel,
+        backClicked: () -> Boolean
+    ) {
+        try {
+            composeTestRule.waitUntil(timeoutMillis = 10_000) { backClicked() }
+        } catch (e: ComposeTimeoutException) {
+            val s = viewModel.uiState.value
+            throw IllegalStateException(
+                "Экран не закрылся после сохранения за 10 с: " +
+                    "setsText=${s.setsText} canSave=${s.canSave} " +
+                    "hasChanges=${s.hasChanges} isSaveError=${s.isSaveError} " +
+                    "isEntryMissing=${s.isEntryMissing}",
+                e
+            )
+        }
+    }
+
     /** Запись с REPS-упражнением X; X заархивирован до открытия экрана. */
     private fun seedArchivedEntry() {
         runBlocking {
@@ -135,21 +170,46 @@ class EntryEditArchivedExerciseTest {
         }
     }
 
+    /**
+     * Компонентный тест (exercises-archive §8.6 + §8.10, багфикс): реальная
+     * [EntryCreateViewModel] поверх Room in-memory. Оба сценария — в одном
+     * тесте: compose-тест-раннер (v2) исполняет каждый тест в собственном
+     * runTest, и viewModelScope-корутины VM, созданной во втором тесте,
+     * интерференция между runTest'ами не исполняет (клик по «Сохранить»
+     * не приводит к записи в БД). Внутри одного теста проблема
+     * отсутствует, поэтому повторное открытие экрана — второй setContent
+     * того же метода.
+     *
+     * Проход 1 (§8.6): запись ссылается на заархивированное ДО открытия
+     * упражнение X. Поле показывает X, сохранение заблокировано без
+     * изменений (инвариант edit-режима), после изменения подходов запись
+     * сохраняется с тем же `exerciseId = X.id`.
+     * Проход 2 (§8.10): смена архивного X на активное Y и возврат —
+     * X остаётся опцией дропдауна до сохранения, запись сохраняется
+     * с `exerciseId = X.id` (spec «Смена архивного упражнения — исходное
+     * остаётся в списке до сохранения»). Исключение X из выпадающего
+     * списка для новых записей покрыто `EntryCreateScreenTest` §8.2
+     * и JVM-тестами `EntryCreateViewModelTest`.
+     */
     @Test
     fun entryEditScreen_when_exercise_archived_then_field_shows_it_and_save_after_change() {
         // Given — запись с архивным упражнением X открыта на редактирование
         seedArchivedEntry()
-        var backClicked = false
-        val viewModel =
+        var backClicked by mutableStateOf(false)
+        var currentViewModel by mutableStateOf(
             EntryCreateViewModel(
                 repository = repository,
                 nowProvider = { System.currentTimeMillis() },
                 entryId = entryId,
                 analyticsProvider = NoopAnalyticsProvider()
             )
+        )
         composeTestRule.setContent {
             JetpackMyWorkoutsTheme {
-                EntryCreateScreen(viewModel = viewModel, onBackClick = { backClicked = true })
+                EntryCreateScreen(
+                    viewModel = currentViewModel,
+                    onBackClick = { backClicked = true }
+                )
             }
         }
 
@@ -175,7 +235,7 @@ class EntryEditArchivedExerciseTest {
             .onNodeWithText(context.getString(R.string.entry_save))
             .assertIsEnabled()
             .performClick()
-        composeTestRule.waitForIdle()
+        awaitSaved(currentViewModel) { backClicked }
 
         val saved =
             checkNotNull(runBlocking { repository.getEntry(entryId).getOrNull() }) {
@@ -184,31 +244,19 @@ class EntryEditArchivedExerciseTest {
         assertEquals("Упражнение записи не изменилось", exerciseId, saved.exerciseId)
         assertEquals("Изменение подходов сохранено", 4, saved.sets)
         assertTrue("После сохранения экран закрывается", backClicked)
-    }
 
-    /**
-     * Смена архивного упражнения на активное и возврат (exercises-archive
-     * §8.10): X остаётся опцией дропдауна до сохранения; после возврата
-     * к X и изменения полей запись сохраняется с `exerciseId = X.id`
-     * (spec «Смена архивного упражнения — исходное остаётся в списке
-     * до сохранения»).
-     */
-    @Test
-    fun entryEditScreen_when_archived_exercise_switched_and_back_then_saved_with_original() {
-        // Given — запись с архивным X открыта на редактирование
-        seedArchivedEntry()
-        var backClicked = false
-        val viewModel =
+        // Проход 2 — смена архивного X на активное Y и возврат к X:
+        // экран открывается заново с новой VM на ту же запись
+        val viewModel2 =
             EntryCreateViewModel(
                 repository = repository,
                 nowProvider = { System.currentTimeMillis() },
                 entryId = entryId,
                 analyticsProvider = NoopAnalyticsProvider()
             )
-        composeTestRule.setContent {
-            JetpackMyWorkoutsTheme {
-                EntryCreateScreen(viewModel = viewModel, onBackClick = { backClicked = true })
-            }
+        composeTestRule.runOnIdle {
+            backClicked = false
+            currentViewModel = viewModel2
         }
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             composeTestRule.onAllNodesWithText("Жим лёжа").fetchSemanticsNodes().isNotEmpty()
@@ -234,23 +282,24 @@ class EntryEditArchivedExerciseTest {
         // Then — поле снова показывает X
         composeTestRule.onNodeWithText("Жим лёжа").assertIsDisplayed()
 
-        // When — изменены подходы, сохранение
+        // When — изменены подходы, сохранение (4 → 5: правка относительно
+        // сохранённого в проходе 1 значения)
         composeTestRule
             .onNode(hasText(context.getString(R.string.entry_field_sets)))
-            .performTextReplacement("4")
+            .performTextReplacement("5")
         composeTestRule
             .onNodeWithText(context.getString(R.string.entry_save))
             .assertIsEnabled()
             .performClick()
-        composeTestRule.waitForIdle()
+        awaitSaved(viewModel2) { backClicked }
 
         // Then — запись обновлена с exerciseId = X.id
-        val saved =
+        val saved2 =
             checkNotNull(runBlocking { repository.getEntry(entryId).getOrNull() }) {
                 "Отредактированная запись должна остаться в БД"
             }
-        assertEquals("Возвращено исходное упражнение X", exerciseId, saved.exerciseId)
-        assertEquals("Изменение подходов сохранено", 4, saved.sets)
+        assertEquals("Возвращено исходное упражнение X", exerciseId, saved2.exerciseId)
+        assertEquals("Изменение подходов сохранено", 5, saved2.sets)
         assertTrue("После сохранения экран закрывается", backClicked)
     }
 }

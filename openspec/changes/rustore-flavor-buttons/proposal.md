@@ -21,7 +21,7 @@
   «Поделиться» — системный chooser с текстом и ссылкой
   (`ACTION_SEND`, `type = text/plain`). Обе — с
   `try/catch ActivityNotFoundException → Log.e`.
-- Новые строки `rate_the_app`, `share_the_app`, `share_chooser_title`,
+- Новые строки `rate_the_app`, `share_the_app`,
   `share_text` в `res/values/strings.xml` и `res/values-en/strings.xml`.
 - androidTest: пара тестов видимости кнопок c `Assume.assumeTrue/false`
   по `BuildConfig.RUSTORE_FEATURES` (видны на rustore, отсутствуют на
@@ -48,7 +48,7 @@
   `private const val` вверху файла (отдельный `util/AppConstants` не
   создаётся — верхнеуровневый `util/` в проекте не заводится).
 - `app/src/main/res/values/strings.xml`,
-  `app/src/main/res/values-en/strings.xml` — 4 новые строки.
+  `app/src/main/res/values-en/strings.xml` — 3 новые строки.
 - `app/src/androidTest/java/com/myworkouts/ui/screens/more/MoreScreenTest.kt` —
   2 новых теста (Assume по флейву).
 - Аналитика на кнопки не добавляется (как в JetpackDays). Offline-политика
