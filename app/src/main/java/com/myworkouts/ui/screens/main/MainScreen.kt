@@ -326,7 +326,8 @@ private fun EntryListItems(
     onLongPress: (EntryListItem, Offset) -> Unit
 ) {
     val yesterdayLabel = stringResource(R.string.entry_section_yesterday)
-    val formatter = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy") }
+    val currentYearFormatter = remember { DateTimeFormatter.ofPattern("EEE, d MMM") }
+    val archiveFormatter = remember { DateTimeFormatter.ofPattern("EEE, dd.MM.yyyy") }
     val today = remember { LocalDate.now() }
     val yesterday = today.minusDays(1)
     LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -338,8 +339,10 @@ private fun EntryListItems(
                         title =
                             if (section.date == yesterday) {
                                 yesterdayLabel
+                            } else if (section.date.year == today.year) {
+                                section.date.format(currentYearFormatter)
                             } else {
-                                section.date.format(formatter)
+                                section.date.format(archiveFormatter)
                             }
                     )
                 }

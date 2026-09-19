@@ -124,8 +124,8 @@ internal fun MainScreenContentListPreview() {
 }
 
 /**
- * Записи для превью секций: сегодня, вчера и пять дней назад
- * (фиксированная дата `dd.MM.yyyy`).
+ * Записи для превью секций: сегодня, вчера, пять дней назад
+ * (текущий год) и прошлогодняя фиксированная дата.
  */
 private fun sectionsPreviewEntries(): List<EntryListItem> {
     val zone = ZoneId.systemDefault()
@@ -168,13 +168,25 @@ private fun sectionsPreviewEntries(): List<EntryListItem> {
             reps = null,
             durationSec = 60,
             date = millisAt(today.minusDays(5), 8, 15)
+        ),
+        // Прошлогодняя фиксированная дата — секция с архивным
+        // заголовком `EEE, dd.MM.yyyy`
+        EntryListItem(
+            id = 14L,
+            exerciseName = "Отжимания",
+            sets = 3,
+            reps = 12,
+            durationSec = null,
+            date = millisAt(LocalDate.of(LocalDate.now().year - 1, 3, 10), 12, 0)
         )
     )
 }
 
 /**
- * Три секции: сегодня / вчера / дата `dd.MM.yyyy`. Превью задаёт только
- * записи — секции рендерер считает сам через [groupEntriesByDate].
+ * Четыре записи — четыре секции: сегодня (без заголовка) / вчера /
+ * дата текущего года / дата прошлого года; заголовки — «Вчера» /
+ * `EEE, d MMM` / `EEE, dd.MM.yyyy`. Превью задаёт только записи —
+ * секции рендерер считает сам через [groupEntriesByDate].
  */
 @Preview(showBackground = true, locale = "ru")
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")

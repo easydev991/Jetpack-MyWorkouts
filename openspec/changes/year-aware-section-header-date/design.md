@@ -42,9 +42,10 @@ yesterdayLabel } else { section.date.format(formatter) }`) — добавляе�
 ## Decisions
 
 - **D1. Выбор форматтера в `EntryListItems`**: добавляем
-  `remember { DateTimeFormatter.ofPattern("EEE, d MMM",
-  Locale.getDefault()) }` и второй `remember { DateTimeFormatter
-  .ofPattern("EEE, dd.MM.yyyy", Locale.getDefault()) }`. В существующей
+  `remember { DateTimeFormatter.ofPattern("EEE, d MMM") }` и второй
+  `remember { DateTimeFormatter.ofPattern("EEE, dd.MM.yyyy") }` —
+  без явной локали: `ofPattern` сам берёт локаль по умолчанию.
+  В существующей
   `if/else`-цепочке добавляется вложенная ветка по году: `if
   (section.date == yesterday) yesterdayLabel else if
   (section.date.year == today.year) currentYearFormatter else
@@ -53,7 +54,7 @@ yesterdayLabel } else { section.date.format(formatter) }`) — добавляе�
   вынести логику в `private fun formatSectionDate(date: LocalDate,
   today: LocalDate): String`: лишняя абстракция для одного call-site,
   YAGNI.
-- **D2. Шаблон через `Locale.getDefault()`**: `EEE` и `MMM` —
+- **D2. Локаль — системная по умолчанию**: `EEE` и `MMM` —
   локальные сокращения (ru: `Сб`/`сент.`, en: `Sat`/`Sep`); точка
   после сокращённого месяца в ru — стандартный вывод JDK
   (`DateTimeFormatterBuilder.appendText(MONTH)` ставит точку в ru

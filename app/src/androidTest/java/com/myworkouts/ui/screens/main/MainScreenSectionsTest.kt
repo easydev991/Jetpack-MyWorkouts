@@ -30,7 +30,9 @@ import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.junit.After
 import org.junit.Assert.assertTrue
+import org.junit.Assume
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -38,6 +40,7 @@ import org.junit.runner.RunWith
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Регрессионные UI-тесты секций по дате на главном экране
@@ -48,9 +51,9 @@ import java.time.format.DateTimeFormatter
  * `TestMainViewModel` не нужен.
  *
  * Проверяет: секция «Сегодня» — без заголовка, записи сразу вверху
- * списка; заголовки «Вчера» / `dd.MM.yyyy`; sticky-заголовок остаётся
- * у верхнего края при скролле; long-press и удаление работают внутри
- * секции; локализация заголовков ru/en.
+ * списка; заголовки «Вчера» / `EEE, d MMM` / `EEE, dd.MM.yyyy`;
+ * sticky-заголовок остаётся у верхнего края при скролле; long-press
+ * и удаление работают внутри секции; локализация заголовков ru/en.
  */
 @RunWith(AndroidJUnit4::class)
 class MainScreenSectionsTest {
@@ -64,13 +67,15 @@ class MainScreenSectionsTest {
     /** «Сегодня» теста — системная дата на момент запуска. */
     private val today: LocalDate = LocalDate.now()
 
-    private val dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
+    /** JVM-локаль до теста — восстанавливается в [restoreLocale]. */
+    private lateinit var initialLocale: Locale
 
     private lateinit var repository: SectionsFakeRepository
     private lateinit var viewModel: MainViewModel
 
     @Before
     fun setUp() {
+        initialLocale = Locale.getDefault()
         repository =
             SectionsFakeRepository(
                 initialEntries =
@@ -79,6 +84,12 @@ class MainScreenSectionsTest {
                         entry(id = 201L, name = "Планка", date = today.minusDays(5), hour = 8)
             )
         viewModel = MainViewModel(repository = repository, analyticsProvider = NoopAnalyticsProvider())
+    }
+
+    /** JVM-локаль утекает между тестами — восстанавливаем исходную. */
+    @After
+    fun restoreLocale() {
+        Locale.setDefault(initialLocale)
     }
 
     /** Двенадцать записей сегодняшней секции — контент заведомо выше экрана. */
@@ -105,6 +116,16 @@ class MainScreenSectionsTest {
                 }
             }
         }
+    }
+
+    /**
+     * Ожидаемый заголовок датированной секции — та же логика выбора по
+     * году, что в `EntryListItems` (MainScreen.kt): текущий год —
+     * `EEE, d MMM` без года, иначе архивный `EEE, dd.MM.yyyy`.
+     */
+    private fun formatSectionDate(date: LocalDate): String {
+        val pattern = if (date.year == LocalDate.now().year) "EEE, d MMM" else "EEE, dd.MM.yyyy"
+        return date.format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()))
     }
 
     /** Локализованный контекст (tasks §8.1: без `AppCompatDelegate`). */
@@ -161,7 +182,7 @@ class MainScreenSectionsTest {
 
         // Then — заголовок датированной секции отображается
         composeTestRule
-            .onNodeWithText(dateFormatter.format(today.minusDays(5)))
+            .onNodeWithText(formatSectionDate(today.minusDays(5)))
             .assertIsDisplayed()
     }
 
@@ -180,7 +201,7 @@ class MainScreenSectionsTest {
         // Then — заголовок датированной секции прилип выше строки
         val headerTop =
             composeTestRule
-                .onNodeWithText(dateFormatter.format(today.minusDays(5)))
+                .onNodeWithText(formatSectionDate(today.minusDays(5)))
                 .assertIsDisplayed()
                 .fetchSemanticsNode()
                 .boundsInRoot.top
@@ -271,6 +292,77 @@ class MainScreenSectionsTest {
         composeTestRule
             .onAllNodesWithText("Today")
             .assertCountEquals(0)
+    }
+
+    @Test
+    fun sections_when_archive_date_then_header_includes_weekday_and_full_date() {
+        // Given — одна запись на фиксированной архивной дате (год ≠ текущий)
+        repository =
+            SectionsFakeRepository(
+                initialEntries =
+                    listOf(
+                        entry(
+                            id = 301L,
+                            name = "Становая тяга",
+                            date = LocalDate.of(2024, 5, 15),
+                            hour = 12
+                        )
+                    )
+            )
+        viewModel = MainViewModel(repository = repository, analyticsProvider = NoopAnalyticsProvider())
+        setContentInLocale("ru")
+        composeTestRule.waitForIdle()
+
+        // Then — заголовок архивной секции: сокращённый день недели +
+        // dd.MM.yyyy с ведущими нулями
+        composeTestRule
+            .onNodeWithText(formatSectionDate(LocalDate.of(2024, 5, 15)))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun sections_when_current_year_date_then_header_localized_ru() {
+        assertCurrentYearHeaderLocalized(Locale("ru"))
+    }
+
+    @Test
+    fun sections_when_current_year_date_then_header_localized_en() {
+        assertCurrentYearHeaderLocalized(Locale.ENGLISH)
+    }
+
+    /**
+     * Проверка заголовка секции текущего года для заданной JVM-локали:
+     * сокращённые день недели и месяц, число без ведущего нуля, год не
+     * выводится.
+     *
+     * Локаль ставится через [Locale.setDefault], а не через
+     * Configuration.locale — DateTimeFormatter берёт именно JVM-локаль.
+     * В единственный день года, когда дата фикстуры совпадает с
+     * «сегодня», запись уйдёт в секцию без заголовка: assumption
+     * пропускает тест.
+     */
+    private fun assertCurrentYearHeaderLocalized(locale: Locale) {
+        Assume.assumeFalse(LocalDate.now() == LocalDate.of(LocalDate.now().year, 5, 15))
+        Locale.setDefault(locale)
+        val fixtureDate = LocalDate.of(LocalDate.now().year, 5, 15)
+        repository =
+            SectionsFakeRepository(
+                initialEntries =
+                    listOf(
+                        entry(
+                            id = 302L,
+                            name = "Жим лёжа",
+                            date = fixtureDate,
+                            hour = 12
+                        )
+                    )
+            )
+        viewModel = MainViewModel(repository = repository, analyticsProvider = NoopAnalyticsProvider())
+        setContentInLocale(locale.language)
+        composeTestRule.waitForIdle()
+        composeTestRule
+            .onNodeWithText(formatSectionDate(fixtureDate))
+            .assertIsDisplayed()
     }
 }
 

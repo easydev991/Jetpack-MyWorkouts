@@ -2,7 +2,7 @@
 
 ## 1. androidTest: новые кейсы на оба формата (TDD — красные)
 
-- [ ] 1.1 `MainScreenSectionsTest.kt`: добавить тест
+- [x] 1.1 `MainScreenSectionsTest.kt`: добавить тест
   `sections_when_archive_date_then_header_includes_weekday_and_full_date`
   — фикстура с одной записью на фиксированной архивной дате
   (год ≠ текущий; например, `LocalDate.of(2024, 5, 15)`, час 12); ожидаемая строка
@@ -13,7 +13,7 @@
   форматтер выдаёт только `15.05.2024`, без дня недели и без
   запятой; красная фаза здесь — расхождение строк, не падение
   компиляции.
-- [ ] 1.2 `MainScreenSectionsTest.kt`: добавить тест
+- [x] 1.2 `MainScreenSectionsTest.kt`: добавить тест
   `sections_when_current_year_date_then_header_has_weekday_without_year`
   — фикстура с одной записью на фиксированной дате текущего года
   (`LocalDate.of(LocalDate.now().year, 5, 15)`, час 12);
@@ -28,7 +28,7 @@
   красный — текущий форматтер выдаёт `15.05.<текущий год>`,
   в ожидаемой строке года тоже нет, но есть день недели —
   расхождение.
-- [ ] 1.3 Локализованный сценарий: добавить параметризацию или
+- [x] 1.3 Локализованный сценарий: добавить параметризацию или
   два отдельных теста (`sections_when_current_year_date_then_header_…_ru`
   / `_en`), повторяющих §1.2 в обеих локалях — это закрывает
   спека-сценарий «Сокращения дня недели и месяца соответствуют локали
@@ -64,17 +64,17 @@
 
 ## 2. Реализация в MainScreen.kt (green)
 
-- [ ] 2.1 `EntryListItems` (`MainScreen.kt:329`): вместо одного
+- [x] 2.1 `EntryListItems` (`MainScreen.kt:329`): вместо одного
   `DateTimeFormatter.ofPattern("dd.MM.yyyy")` ввести два
-  `remember`-форматтера с `Locale.getDefault()` — `currentYearFormatter`
+  `remember`-форматтера на локали по умолчанию — `currentYearFormatter`
   (шаблон `"EEE, d MMM"`) и `archiveFormatter` (шаблон
   `"EEE, dd.MM.yyyy"`). Старый `formatter` удалить. В
   `if (section.date == yesterday) … else …` добавить вложенную
   ветку по году: `if (section.date.year == today.year)
   currentYearFormatter else archiveFormatter`. Проверка:
   компиляция.
-- [ ] 2.2 Запустить тесты §1.1, §1.2, §1.3 — зелёные.
-- [ ] 2.3 `MainScreenPreview.kt` — `sectionsPreviewEntries()`
+- [x] 2.2 Запустить тесты §1.1, §1.2, §1.3 — зелёные.
+- [x] 2.3 `MainScreenPreview.kt` — `sectionsPreviewEntries()`
   (строки 130–173): добавить одну запись на фиксированной
   прошлогодней дате (например, `LocalDate.of(
   LocalDate.now().year - 1, 3, 10)`, час 12), чтобы
@@ -104,7 +104,7 @@
 после удаления val на строке 67 вызовы на строках 164/183
 не скомпилируются.
 
-- [ ] 3.1 `MainScreenSectionsTest.kt` — добавить `private fun
+- [x] 3.1 `MainScreenSectionsTest.kt` — добавить `private fun
   formatSectionDate(date: LocalDate): String` с той же логикой
   выбора по году, что в `MainScreen.kt:329`, и заменить вызовы
   `dateFormatter.format(today.minusDays(5))` (строки 164, 183)
@@ -115,12 +115,12 @@
   фактически ассертится архивный формат — контраст с §1.2
   («без года») размывается. Проверка: компиляция (val
   `dateFormatter` на строке 67 становится неиспользуемым).
-- [ ] 3.2 `MainScreenSectionsTest.kt:67` — удалить ставший
+- [x] 3.2 `MainScreenSectionsTest.kt:67` — удалить ставший
   неиспользуемым `val dateFormatter`. Проверка: компиляция;
   существующие тесты `sections_when_entries_across_dates_then_today_has_no_header_…`
   и `sections_when_scrolled_then_date_header_sticks_above_rows`
   после правки `MainScreen.kt` зелёные.
-- [ ] 3.3 `MainScreenSectionsTest.kt:50–53` — обновить KDoc
+- [x] 3.3 `MainScreenSectionsTest.kt:50–53` — обновить KDoc
   тест-класса: «заголовки „Вчера" / `dd.MM.yyyy`» → «заголовки
   „Вчера" / `EEE, d MMM` / `EEE, dd.MM.yyyy`», чтобы описание
   соответствовало трём форматам после §2.1. Проверка: текст KDoc
@@ -128,12 +128,12 @@
 
 ## 4. Верификация
 
-- [ ] 4.1 `make android-test` — единый прогон: новые тесты
+- [x] 4.1 `make android-test` — единый прогон: новые тесты
   §1.1–§1.3 зелёные, существующие тесты §3.2 зелёные, остальные
   androidTest не сломаны. Отчёт — `scripts/test_report.py` уже
   в make-цели.
-- [ ] 4.2 `make format && make lint && make test` — без новых
+- [x] 4.2 `make format && make lint && make test` — без новых
   замечаний, JVM-тесты зелёные.
-- [ ] 4.3 `MainScreenPreview` рендерится в IDE без ошибок —
+- [x] 4.3 `MainScreenPreview` рендерится в IDE без ошибок —
   видны все три формата заголовков («Вчера», `EEE, d MMM`,
   `EEE, dd.MM.yyyy`); правка фикстуры — §2.3.
