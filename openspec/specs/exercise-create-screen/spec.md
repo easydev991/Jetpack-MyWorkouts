@@ -47,12 +47,16 @@ horizontal = 16.dp, vertical = 16.dp)`. `ExerciseCreateSaveBottomBar`
 - **AND** поле «Комментарий» пустое
 - **AND** кнопка «Сохранить» в bottomBar disabled
 
-#### Scenario: Edit-режим показывает заголовок «Изменить упражнение»
+#### Scenario: Edit-режим показывает заголовок «Изменить упражнение» (ru)
 
 - **WHEN** `ExerciseCreateScreen` открыт с `exerciseId` существующего
-  упражнения (ru-локаль)
+  упражнения
 - **THEN** в `TopAppBar` отображается «Изменить упражнение»
-- **WHEN** en-локаль
+
+#### Scenario: Edit-режим показывает заголовок «Изменить упражнение» (en)
+
+- **WHEN** `ExerciseCreateScreen` открыт с `exerciseId` существующего
+  упражнения, локаль en
 - **THEN** в `TopAppBar` отображается "Edit exercise"
 
 ### Requirement: Поле «Название» — однострочное, обязательное
