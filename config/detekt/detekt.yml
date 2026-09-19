@@ -1,5 +1,5 @@
 build:
-  maxIssues: 10  # Allow up to 10 issues before failing the build
+  maxIssues: 5  # Нельзя повышать без прямого согласования с владельцем репо
   excludeCorrectable: false
   weights:
     # complexity: 2

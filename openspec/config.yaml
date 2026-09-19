@@ -6,6 +6,10 @@ context: |
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
   Implementation tasks are complete only with green `make format && make lint && make test` (kotlin and markdown lint); run them before the commit.
 
+  Detekt: правило в AGENTS.md — лимит и запрет его повышения без
+  согласования с владельцем репо; новые предупреждения исправляются
+  до завершения задачи.
+
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
 # Example:
