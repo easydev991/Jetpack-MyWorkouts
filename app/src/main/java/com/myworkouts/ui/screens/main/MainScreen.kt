@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
 import com.myworkouts.analytics.AnalyticsEvent
@@ -350,14 +351,26 @@ private fun EntryListItems(
             }
             items(items = section.items, key = { it.id }, contentType = { "row" }) { item ->
                 var positionInRoot by remember { mutableStateOf(Offset.Zero) }
+                var rowSize by remember { mutableStateOf(IntSize.Zero) }
                 EntryListItemRow(
                     item = item,
                     separator = separator,
                     isSelected = isSelected(item),
+                    // A11y-канал меню: центр строки по позиции и размеру из
+                    // того же onGloballyPositioned, что и long-press
+                    // (accessibility-semantics-fixes, design D2/D3).
+                    onOpenMenu = {
+                        onLongPress(
+                            item,
+                            positionInRoot +
+                                Offset(x = rowSize.width / 2f, y = rowSize.height / 2f)
+                        )
+                    },
                     modifier =
                         Modifier
                             .onGloballyPositioned { coords ->
                                 positionInRoot = coords.positionInRoot()
+                                rowSize = coords.size
                             }.pointerInput(item.id) {
                                 detectTapGestures(
                                     onLongPress = { localOffset ->

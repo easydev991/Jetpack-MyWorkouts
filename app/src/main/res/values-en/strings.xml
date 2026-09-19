@@ -99,6 +99,9 @@
     <string name="entry_value_separator">" x "</string>
     <string name="entry_list_menu_edit">Edit</string>
     <string name="entry_list_menu_delete">Delete</string>
+    <!-- Accessibility: shared label of the "open context menu" action
+         for rows of all three lists (accessibility-semantics-fixes, D4) -->
+    <string name="a11y_open_menu">Open menu</string>
     <string name="entry_list_delete_dialog_title">Delete entry?</string>
     <string name="entry_list_delete_dialog_message">Delete \"%1$s\"?</string>
     <string name="entry_list_empty">Add your first entry</string>

@@ -10,6 +10,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 /**
@@ -17,6 +19,10 @@ import androidx.compose.ui.unit.dp
  * Decision 5). Фон обязателен: `stickyHeader` без фона просвечивал бы
  * строками списка при скролле; цвет совпадает с фоном строк
  * ([EntryListItemRow]).
+ *
+ * Accessibility (accessibility-semantics-fixes, design D5): текст
+ * помечен `semantics { heading() }` — TalkBack объявляет заголовок
+ * и включает навигацию по заголовкам между секциями.
  *
  * @param title Готовый текст заголовка
  * @param modifier Внешний модификатор
@@ -46,7 +52,10 @@ internal fun SectionHeader(
         Text(
             text = title,
             color = lineColor,
-            modifier = Modifier.padding(horizontal = 12.dp)
+            modifier =
+                Modifier
+                    .padding(horizontal = 12.dp)
+                    .semantics { heading() }
         )
         HorizontalDivider(
             modifier =

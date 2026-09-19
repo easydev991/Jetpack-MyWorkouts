@@ -5,6 +5,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -28,6 +32,7 @@ import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.state.ExercisesUiState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -316,6 +321,111 @@ class ExercisesScreenTest {
         composeTestRule
             .onNodeWithText("Подтягивания")
             .assertIsDisplayed()
+    }
+
+    /**
+     * Accessibility-канал long-press (accessibility-semantics-fixes):
+     * строка каталога предоставляет custom-действие `a11y_open_menu`;
+     * выполнение открывает то же меню, что long-press — для стандартного
+     * упражнения единственный пункт «Архивировать» (состав по типу).
+     */
+    @Test
+    fun row_when_a11y_action_invoked_then_menu_with_archive_only() {
+        // Given — стандартные упражнения + локальная state-машина
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState = ExercisesUiState.Success(exercises = listOf(pullups)),
+                        contextMenu = menu,
+                        onAddExerciseClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestEdit = {},
+                        onRequestArchive = {},
+                        onRequestDelete = {}
+                    )
+            )
+        }
+
+        // When — выполнение custom-действия «Открыть меню» (как из
+        // меню действий TalkBack)
+        val openMenuAction =
+            composeTestRule
+                .onNodeWithText("Подтягивания")
+                .fetchSemanticsNode()
+                .config
+                .getOrNull(SemanticsActions.CustomActions)
+                ?.firstOrNull { it.label == context.getString(R.string.a11y_open_menu) }
+        assertNotNull(
+            "Строка каталога должна предоставлять custom-действие «Открыть меню»",
+            openMenuAction
+        )
+        checkNotNull(openMenuAction).action.invoke()
+        composeTestRule.waitForIdle()
+
+        // Then — меню как после long-press: только «Архивировать»
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_archive))
+            .assertExists()
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_list_menu_edit))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_list_menu_delete))
+            .assertCountEquals(0)
+    }
+
+    /**
+     * Accessibility-канал long-press: состав пунктов меню — по типу
+     * упражнения. У кастомного — все три пункта «Изменить» /
+     * «Архивировать» / «Удалить» (spec: сценарий «открывает меню
+     * по типу упражнения»).
+     */
+    @Test
+    fun row_when_a11y_action_invoked_when_custom_then_menu_with_edit_archive_delete() {
+        // Given — кастомное упражнение + локальная state-машина
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState = ExercisesUiState.Success(exercises = listOf(bench)),
+                        contextMenu = menu,
+                        onAddExerciseClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestEdit = {},
+                        onRequestArchive = {},
+                        onRequestDelete = {}
+                    )
+            )
+        }
+
+        // When — выполнение custom-действия «Открыть меню»
+        val openMenuAction =
+            composeTestRule
+                .onNodeWithText("Жим")
+                .fetchSemanticsNode()
+                .config
+                .getOrNull(SemanticsActions.CustomActions)
+                ?.firstOrNull { it.label == context.getString(R.string.a11y_open_menu) }
+        assertNotNull(
+            "Строка кастомного упражнения должна предоставлять custom-действие «Открыть меню»",
+            openMenuAction
+        )
+        checkNotNull(openMenuAction).action.invoke()
+        composeTestRule.waitForIdle()
+
+        // Then — все три пункта, как после long-press
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_edit))
+            .assertExists()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_archive))
+            .assertExists()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_delete))
+            .assertExists()
     }
 
     /**
@@ -679,6 +789,103 @@ class ExercisesScreenTest {
         org.junit.Assert.assertTrue(
             "confirmArchive должен быть вызван",
             confirmed
+        )
+    }
+
+    /**
+     * Accessibility чекбокса «Больше не показывать»
+     * (accessibility-semantics-fixes, design D7): лейбл и чекбокс —
+     * единая кликабельная область; тап по лейблу переключает чекбокс,
+     * подтверждение с поставленным лейблом приводит к записи
+     * `dontShowArchiveDialog = true` (колбэк `onConfirmArchive`
+     * получает `suppress = true`, как в существующем сценарии
+     * «confirmArchive с suppress=true пишет pref»).
+     */
+    @Test
+    fun archive_alert_when_label_tapped_then_checkbox_toggles_and_confirm_records_suppress() {
+        // Given — экран с алертом архивации и захватом suppress
+        var confirmedSuppress: Boolean? = null
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+            var pendingArchiveId by remember { mutableStateOf<Long?>(null) }
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState =
+                            ExercisesUiState.Success(
+                                exercises = listOf(bench),
+                                pendingArchiveId = pendingArchiveId
+                            ),
+                        contextMenu = menu,
+                        onAddExerciseClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestEdit = {},
+                        onRequestArchive = { item ->
+                            menu = null
+                            pendingArchiveId = item.id
+                        },
+                        onRequestDelete = {},
+                        onConfirmDelete = {},
+                        onCancelDelete = {},
+                        onConfirmArchive = { suppress ->
+                            confirmedSuppress = suppress
+                            pendingArchiveId = null
+                        },
+                        onCancelArchive = { pendingArchiveId = null },
+                        onArchivedExercisesClick = {}
+                    )
+            )
+        }
+        composeTestRule
+            .onNodeWithText("Жим")
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_archive))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — до тапа по лейблу чекбокс выключен
+        val suppressLabel = context.getString(R.string.exercise_archive_dont_show_again)
+        val toggledRow =
+            composeTestRule
+                .onNodeWithText(suppressLabel)
+                .fetchSemanticsNode()
+                .config
+        assertEquals(
+            "До тапа по лейблу чекбокс должен быть выключен",
+            ToggleableState.Off,
+            toggledRow.getOrNull(SemanticsProperties.ToggleableState)
+        )
+
+        // When — тап по лейблу «Больше не показывать»
+        composeTestRule
+            .onNodeWithText(suppressLabel)
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — чекбокс переключился
+        assertEquals(
+            "Тап по лейблу должен переключить чекбокс",
+            ToggleableState.On,
+            composeTestRule
+                .onNodeWithText(suppressLabel)
+                .fetchSemanticsNode()
+                .config
+                .getOrNull(SemanticsProperties.ToggleableState)
+        )
+
+        // When — подтверждение архивации с поставленным лейблом
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_archive_dialog_confirm))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — подтверждение записывает suppress = true
+        assertEquals(
+            "onConfirmArchive должен получить suppress = true",
+            true,
+            confirmedSuppress
         )
     }
 

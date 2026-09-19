@@ -101,6 +101,9 @@
     <string name="entry_value_separator">" х "</string>
     <string name="entry_list_menu_edit">Изменить</string>
     <string name="entry_list_menu_delete">Удалить</string>
+    <!-- Accessibility: единый лейбл действия «открыть контекстное меню»
+         для строк всех трёх списков (accessibility-semantics-fixes, D4) -->
+    <string name="a11y_open_menu">Открыть меню</string>
     <string name="entry_list_delete_dialog_title">Удалить запись?</string>
     <string name="entry_list_delete_dialog_message">Удалить «%1$s»?</string>
     <string name="entry_list_empty">Добавьте первую запись</string>

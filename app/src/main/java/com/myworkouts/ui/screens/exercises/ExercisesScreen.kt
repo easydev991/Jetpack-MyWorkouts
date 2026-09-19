@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
@@ -53,6 +55,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -438,7 +441,8 @@ private fun ExercisesList(
                             }.applyLongPress(
                                 item = exercise,
                                 positionInRootProvider = { positionInRoot },
-                                onItemLongPress = state.onContextMenuItemChange
+                                onItemLongPress = state.onContextMenuItemChange,
+                                openMenuLabel = stringResource(R.string.a11y_open_menu)
                             )
                 )
             }
@@ -684,6 +688,11 @@ internal fun ExerciseConfirmDialog(
  * поднимается на call-сайте: [SuccessBody] захватывает его в
  * `onConfirm`-лямбде, превью держат собственную копию через `remember`
  * (design.md Decision 4 — диалог не знает про `suppress`).
+ *
+ * Accessibility (accessibility-semantics-fixes, design D7): `Row`
+ * обёрнут в `toggleable` c `Role.Checkbox`, у чекбокса `onClick = null`
+ * — лейбл и чекбокс образуют единую кликабельную область (по образцу
+ * радио-строк `AppearanceScreen`, где вместо `toggleable` — `selectable`).
  */
 @Composable
 internal fun ArchiveSuppressSlot(
@@ -692,11 +701,28 @@ internal fun ArchiveSuppressSlot(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(top = 8.dp)
+        modifier =
+            Modifier
+                // Padding ДО toggleable: зона нажатия обнимает контент,
+                // иначе подсветка long-press включает пустой отступ и
+                // контент выглядит не отцентрированным в зоне.
+                .padding(top = 8.dp)
+                .toggleable(
+                    value = checked,
+                    role = Role.Checkbox,
+                    onValueChange = onCheckedChange
+                )
     ) {
         Checkbox(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = null,
+            // `onCheckedChange = null` отключает у M3 Checkbox слот
+            // `minimumInteractiveComponentSize` — чекбокс рендерится
+            // «голым» боксом вплотную к лейблу. Явный 48dp-слот
+            // воспроизводит геометрию интерактивного чекбокса: бокс
+            // 20dp центрируется в слоте (зазор и выравнивание как до
+            // accessibility-semantics-fixes).
+            modifier = Modifier.size(48.dp)
         )
         Text(stringResource(R.string.exercise_archive_dont_show_again))
     }

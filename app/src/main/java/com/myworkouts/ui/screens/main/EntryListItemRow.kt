@@ -13,6 +13,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -46,10 +48,18 @@ import com.myworkouts.ui.util.formatDurationResource
  * (`Modifier.semantics { selected = ... }`) дублирует состояние
  * для accessibility и Compose UI Test.
  *
+ * Accessibility-канал меню (accessibility-semantics-fixes, design D1/D2):
+ * в тот же `semantics(mergeDescendants = true)`-блок добавляется
+ * custom-действие с лейблом `a11y_open_menu` — TalkBack показывает его
+ * в меню действий. Действие вызывает [onOpenMenu] без точки касания;
+ * офсет меню (центр строки) вычисляет вызывающая сторона — она уже
+ * отслеживает позицию строки для long-press.
+ *
  * @param item Элемент списка (проекция из DAO JOIN)
  * @param separator Локализованный разделитель (« х »/« x »)
  * @param isSelected `true` пока для этой записи открыто контекстное
  *   меню (design Decision 5)
+ * @param onOpenMenu Колбэк открытия контекстного меню (a11y-действие)
  * @param modifier Внешний модификатор (для gesture/position из списка)
  */
 @Composable
@@ -57,6 +67,7 @@ internal fun EntryListItemRow(
     item: EntryListItem,
     separator: String,
     isSelected: Boolean,
+    onOpenMenu: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Тип значения различается: повторы или отформатированная длительность
@@ -82,6 +93,7 @@ internal fun EntryListItemRow(
             label = "rowBackground"
         ).value
     val weightKg = item.weightKg
+    val openMenuLabel = stringResource(R.string.a11y_open_menu)
 
     Column(
         modifier =
@@ -96,6 +108,15 @@ internal fun EntryListItemRow(
                     // находил строку (а не отдельный Text), иначе свойство
                     // Selected останется только у родителя.
                     selected = isSelected
+                    // Меню действий TalkBack: то же контекстное меню, что
+                    // по long-press (design D1).
+                    customActions =
+                        listOf(
+                            CustomAccessibilityAction(openMenuLabel) {
+                                onOpenMenu()
+                                true
+                            }
+                        )
                 },
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {

@@ -5,6 +5,8 @@ import android.content.res.Configuration
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
@@ -184,6 +186,28 @@ class MainScreenSectionsTest {
         composeTestRule
             .onNodeWithText(formatSectionDate(today.minusDays(5)))
             .assertIsDisplayed()
+    }
+
+    /**
+     * Accessibility (accessibility-semantics-fixes, design D5): заголовок
+     * секции помечен семантикой `Heading` — TalkBack включает навигацию
+     * по заголовкам.
+     */
+    @Test
+    fun sections_when_rendered_then_section_header_has_heading_semantics() {
+        // Given — записи за сегодня, вчера и пять дней назад
+        setContentInLocale("ru")
+        composeTestRule.waitForIdle()
+
+        // Then — у заголовка «Вчера» есть свойство Heading
+        val headerNode =
+            composeTestRule
+                .onNodeWithText(context.getString(R.string.entry_section_yesterday))
+                .fetchSemanticsNode()
+        assertTrue(
+            "Заголовок секции должен иметь семантику Heading",
+            headerNode.config.getOrNull(SemanticsProperties.Heading) != null
+        )
     }
 
     @Test

@@ -369,7 +369,11 @@ private fun AppBottomBar(
                 selected = currentRoute == tab.route,
                 onClick = { onTabClick(tab.route) },
                 icon = {
-                    Icon(tab.icon, contentDescription = title)
+                    // Accessibility (accessibility-semantics-fixes, design
+                    // D6): null вместо дублирующего title — лейбл вкладки
+                    // и так смержен с элементом, иначе TalkBack читает
+                    // название дважды.
+                    Icon(tab.icon, contentDescription = null)
                 },
                 label = { Text(title) }
             )

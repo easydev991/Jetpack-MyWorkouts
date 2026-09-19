@@ -108,19 +108,22 @@ internal fun EntryListItemRowWeightPreview() {
                 EntryListItemRow(
                     item = previewWholeWeightItem,
                     separator = " х ",
-                    isSelected = false
+                    isSelected = false,
+                    onOpenMenu = {}
                 )
                 // 3×12 + вес 2.5 → «2.5 кг»
                 EntryListItemRow(
                     item = previewFractionalWeightItem,
                     separator = " х ",
-                    isSelected = false
+                    isSelected = false,
+                    onOpenMenu = {}
                 )
                 // 20 без веса — одна строка, как до изменения
                 EntryListItemRow(
                     item = previewNoWeightItem,
                     separator = " х ",
-                    isSelected = false
+                    isSelected = false,
+                    onOpenMenu = {}
                 )
             }
         }
@@ -148,19 +151,22 @@ internal fun EntryListItemRowCommentPreview() {
                 EntryListItemRow(
                     item = previewShortCommentItem,
                     separator = " х ",
-                    isSelected = false
+                    isSelected = false,
+                    onOpenMenu = {}
                 )
                 // Длинный комментарий с весом — после строки веса, «…»
                 EntryListItemRow(
                     item = previewLongCommentWithWeightItem,
                     separator = " х ",
-                    isSelected = false
+                    isSelected = false,
+                    onOpenMenu = {}
                 )
                 // Без комментария — как до изменения
                 EntryListItemRow(
                     item = previewNoCommentItem,
                     separator = " х ",
-                    isSelected = false
+                    isSelected = false,
+                    onOpenMenu = {}
                 )
             }
         }

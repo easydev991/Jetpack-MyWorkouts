@@ -4,6 +4,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -28,6 +30,7 @@ import com.myworkouts.ui.viewmodel.ArchivedExercisesViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -126,6 +129,54 @@ class ArchivedExercisesScreenTest {
         composeTestRule.waitForIdle()
 
         // Then — пункт «Вернуть» появился
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_unarchive))
+            .assertIsDisplayed()
+    }
+
+    /**
+     * Accessibility-канал long-press (accessibility-semantics-fixes):
+     * архивная строка предоставляет custom-действие `a11y_open_menu`;
+     * выполнение открывает то же меню, что long-press — всегда
+     * единственный пункт «Вернуть», без зависимости от типа упражнения
+     * (в отличие от каталога, проверки `isCustom` нет).
+     */
+    @Test
+    fun archived_row_when_a11y_action_invoked_then_menu_with_unarchive() {
+        // Given — одно упражнение + state-машина для меню
+        composeTestRule.setContent {
+            var menu by remember {
+                mutableStateOf<ExerciseContextMenuState?>(null)
+            }
+            ArchivedExercisesScreenContent(
+                state =
+                    ArchivedExercisesState(
+                        uiState = ArchivedExercisesUiState.Success(exercises = listOf(pullups)),
+                        contextMenu = menu,
+                        onContextMenuItemChange = { menu = it },
+                        onUnarchive = {},
+                        onBackClick = {}
+                    )
+            )
+        }
+
+        // When — выполнение custom-действия «Открыть меню» (как из
+        // меню действий TalkBack)
+        val openMenuAction =
+            composeTestRule
+                .onNodeWithText("Подтягивания")
+                .fetchSemanticsNode()
+                .config
+                .getOrNull(SemanticsActions.CustomActions)
+                ?.firstOrNull { it.label == context.getString(R.string.a11y_open_menu) }
+        assertNotNull(
+            "Архивная строка должна предоставлять custom-действие «Открыть меню»",
+            openMenuAction
+        )
+        checkNotNull(openMenuAction).action.invoke()
+        composeTestRule.waitForIdle()
+
+        // Then — меню всегда «Вернуть»
         composeTestRule
             .onNodeWithText(context.getString(R.string.exercise_list_menu_unarchive))
             .assertIsDisplayed()

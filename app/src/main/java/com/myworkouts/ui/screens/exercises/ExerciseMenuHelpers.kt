@@ -6,6 +6,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import com.myworkouts.domain.model.Exercise
@@ -40,6 +43,12 @@ internal fun contextMenuDpOffset(
  * `ExercisesScreen` и `ArchivedExercisesScreen`; вынесен из
  * `ExercisesScreen.kt` ради лимита detekt `TooManyFunctions`.
  *
+ * Accessibility-канал (accessibility-semantics-fixes, design D1/D3):
+ * на тот же узел добавляется `semantics { customActions }` с лейблом
+ * `a11y_open_menu` — TalkBack показывает действие «Открыть меню»;
+ * выполнение открывает то же меню (офсет — верхний левый угол строки,
+ * `positionInRootProvider`). Одна правка хелпера покрывает оба экрана.
+ *
  * `positionInRootProvider` — лямбда, возвращающая актуальную позицию
  * строки в корне: closure ссылается на `mutableStateOf<Offset>`, чтобы
  * избежать пересоздания `pointerInput` при каждом изменении позиции
@@ -48,14 +57,27 @@ internal fun contextMenuDpOffset(
 internal fun Modifier.applyLongPress(
     item: Exercise,
     positionInRootProvider: () -> Offset,
-    onItemLongPress: (ExerciseContextMenuState) -> Unit
+    onItemLongPress: (ExerciseContextMenuState) -> Unit,
+    openMenuLabel: String
 ): Modifier =
-    this.pointerInput(item.id) {
-        detectTapGestures(
-            onLongPress = { localOffset ->
-                onItemLongPress(
-                    ExerciseContextMenuState(item, positionInRootProvider() + localOffset)
+    this
+        .pointerInput(item.id) {
+            detectTapGestures(
+                onLongPress = { localOffset ->
+                    onItemLongPress(
+                        ExerciseContextMenuState(item, positionInRootProvider() + localOffset)
+                    )
+                }
+            )
+        }.semantics(mergeDescendants = true) {
+            // mergeDescendants: действие обязано попасть в тот же узел,
+            // что и текст строки — иначе TalkBack не покажет его в меню
+            // действий строки.
+            customActions =
+                listOf(
+                    CustomAccessibilityAction(openMenuLabel) {
+                        onItemLongPress(ExerciseContextMenuState(item, positionInRootProvider()))
+                        true
+                    }
                 )
-            }
-        )
-    }
+        }

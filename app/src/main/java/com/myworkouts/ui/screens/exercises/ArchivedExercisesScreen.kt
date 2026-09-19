@@ -226,7 +226,8 @@ private fun ArchivedExercisesList(
                             }.applyLongPress(
                                 item = exercise,
                                 positionInRootProvider = { positionInRoot },
-                                onItemLongPress = state.onContextMenuItemChange
+                                onItemLongPress = state.onContextMenuItemChange,
+                                openMenuLabel = stringResource(R.string.a11y_open_menu)
                             )
                 )
             }

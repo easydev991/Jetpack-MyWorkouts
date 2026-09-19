@@ -218,25 +218,29 @@ internal fun EntryListItemRowPreview() {
             EntryListItemRow(
                 item = previewRepsItem,
                 separator = " х ",
-                isSelected = false
+                isSelected = false,
+                onOpenMenu = {}
             )
             // «20 сек» (один подход TIME) — выделена, как при показе контекстного меню
             EntryListItemRow(
                 item = previewTimeItem,
                 separator = " х ",
-                isSelected = true
+                isSelected = true,
+                onOpenMenu = {}
             )
             // «4 х 2 мин 30 сек» (несколько подходов TIME — составной пример)
             EntryListItemRow(
                 item = previewLongDurationItem,
                 separator = " х ",
-                isSelected = false
+                isSelected = false,
+                onOpenMenu = {}
             )
             // 3×12 (REPS)
             EntryListItemRow(
                 item = previewSingleRepsItem,
                 separator = " х ",
-                isSelected = false
+                isSelected = false,
+                onOpenMenu = {}
             )
         }
     }

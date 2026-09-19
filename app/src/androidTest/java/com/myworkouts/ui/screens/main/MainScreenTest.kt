@@ -4,7 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
@@ -21,6 +23,7 @@ import com.myworkouts.R
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.ui.state.MainUiState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -580,6 +583,68 @@ class MainScreenTest {
         assertDisplayedAbove(
             higher = context.getString(R.string.entry_list_menu_edit),
             lower = context.getString(R.string.entry_list_menu_delete)
+        )
+    }
+
+    /**
+     * Accessibility-канал long-press (accessibility-semantics-fixes):
+     * строка предоставляет custom-действие с локализованным лейблом
+     * `a11y_open_menu`; выполнение действия открывает то же
+     * контекстное меню «Изменить»/«Удалить», что long-press.
+     */
+    @Test
+    fun row_when_a11y_action_invoked_then_opens_context_menu() {
+        // Given — экран с одной записью и локальным состоянием меню
+        var menuChanges = 0
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ContextMenuState?>(null) }
+            MainScreenContent(
+                state =
+                    MainScreenState(
+                        uiState = success(listOf(repsItem)),
+                        contextMenu = menu,
+                        onAddEntryClick = {},
+                        onContextMenuItemChange = {
+                            menuChanges++
+                            menu = it
+                        },
+                        onRequestDelete = { menu = null },
+                        onConfirmDelete = {},
+                        onCancelDelete = {}
+                    )
+            )
+        }
+
+        // When — поиск custom-действия «Открыть меню» на строке
+        val rowNode =
+            composeTestRule
+                .onNodeWithText(repsItem.exerciseName)
+                .fetchSemanticsNode()
+        val openMenuAction =
+            rowNode
+                .config
+                .getOrNull(SemanticsActions.CustomActions)
+                ?.firstOrNull { it.label == context.getString(R.string.a11y_open_menu) }
+        assertNotNull(
+            "Строка записи должна предоставлять custom-действие «Открыть меню»",
+            openMenuAction
+        )
+
+        // When — выполнение действия (как из меню действий TalkBack)
+        checkNotNull(openMenuAction).action.invoke()
+        composeTestRule.waitForIdle()
+
+        // Then — меню открыто: оба пункта на месте, колбэк вызван
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_list_menu_edit))
+            .assertExists()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_list_menu_delete))
+            .assertExists()
+        assertEquals(
+            "onContextMenuItemChange должен быть вызван один раз",
+            1,
+            menuChanges
         )
     }
 
