@@ -43,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -105,10 +106,10 @@ import com.myworkouts.ui.viewmodel.ExercisesViewModel
 fun ExercisesScreen(
     viewModel: ExercisesViewModel,
     onAddExerciseClick: () -> Unit,
-    onEditExercise: (Long) -> Unit = {},
     onArchivedExercisesClick: () -> Unit,
     analyticsProvider: AnalyticsProvider,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onEditExercise: (Long) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var contextMenu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
@@ -253,8 +254,8 @@ internal data class ExercisesScreenState(
 @Composable
 internal fun ExercisesScreenContent(
     state: ExercisesScreenState,
-    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }
 ) {
     Scaffold(
         modifier = modifier,
@@ -409,7 +410,7 @@ private fun ExercisesList(
     // позиция списка в корне + высота нужны, чтобы сместить меню
     // к точке long-press с поправкой на верхнюю границу контейнера.
     var anchorOrigin by remember { mutableStateOf(IntOffset.Zero) }
-    var anchorHeight by remember { mutableStateOf(0) }
+    var anchorHeight by remember { mutableIntStateOf(0) }
     Box(
         modifier =
             Modifier
@@ -472,8 +473,8 @@ private fun ExercisesList(
 @Composable
 internal fun ExerciseListItemRow(
     exercise: Exercise,
-    isSelected: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isSelected: Boolean = false
 ) {
     val backgroundColor =
         animateColorAsState(

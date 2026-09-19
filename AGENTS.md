@@ -115,7 +115,7 @@ DataStore, Room. Manual DI — без Hilt.
 - `data/db/` — Room: entities, DAOs, `Mappers`, `WorkoutDatabase`,
   стандартные упражнения. Смена схемы — bump `version` + коммит
   экспортированного JSON из `app/schemas/`; до первого релиза
-  `fallbackToDestructiveMigration` пересоздаёт БД с повторным prepopulate
+  `fallbackToDestructiveMigration(dropAllTables = false)` пересоздаёт БД с повторным prepopulate
   стандартного набора (тот же список используется и в `deleteAllData`)
 - `data/preferences/AppSettingsDataStore.kt`
 - `data/repository/` — `WorkoutDataRepository`, `RoomWorkoutDataRepository`,

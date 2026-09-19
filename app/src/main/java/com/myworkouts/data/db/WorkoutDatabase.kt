@@ -17,7 +17,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * (`workouts` появится отдельным изменением схемы, design.md Decision 7).
  *
  * До первого релиза схема может меняться без миграций:
- * `fallbackToDestructiveMigration` пересоздаёт базу при расхождении версий
+ * `fallbackToDestructiveMigration(dropAllTables = false)` пересоздаёт базу
+ * при расхождении версий
  * (в т.ч. откат с более новой версии). С первым релизом деструктивный
  * фоллбек убирается и изменения схемы идут через `Migration`.
  *
@@ -64,7 +65,7 @@ abstract class WorkoutDatabase : RoomDatabase() {
                     context.applicationContext,
                     WorkoutDatabase::class.java,
                     DATABASE_NAME
-                ).fallbackToDestructiveMigration()
+                ).fallbackToDestructiveMigration(dropAllTables = false)
                 .addCallback(seedCallback(standardExercises))
                 .build()
 

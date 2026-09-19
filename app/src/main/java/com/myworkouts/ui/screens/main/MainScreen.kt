@@ -28,6 +28,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -76,9 +77,9 @@ import java.time.format.DateTimeFormatter
 fun MainScreen(
     viewModel: MainViewModel,
     onAddEntryClick: () -> Unit,
-    onEditEntryClick: (Long) -> Unit = {},
     analyticsProvider: AnalyticsProvider,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onEditEntryClick: (Long) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     // Транзитное состояние меню: какая запись выбрана + где на экране.
@@ -271,7 +272,7 @@ private fun EntryList(
     modifier: Modifier = Modifier
 ) {
     var anchorOrigin by remember { mutableStateOf(IntOffset.Zero) }
-    var anchorHeight by remember { mutableStateOf(0) }
+    var anchorHeight by remember { mutableIntStateOf(0) }
     Box(
         modifier =
             modifier
