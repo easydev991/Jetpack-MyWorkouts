@@ -142,7 +142,7 @@ change.
 
 ### Requirement: NavigationBar highlights the active tab via currentBackStackEntryAsState
 
-`RootScreen` SHALL derive the active tab from `navController.currentBackStackEntryAsState()?.destination?.route` (NOT from a separate `ViewModel`). A `NavigationBarItem` SHALL be `selected = true` when the current route equals its `tab.route`.
+`RootScreen` SHALL derive the active tab from `navController.currentBackStackEntryAsState()?.destination?.route` (NOT from a separate `ViewModel`). A `NavigationBarItem` SHALL be `selected = true` when the current route equals its `tab.route`. Иконка `NavigationBarItem` SHALL NOT иметь собственного текстового описания (`contentDescription = null`): название вкладки читается скринридером один раз из видимого лейбла.
 
 #### Scenario: Active tab indicator follows navigation
 
@@ -158,6 +158,12 @@ change.
   `forEach { tab -> ... }`
 - **AND** the number of `NavigationBarItem`s equals the number of visible
   tabs (3 with the setting on, 2 with it off)
+
+#### Scenario: Tab name is announced once
+
+- **WHEN** скринридер читает элемент нижней навигации
+- **THEN** название вкладки озвучивается один раз — из видимого лейбла
+- **AND** иконка вкладки не добавляет дублирующее текстовое описание
 
 #### Scenario: Appearance destination has no NavigationBarItem
 
