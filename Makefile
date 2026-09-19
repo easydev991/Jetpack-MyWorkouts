@@ -59,6 +59,11 @@ test: _ensure_secrets
 android-test: _ensure_secrets
 	$(call run_tests,connected$(FLAVOR_TITLE)DebugAndroidTest,app/build/outputs/androidTest-results/connected/debug)
 
+## scripts-test: Запуск unit-тестов Python-скриптов
+scripts-test:
+	python3 -m unittest discover -s scripts -p "*_test.py"
+	python3 -m unittest discover -s tools/release/scripts -p "*_test.py"
+
 # Анализ кода
 ## lint: Запуск ktlint, detekt и markdownlint (проверка)
 lint:
@@ -123,6 +128,76 @@ apk: _ensure_secrets
 	printf "$(GREEN)APK создан: $$OUTPUT_FILE$(RESET)\n"; \
 	printf "$(YELLOW)Версия: $$VERSION_NAME (build $$VERSION_CODE)$(RESET)\n"
 
+# Подготовка к публикации
+# VERSION_NAME и _WHATS_NEW_FILE используются target-ами whats-new,
+# rustore, rustore-draft. Берутся из gradle.properties при каждом запуске.
+VERSION_NAME := $(shell grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)
+_WHATS_NEW_FILE := fastlane/metadata/android/ru-RU/whats_new/$(VERSION_NAME).txt
+
+# App-специфичные значения публикации: единственное место в репо с
+# идентификатором приложения — скрипты в tools/release (тулкит
+# android-release-toolkit) генерик. RUSTORE_APP_ID экспортируется: без export
+# make-переменная не попадает в env рецепта, и скрипт упадёт на guard.
+RUSTORE_APP_ID ?= com.myworkouts
+export RUSTORE_APP_ID
+
+# Общий prerequisite для rustore и rustore-draft: инкремент VERSION_CODE,
+# build AAB, upload Crashlytics mapping, копирование в корень.
+_rustore_build_aab: _ensure_secrets
+	@printf "$(YELLOW)Увеличиваю VERSION_CODE...$(RESET)\n"
+	@CURRENT_VERSION_CODE=$$(grep "^VERSION_CODE=" gradle.properties | cut -d'=' -f2); \
+	NEW_VERSION_CODE=$$((CURRENT_VERSION_CODE + 1)); \
+	sed -i.tmp "s/^VERSION_CODE=.*/VERSION_CODE=$$NEW_VERSION_CODE/" gradle.properties && rm -f gradle.properties.tmp; \
+	printf "$(GREEN)VERSION_CODE обновлен с $$CURRENT_VERSION_CODE на $$NEW_VERSION_CODE$(RESET)\n"
+	@printf "$(YELLOW)Создаю релиз-сборку (AAB)...$(RESET)\n"
+	@./gradlew bundleRustoreRelease uploadCrashlyticsMappingFileRustoreRelease --console=plain
+	@VERSION_CODE=$$(grep "^VERSION_CODE=" gradle.properties | cut -d'=' -f2); \
+	OUTPUT_FILE="$(APP_NAME)$$VERSION_CODE.aab"; \
+	cp app/build/outputs/bundle/rustoreRelease/app-rustore-release.aab "$$OUTPUT_FILE"; \
+	printf "$(GREEN)AAB создан и mapping files загружены в Firebase: $$OUTPUT_FILE$(RESET)\n"
+	@printf "$(YELLOW)Версия для публикации: $$(grep "^VERSION_NAME=" gradle.properties | cut -d'=' -f2)$(RESET)\n"
+
+## whats-new: Сгенерировать fastlane/metadata/android/ru-RU/whats_new/<VERSION>.txt из git log
+##   Если файл уже существует — печатает содержимое и НЕ перезаписывает.
+##   Используется автоматически как prerequisite для rustore/rustore-draft.
+whats-new:
+	@./tools/release/scripts/_generate_whats_new.sh "$(VERSION_NAME)" "$(_WHATS_NEW_FILE)"
+
+## rustore: Собрать AAB и опубликовать в RuStore (все 4 шага: auth → draft → upload → commit). Файл: $(APP_NAME){VERSION_CODE}.aab
+##   SKIP_PUBLISH=1 — собрать AAB без загрузки в RuStore (escape hatch для локальной отладки)
+rustore: _rustore_build_aab whats-new
+	@VERSION_CODE=$$(grep "^VERSION_CODE=" gradle.properties | cut -d'=' -f2); \
+	OUTPUT_FILE="$(APP_NAME)$$VERSION_CODE.aab"; \
+	if [ -z "$(SKIP_PUBLISH)" ]; then \
+		printf "$(YELLOW)Загружаю в RuStore...$(RESET)\n"; \
+		./tools/release/scripts/rustore_publish.sh .secrets/rustore-credentials.json "$$OUTPUT_FILE"; \
+	else \
+		printf "$(YELLOW)SKIP_PUBLISH=1 — пропускаю загрузку в RuStore. AAB готов: $$OUTPUT_FILE$(RESET)\n"; \
+	fi
+
+## rustore-draft: Собрать AAB и создать черновик в RuStore (без отправки на модерацию).
+##   Используется для двухшагового workflow: draft → проверка в Console → make rustore-commit VID=<vid>.
+rustore-draft: _rustore_build_aab whats-new
+	@VERSION_CODE=$$(grep "^VERSION_CODE=" gradle.properties | cut -d'=' -f2); \
+	OUTPUT_FILE="$(APP_NAME)$$VERSION_CODE.aab"; \
+	printf "$(YELLOW)Загружаю в RuStore (auth → draft → upload, без commit)...$(RESET)\n"; \
+	RUSTORE_MODE=upload ./tools/release/scripts/rustore_publish.sh .secrets/rustore-credentials.json "$$OUTPUT_FILE"; \
+	VID=$$(cat .secrets/.last_rustore_vid 2>/dev/null); \
+	printf "\n$(GREEN)Черновик создан в RuStore Console: VID=%s$(RESET)\n" "$$VID"; \
+	printf "Следующий шаг: $(YELLOW)make rustore-commit VID=%s$(RESET)\n" "$$VID"
+
+## rustore-commit: Отправить черновик VID=<versionId> на модерацию.
+##   Использование: make rustore-commit VID=12345
+rustore-commit:
+	@if [ -z "$(VID)" ]; then \
+		echo "usage: make rustore-commit VID=<versionId>" >&2; \
+		echo "Найдите versionId в RuStore Console → Черновики." >&2; \
+		exit 1; \
+	fi
+	@printf "$(YELLOW)Отправляю черновик VID=$(VID) на модерацию...$(RESET)\n"
+	RUSTORE_MODE=commit RUSTORE_VID=$(VID) ./tools/release/scripts/rustore_publish.sh \
+		.secrets/rustore-credentials.json ""
+
 # Настройка окружения
 ## setup: Установка и настройка инструментов для локальной разработки (JDK, markdownlint-cli, git hooks)
 setup:
@@ -186,4 +261,4 @@ setup_git_hooks:
 ## all: Полная проверка (сборка + тесты + линтер) и установка APK на устройство
 all: check install
 
-.PHONY: help build clean test lint format check install all android-test setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets
+.PHONY: help build clean test scripts-test lint format check install all android-test setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets rustore rustore-draft rustore-commit whats-new _rustore_build_aab
