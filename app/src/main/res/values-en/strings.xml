@@ -11,6 +11,8 @@
     <!-- Exercise create screen (creating an exercise) -->
     <string name="exercise_create_title">New exercise</string>
     <string name="exercise_field_name">Name</string>
+    <string name="exercise_field_icon">Icon</string>
+    <string name="exercise_icon_picker_no_icon">No icon</string>
     <string name="exercise_field_category">Category</string>
     <string name="exercise_field_category_select">Select category</string>
     <string name="exercise_field_comment">Comment</string>

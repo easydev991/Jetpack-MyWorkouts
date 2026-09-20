@@ -31,6 +31,7 @@ data class ExerciseCreateUiState(
     val category: ExerciseCategory? = null,
     val measuredBy: ExerciseMeasuredBy = ExerciseMeasuredBy.REPS,
     val comment: String? = null,
+    val iconNumber: Int? = null,
     val isSaveError: Boolean = false,
     val isEditMode: Boolean = false,
     val hasChanges: Boolean = false,
@@ -54,8 +55,10 @@ data class ExerciseCreateUiState(
     /**
      * Вычисляемое «есть несохранённые изменения»: в режиме создания —
      * заполнено любое текстовое поле (`name`/`comment` с отсечением blank)
-     * или выбрана категория, `measuredBy` в формулу не входит
-     * (spec-сценарий «hasUnsavedChanges вычисляется по name/category/comment»);
+     * или выбрана категория или выбрана иконка (`iconNumber != null`),
+     * `measuredBy` в формулу не входит (spec-сценарии
+     * «hasUnsavedChanges вычисляется по name/category/comment» и
+     * «Изменение иконки учитывается в hasUnsavedChanges и hasChanges»);
      * в режиме редактирования — [hasChanges]: предзаполненные поля сами по
      * себе не блокируют закрытие экрана.
      */
@@ -64,6 +67,9 @@ data class ExerciseCreateUiState(
             if (isEditMode) {
                 hasChanges
             } else {
-                !name.isNullOrBlank() || category != null || !comment.isNullOrBlank()
+                !name.isNullOrBlank() ||
+                    category != null ||
+                    !comment.isNullOrBlank() ||
+                    iconNumber != null
             }
 }

@@ -890,4 +890,177 @@ class ExerciseCreateViewModelTest {
             assertTrue(repository.updatedExercises.isEmpty(), "updateExercise НЕ вызван")
             assertEquals(0, onSavedCalls, "onSaved НЕ вызван")
         }
+
+    /* iconNumber: обработчик обновляет state и сбрасывает isSaveError,
+     * «Без иконки» (null) — допустимое значение, edit-предзаполнение,
+     * смена иконки → hasChanges = true, save пишет iconNumber в
+     * addExercise/updateExercise. */
+
+    /** Кастомное упражнение с иконкой — для icon-тестов edit-режима. */
+    private val exerciseWithIcon =
+        Exercise(
+            id = 7L,
+            name = "Подтягивания",
+            category = ExerciseCategory.PULL,
+            isCustom = true,
+            comment = "широкий хват",
+            createdAt = 1_700_000_000_000L,
+            measuredBy = ExerciseMeasuredBy.REPS,
+            iconNumber = 5
+        )
+
+    @Test
+    fun on_icon_number_change_updates_state_and_resets_save_error_after_failure() =
+        runTest(testDispatcher) {
+            // Given — неуспешный save с заполненной формой
+            repository.addExerciseResult = Result.failure(IllegalStateException("БД недоступна"))
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            viewModel.onNameChange("Жим")
+            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            advanceUntilIdle()
+            viewModel.save { }
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.isSaveError, "Пре-условие: isSaveError = true после провала")
+
+            // When — выбор иконки
+            viewModel.onIconNumberChange(7)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                7,
+                viewModel.uiState.value.iconNumber,
+                "onIconNumberChange(7) — iconNumber = 7"
+            )
+            assertFalse(
+                viewModel.uiState.value.isSaveError,
+                "onIconNumberChange сбрасывает isSaveError (паттерн onXChange)"
+            )
+        }
+
+    @Test
+    fun on_icon_number_change_to_null_resets_icon_number() =
+        runTest(testDispatcher) {
+            // Given — выбрана иконка
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            viewModel.onIconNumberChange(7)
+            advanceUntilIdle()
+            assertEquals(7, viewModel.uiState.value.iconNumber, "Пре-условие: иконка 7")
+
+            // When — повторный выбор «Без иконки»
+            viewModel.onIconNumberChange(null)
+            advanceUntilIdle()
+
+            // Then — «Без иконки» — допустимое значение null
+            assertNull(
+                viewModel.uiState.value.iconNumber,
+                "Повторный выбор «Без иконки» — iconNumber = null"
+            )
+        }
+
+    @Test
+    fun edit_mode_prefill_loads_icon_number_into_state() =
+        runTest(testDispatcher) {
+            // Given — упражнение с iconNumber = 5 в репозитории
+            repository.exerciseById = exerciseWithIcon
+            val viewModel = createViewModel(exerciseId = exerciseWithIcon.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+
+            // When
+            advanceUntilIdle()
+
+            // Then — предзаполнен iconNumber из БД
+            assertEquals(
+                exerciseWithIcon.iconNumber,
+                viewModel.uiState.value.iconNumber,
+                "iconNumber предзаполнен из БД"
+            )
+        }
+
+    @Test
+    fun edit_mode_when_icon_changed_then_has_changes_true() =
+        runTest(testDispatcher) {
+            // Given — edit-режим с упражнением (iconNumber = 5)
+            repository.exerciseById = exerciseWithIcon
+            val viewModel = createViewModel(exerciseId = exerciseWithIcon.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.hasChanges, "Пре-условие: форма не тронута")
+
+            // When — смена иконки 5 → 9
+            viewModel.onIconNumberChange(9)
+            advanceUntilIdle()
+
+            // Then
+            assertTrue(
+                viewModel.uiState.value.hasChanges,
+                "Смена иконки в edit-режиме — hasChanges = true (data-сравнение)"
+            )
+        }
+
+    @Test
+    fun edit_mode_when_icon_reverted_to_original_then_has_changes_false() =
+        runTest(testDispatcher) {
+            // Given — edit-режим, иконка изменена 5 → 9
+            repository.exerciseById = exerciseWithIcon
+            val viewModel = createViewModel(exerciseId = exerciseWithIcon.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onIconNumberChange(9)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.hasChanges, "Пре-условие: иконка изменена")
+
+            // When — возврат к исходной иконке 5
+            viewModel.onIconNumberChange(exerciseWithIcon.iconNumber)
+            advanceUntilIdle()
+
+            // Then
+            assertFalse(
+                viewModel.uiState.value.hasChanges,
+                "Возврат к исходной иконке — hasChanges = false"
+            )
+        }
+
+    @Test
+    fun save_in_create_mode_passes_selected_icon_number_to_add_exercise() =
+        runTest(testDispatcher) {
+            // Given — заполненная create-форма с выбранной иконкой 7
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            viewModel.onNameChange("Жим")
+            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onIconNumberChange(7)
+            advanceUntilIdle()
+
+            // When
+            viewModel.save { }
+            advanceUntilIdle()
+
+            // Then — addExercise получил Exercise с iconNumber = 7
+            val saved = repository.addedExercises.single()
+            assertEquals(7, saved.iconNumber, "iconNumber = 7 передан в addExercise")
+        }
+
+    @Test
+    fun save_in_edit_mode_passes_new_icon_number_with_original_id_to_update_exercise() =
+        runTest(testDispatcher) {
+            // Given — edit-режим, оригинал iconNumber = 5, выбрана новая 9
+            repository.exerciseById = exerciseWithIcon
+            val viewModel = createViewModel(exerciseId = exerciseWithIcon.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onIconNumberChange(9)
+            advanceUntilIdle()
+
+            // When
+            viewModel.save { }
+            advanceUntilIdle()
+
+            // Then — updateExercise с id оригинала и новой iconNumber = 9
+            val updated = repository.updatedExercises.single()
+            assertEquals(exerciseWithIcon.id, updated.id, "id из оригинала")
+            assertEquals(9, updated.iconNumber, "iconNumber = 9 (новая выбранная)")
+        }
 }

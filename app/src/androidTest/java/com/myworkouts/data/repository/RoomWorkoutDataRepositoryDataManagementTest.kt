@@ -45,11 +45,16 @@ class RoomWorkoutDataRepositoryDataManagementTest {
      */
     private val standardExercises =
         listOf(
-            StandardExercise(name = "Подтягивания", category = ExerciseCategory.PULL),
+            StandardExercise(
+                name = "Подтягивания",
+                category = ExerciseCategory.PULL,
+                iconNumber = 3
+            ),
             StandardExercise(
                 name = "Планка",
                 category = ExerciseCategory.CORE,
-                measuredBy = ExerciseMeasuredBy.TIME
+                measuredBy = ExerciseMeasuredBy.TIME,
+                iconNumber = 8
             )
         )
 
@@ -283,6 +288,16 @@ class RoomWorkoutDataRepositoryDataManagementTest {
             assertTrue(
                 "Восстановленный набор — только стандартные упражнения",
                 catalog.none { it.isCustom }
+            )
+            // Иконки переносятся из списка стандартных (exercise-icon-display):
+            // без этого после «Удалить все данные» стандартный набор без иконок
+            assertEquals(
+                3,
+                catalog.single { it.name == "Подтягивания" }.iconNumber
+            )
+            assertEquals(
+                8,
+                catalog.single { it.name == "Планка" }.iconNumber
             )
             // Реактивный список тоже пуст
             assertTrue(repository.entries().first().isEmpty())

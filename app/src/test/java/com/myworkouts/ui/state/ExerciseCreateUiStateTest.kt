@@ -229,4 +229,37 @@ class ExerciseCreateUiStateTest {
         // Then
         assertTrue(result, "Edit с hasChanges требует подтверждения закрытия")
     }
+
+    /* hasUnsavedChanges create-режима: выбранная иконка (iconNumber != null)
+     * — несохранённое изменение; null («Без иконки») — дефолт, не считается
+     * изменением (spec «Изменение иконки учитывается в hasUnsavedChanges и
+     * hasChanges»). */
+
+    @Test
+    fun hasUnsavedChanges_when_create_iconNumberOnly_then_true() {
+        // Given — только иконка (3) при пустых name/category/comment
+        val state = ExerciseCreateUiState(iconNumber = 3)
+
+        // When
+        val result = state.hasUnsavedChanges
+
+        // Then
+        assertTrue(
+            result,
+            "Выбранная иконка (iconNumber != null) при пустых остальных полях — несохранённое изменение"
+        )
+    }
+
+    @Test
+    fun hasUnsavedChanges_when_create_iconNumberReverted_then_false() {
+        // Given
+        val filled = ExerciseCreateUiState(iconNumber = 3)
+        val reverted = filled.copy(iconNumber = null)
+
+        // When
+        val result = reverted.hasUnsavedChanges
+
+        // Then
+        assertFalse(result, "Повторный выбор «Без иконки» гасит условие")
+    }
 }

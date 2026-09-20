@@ -150,12 +150,11 @@ EXERCISE_ICON_PICKER_CELL_TEST_TAG = "exercise_icon_picker_cell_"`, ячейки
 `Time`, `EditUnchanged`, `EditChanged`, `WithIconSection`) адаптируются
 под финальный API: `previewScreenState` теряет параметры
 `selectedIconNumber`/`onIconNumberChange` и принимает выбранную иконку
-через `ExerciseCreateUiState(iconNumber = …)`. Секционные превью
-(`ExerciseIconPickerSectionPreview`, `ExerciseIconPickerSectionNarrowPreview`,
-`ExerciseIconPickerSectionWidePreview`, строки 188/219/250) не меняются —
-продолжают вызывать `ExerciseIconPickerSection` напрямую без ScreenState,
-как описано в tasks.md §6.1. Новых превью не добавляется — черновой набор
-уже покрывает вёрстку (детали адаптации — tasks.md §6.1).
+через `ExerciseCreateUiState(iconNumber = …)`. Секционное превью
+(`ExerciseIconPickerSectionPreview`, через helper `IconPickerFrame`) не
+меняется — продолжает вызывать `ExerciseIconPickerSection` напрямую без
+ScreenState, как описано в tasks.md §6.1. Новых превью не добавляется —
+черновой набор уже покрывает вёрстку (детали адаптации — tasks.md §6.1).
 Каждое превью — в светлой и тёмной теме (`UI_MODE_NIGHT_YES`,
 `showBackground = true`, `locale = "ru"`), состояния — отдельными
 `@Preview`-функциями по конвенции AGENTS.md.

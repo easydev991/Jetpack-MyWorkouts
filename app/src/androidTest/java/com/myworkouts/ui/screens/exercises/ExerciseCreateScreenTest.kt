@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -23,11 +24,16 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
+import com.myworkouts.data.db.StandardExercise
+import com.myworkouts.data.db.WorkoutDatabase
+import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
@@ -41,6 +47,7 @@ import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.viewmodel.ExerciseCreateViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -69,6 +76,7 @@ class ExerciseCreateScreenTest {
             onCategoryChange = {},
             onMeasuredByChange = {},
             onCommentChange = {},
+            onIconNumberChange = {},
             onSaveClick = {},
             onBackClick = {}
         )
@@ -409,7 +417,7 @@ class ExerciseCreateScreenTest {
      */
     @Composable
     private fun ExerciseCreateScreenWithNavHost(
-        repository: EditFakeRepository,
+        repository: WorkoutDataRepository,
         onControllerReady: (NavHostController) -> Unit
     ) {
         val navController = rememberNavController()
@@ -436,7 +444,7 @@ class ExerciseCreateScreenTest {
 
     /** Открывает edit-режим с [exerciseId] через harness и ждёт загрузки. */
     private fun openEdit(
-        repository: EditFakeRepository,
+        repository: WorkoutDataRepository,
         exerciseId: Long
     ): NavHostController {
         lateinit var navController: NavHostController
@@ -582,5 +590,299 @@ class ExerciseCreateScreenTest {
         composeTestRule.onNodeWithText(context.getString(R.string.exercise_hint_exercise_missing)).assertIsDisplayed()
         composeTestRule.onNodeWithText(context.getString(R.string.entry_save)).assertIsNotEnabled()
     }
+    // endregion
+
+    // region exercise-icon-selection: секция выбора иконки (§4.2 AndroidTest)
+
+    /**
+     * §4.2: в create-форме секция отрисовывается — заголовок
+     * `exercise_field_icon`, ровно 20 ячеек с тегами (`none` +
+     * 19 иконок) и ячейка «Без иконки» с правильным
+     * `contentDescription`. Тесты на ru-локали эмулятора; на неру-
+     * локали эти кейсы становятся красными до §5.2 — оттуда взят
+     * `stringResource` для заголовка и `contentDescription`.
+     */
+    @Test
+    fun iconSection_when_rendered_then_shows_title_and_twenty_cells() {
+        // Given — пустая create-форма
+        setContent()
+
+        // Then — заголовок секции «Иконка» виден
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_field_icon))
+            .assertIsDisplayed()
+
+// Then — каждая из 20 ячеек (19 каталога + «Без иконки») присутствует.
+        // `hasTestTag` в compose-ui-test 1.12 ищет точное совпадение, поэтому
+        // каталог обходится списком тегов: 19 номеров + «Без иконки».
+        val noIconTag =
+            EXERCISE_ICON_PICKER_CELL_TEST_TAG +
+                EXERCISE_ICON_PICKER_CELL_NO_ICON_TAG
+        val allTags =
+            (1..19).map { EXERCISE_ICON_PICKER_CELL_TEST_TAG + it } +
+                noIconTag
+        allTags.forEach { tag ->
+            composeTestRule
+                .onNode(hasTestTag(tag), useUnmergedTree = true)
+                .assertExists()
+        }
+
+        // Then — «Без иконки» ячейка: contentDescription = exercise_icon_picker_no_icon
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.exercise_icon_picker_no_icon))
+            .assertIsDisplayed()
+    }
+
+    /**
+     * §4.2: тап по ячейке с иконкой номер 7 по тегу
+     * `exercise_icon_picker_cell_7` через локальный state-маппинг
+     * `remember { mutableStateOf(...) }` (паттерн файла) переключает
+     * выделение: ячейка 7 становится «selected» (обводка `primary`),
+     * ячейка «Без иконки» — нет.
+     */
+    @Test
+    fun iconSection_when_cell_7_tapped_then_icon_7_selected_and_no_icon_unselected() {
+        // Given — форма с локальным state, onIconNumberChange обновляет UiState
+        composeTestRule.setContent {
+            val iconState = remember { mutableStateOf(ExerciseCreateUiState(iconNumber = null)) }
+            ExerciseCreateScreenContent(
+                state =
+                    stateFor(iconState.value).copy(
+                        onIconNumberChange = { newNumber ->
+                            iconState.value = iconState.value.copy(iconNumber = newNumber)
+                        }
+                    )
+            )
+        }
+
+        // When — тап по ячейке с номером 7
+        composeTestRule
+            .onNode(
+                hasTestTag(
+                    EXERCISE_ICON_PICKER_CELL_TEST_TAG + "7"
+                ),
+                useUnmergedTree = true
+            ).performClick()
+
+        // Then — ячейка 7 отмечена как selected, «Без иконки» — нет
+        composeTestRule
+            .onNode(
+                hasTestTag(
+                    EXERCISE_ICON_PICKER_CELL_TEST_TAG + "7"
+                ),
+                useUnmergedTree = true
+            ).assertIsSelected()
+        composeTestRule
+            .onNode(
+                hasTestTag(
+                    EXERCISE_ICON_PICKER_CELL_TEST_TAG +
+                        EXERCISE_ICON_PICKER_CELL_NO_ICON_TAG
+                ),
+                useUnmergedTree = true
+            ).assertIsNotSelected()
+    }
+
+    /**
+     * §4.2: edit-режим с предзаполненным `iconNumber = 13` — при
+     * открытии ячейка 13 уже выделена. Проверяется через
+     * `ExerciseCreateScreenWithNavHost` с реальной VM над
+     * [EditFakeRepository] (тот же harness, что в edit-кейсах выше).
+     */
+    @Test
+    fun iconSection_when_edit_prefilled_icon_13_then_cell_13_selected() {
+        // Given — упражнение с iconNumber = 13 в каталоге
+        val fake =
+            EditFakeRepository(
+                listOf(
+                    editableExercise.copy(iconNumber = 13)
+                )
+            )
+
+        // When — открытие edit-режима
+        openEdit(fake, editableExercise.id)
+
+        // Then — ячейка с номером 13 отмечена как selected,
+        // ячейка «Без иконки» — нет
+        composeTestRule
+            .onNode(
+                hasTestTag(
+                    EXERCISE_ICON_PICKER_CELL_TEST_TAG + "13"
+                ),
+                useUnmergedTree = true
+            ).assertIsSelected()
+        composeTestRule
+            .onNode(
+                hasTestTag(
+                    EXERCISE_ICON_PICKER_CELL_TEST_TAG +
+                        EXERCISE_ICON_PICKER_CELL_NO_ICON_TAG
+                ),
+                useUnmergedTree = true
+            ).assertIsNotSelected()
+    }
+    // endregion
+
+    // region exercise-icon-selection: round-trip через Room in-memory (§4.3)
+
+    /** Локальный Room in-memory + репозиторий для round-trip кейсов. */
+    private fun roundTripRepository(): Pair<WorkoutDatabase, RoomWorkoutDataRepository> {
+        val database =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    WorkoutDatabase::class.java
+                ).allowMainThreadQueries()
+                .build()
+        val repository =
+            RoomWorkoutDataRepository(
+                database = database,
+                standardExercises =
+                    listOf(
+                        StandardExercise(name = "Подтягивания", category = ExerciseCategory.PULL)
+                    )
+            )
+        return database to repository
+    }
+
+    /**
+     * §4.3: create-режим — выбор иконки 7 на форме и сохранение даёт
+     * упражнение с `iconNumber = 7` в БД. Сценарий через harness с
+     * реальной [ExerciseCreateScreen] поверх `roundTripRepository`:
+     * `viewModelScope` использует `Dispatchers.Main` (= тестовый
+     * поток Compose), поэтому `viewModel.save` запускается через
+     * `performClick` по кнопке «Сохранить» — это гоняет Main и
+     * доводит корутину до `onSaved`. Прямой вызов `viewModel.save`
+     * из тела теста в `runBlocking { ... }` блокирует тестовый поток
+     * и приводит к deadlock (Main не получает управление).
+     */
+    @Test
+    fun roundTrip_when_create_with_icon_7_then_persists_in_database() {
+        val (database, repository) = roundTripRepository()
+        try {
+            // Given — harness с реальной ExerciseCreateScreen над
+            // repository, открыт сразу в create-режиме
+            lateinit var navController: NavHostController
+            composeTestRule.setContent {
+                JetpackMyWorkoutsTheme {
+                    ExerciseCreateScreenWithNavHost(repository) { navController = it }
+                }
+            }
+            composeTestRule.runOnIdle {
+                navController.navigate(Screen.ExerciseCreate.createRoute())
+            }
+            composeTestRule.waitForIdle()
+
+            // When — заполняем форму через Compose-ввод (текст + категория)
+            composeTestRule
+                .onNode(hasText(context.getString(R.string.exercise_field_name)))
+                .performTextReplacement("Жим с иконкой")
+            composeTestRule
+                .onNode(hasText(context.getString(R.string.exercise_field_category)))
+                .performClick()
+            composeTestRule
+                .onNodeWithText(context.getString(R.string.exercise_category_push))
+                .performClick()
+            // When — выбор иконки 7 через тап по ячейке
+            composeTestRule
+                .onNode(
+                    hasTestTag(
+                        EXERCISE_ICON_PICKER_CELL_TEST_TAG + "7"
+                    ),
+                    useUnmergedTree = true
+                ).performClick()
+            composeTestRule.waitForIdle()
+
+            // When — нажатие «Сохранить» (запускает VM.save → addExercise → onSaved)
+            composeTestRule
+                .onNodeWithText(context.getString(R.string.entry_save))
+                .performClick()
+            // Wait until navigation back to exercises (proof that save succeeded)
+            composeTestRule.waitUntil(5_000) {
+                composeTestRule.runOnIdle {
+                    navController.currentDestination?.route
+                } == Screen.Exercises.route
+            }
+
+            // Then — упражнение с iconNumber = 7 в БД. runBlocking допустим
+            // здесь: всё, что нужно от Compose, уже произошло (навигация
+            // закрылась), Main свободен.
+            composeTestRule.runOnIdle {
+                runBlocking {
+                    val saved =
+                        repository
+                            .getAllExercises()
+                            .getOrThrow()
+                            .single { it.name == "Жим с иконкой" }
+                    assertEquals(
+                        "iconNumber = 7 записан в БД",
+                        7,
+                        saved.iconNumber
+                    )
+                }
+            }
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * §4.3: edit-режим — упражнение с `iconNumber = 7` создано через
+     * репозиторий; открываем форму с его `exerciseId` через harness,
+     * тапаем ячейку 9, жмём «Сохранить», перечитываем из БД —
+     * `iconNumber == 9`. Тот же `openEdit(...)` с реальным
+     * [RoomWorkoutDataRepository] через расширенный harness.
+     */
+    @Test
+    fun roundTrip_when_edit_icon_7_to_9_then_persists_in_database() =
+        runBlocking {
+            val (database, repository) = roundTripRepository()
+            try {
+                // Given — упражнение с iconNumber = 7 в репозитории
+                val exerciseId =
+                    repository
+                        .addExercise(
+                            Exercise(
+                                id = 0L,
+                                name = "Подтягивания wide",
+                                category = ExerciseCategory.PULL,
+                                isCustom = true,
+                                comment = "широкий хват",
+                                createdAt = 1_700_000_000_000L,
+                                measuredBy = ExerciseMeasuredBy.REPS,
+                                iconNumber = 7
+                            )
+                        ).getOrThrow()
+
+                // When — открытие edit-режима и смена иконки 7 → 9 + Сохранить
+                openEdit(repository, exerciseId)
+                composeTestRule
+                    .onNode(
+                        hasTestTag(
+                            EXERCISE_ICON_PICKER_CELL_TEST_TAG + "9"
+                        ),
+                        useUnmergedTree = true
+                    ).performClick()
+                composeTestRule.onNodeWithText(context.getString(R.string.entry_save)).performClick()
+                composeTestRule.waitForIdle()
+
+                // Then — в БД иконка 9
+                val saved =
+                    repository
+                        .getExercise(exerciseId)
+                        .getOrThrow()
+                checkNotNull(saved) { "Упражнение должно остаться в БД" }
+                assertEquals(
+                    "iconNumber = 9 после сохранения edit-формы",
+                    9,
+                    saved.iconNumber
+                )
+                assertEquals(
+                    "id сохранён при edit",
+                    exerciseId,
+                    saved.id
+                )
+            } finally {
+                database.close()
+            }
+        }
     // endregion
 }

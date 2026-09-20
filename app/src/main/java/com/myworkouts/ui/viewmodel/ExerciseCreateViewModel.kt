@@ -116,6 +116,12 @@ class ExerciseCreateViewModel(
             it.copy(comment = text, isSaveError = false)
         }
 
+    /** Выбор иконки (`null` — «Без иконки»); сбрасывает ошибку сохранения. */
+    fun onIconNumberChange(iconNumber: Int?) =
+        updateState {
+            it.copy(iconNumber = iconNumber, isSaveError = false)
+        }
+
     /**
      * Сохраняет форму сборщиком [draftOf]: в режиме редактирования —
      * [WorkoutDataRepository.updateExercise] с `id`/`createdAt`/`isCustom`
@@ -178,7 +184,8 @@ class ExerciseCreateViewModel(
             isCustom = original?.isCustom ?: true,
             comment = state.comment?.trim()?.takeIf { it.isNotEmpty() },
             createdAt = original?.createdAt ?: System.currentTimeMillis(),
-            measuredBy = state.measuredBy
+            measuredBy = state.measuredBy,
+            iconNumber = state.iconNumber
         )
     }
 
@@ -191,7 +198,8 @@ class ExerciseCreateViewModel(
             name = exercise.name,
             category = exercise.category,
             measuredBy = exercise.measuredBy,
-            comment = exercise.comment ?: ""
+            comment = exercise.comment ?: "",
+            iconNumber = exercise.iconNumber
         )
 
     companion object {

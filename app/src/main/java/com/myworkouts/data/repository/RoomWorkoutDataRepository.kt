@@ -324,7 +324,8 @@ class RoomWorkoutDataRepository(
                             isCustom = false,
                             comment = null,
                             createdAt = now,
-                            measuredBy = standard.measuredBy
+                            measuredBy = standard.measuredBy,
+                            iconNumber = standard.iconNumber
                         ).toEntity()
                     )
                 }

@@ -11,6 +11,8 @@
     <!-- Exercise create screen (создание упражнения) -->
     <string name="exercise_create_title">Новое упражнение</string>
     <string name="exercise_field_name">Название</string>
+    <string name="exercise_field_icon">Иконка</string>
+    <string name="exercise_icon_picker_no_icon">Без иконки</string>
     <string name="exercise_field_category">Категория</string>
     <string name="exercise_field_category_select">Выберите категорию</string>
     <string name="exercise_field_comment">Комментарий</string>
