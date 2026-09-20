@@ -114,6 +114,20 @@ description: >
     (зависимости `androidTestImplementation` в `app/build.gradle.kts:72-75`).
     В androidTest используется реальный `Dispatchers.Main` + `runBlocking`
     (Room + Compose UI Test работают с ним корректно).
+14. **Один `setContent` на тест (sealed v2 API).** Повторный
+    `composeTestRule.setContent` в том же тесте бросает
+    `IllegalStateException: ... has already set content`. «Второй экран»
+    в рамках теста — подмена состояния через `mutableStateOf` внутри
+    первого `setContent` (образец — `EntryEditArchivedExerciseTest`:
+    свап `currentViewModel` с последующим `waitForIdle`); смена темы/конфигурации —
+    разносить по двум тестам (образец — `MainScreenTest`:
+    `row_when_dark_theme_then_icon_uses_dark_variant` +
+    `row_when_light_theme_then_icon_uses_light_variant`).
+15. **Проверка `assertExists` в v2 API отсутствует** (unresolved
+    reference). Существование узла — `onAllNodesWithText(...).
+    assertCountEquals(n)` или счётчики тегов; видимость —
+    `assertIsDisplayed`. Не путать: «не displayed» = узел есть, но за
+    границами окна (частый случай — нижние опции dropdown-меню).
 
 ## Запуск тестов
 
@@ -173,6 +187,9 @@ description: >
   `references/running-tests.md`
 - Ручная проверка на эмуляторе, `android-debug-bridge`, что UI-тесты
   не покрывают → `references/manual-verification.md`
+- Поиск иконки упражнения (`testTag` + unmerged-дерево), проверка
+  тёмного/светлого варианта по яркости →
+  `references/exercise-icon-testing.md`
 - Полные канонические примеры → `references/EXAMPLE.md`
 
 > Файлы `viewmodel-integration.md`, `alarm-reminder.md` в
@@ -195,6 +212,19 @@ description: >
 | `performClick` на недоступной (disabled) ноде падает | У disabled-ноды нет click-action — паттерн «тап по недоступному → ничего не произошло» не работает. Проверяй `assertIsNotEnabled`, подсчёт disabled-нод или физический тап по координатам через `performTouchInput` |
 | `Unresolved reference 'click'` в `performTouchInput` | `click`/`longClick`/`doubleClick` — extension-функции `TouchInjectionScope`, каждой нужен свой импорт: `import androidx.compose.ui.test.click` |
 | Нод в диалоге больше, чем ожидал `assertCountEquals` | `onAllNodes(...)` видит форму под диалогом — см. `references/compose-selectors.md` → «M3 DatePicker: семантика дней» (канон) |
+| `onAllNodesWithTag` находит 0 нод, хотя тег проставлен | Тег на ноде внутри контейнера с `mergeDescendants = true` (строка списка, кнопка) не виден в merged-дереве — ищи с `useUnmergedTree = true` (канон — `ExerciseIcon` + `MainScreenTest`) |
+| Второй `setContent` бросает `IllegalStateException: has already set content` | Sealed v2 API разрешает один `setContent` на тест — подменяй состояние через `mutableStateOf` внутри первого `setContent` (правило 14) |
+| `Unresolved reference 'assertExists'` | В v2 API удаления нет: `onAllNodesWithText(...).assertCountEquals(n)` (правило 15) |
+| Позиционная проверка «что левее/выше» даёт неверные bounds | `onNodeWithText` в merged-дереве возвращает слитую строку целиком (bounds = вся строка, left = 0) — оба сравниваемых узла бери из unmerged-дерева (канон — `MainScreenTest.row_when_icon_assigned_...`) |
+
+## Поиск иконки упражнения в UI-тестах
+
+`ExerciseIcon` рисует `Image` с `contentDescription = null` (требование
+спеки) — для тестов он помечен тегом `EXERCISE_ICON_TEST_TAG`
+(`ui/icons/ExerciseIcon.kt`); поиск — только с `useUnmergedTree = true`.
+Проверка тёмного/светлого варианта — `captureToImage()` + яркость
+«чернил». Подробности и канонические примеры →
+`references/exercise-icon-testing.md`.
 
 ## Verification checklist
 
@@ -222,7 +252,10 @@ description: >
 - [ ] Файлы в `app/src/androidTest/` зеркалят структуру `app/src/main/`
 - [ ] Имя класса оканчивается на `Test` (или `UiTest` / `IntegrationTest` /
       `InstrumentedTest`)
-- [ ] Запуск — `make android-test`, все тесты зелёные
+- [ ] Поиск по `testTag` (иконки упражнений) — только с
+      `useUnmergedTree = true`; один `setContent` на тест
+- [ ] Запуск — `make android-test`, все тесты зелёные; повторные прогоны
+      ради чтения отчёта запрещены (см. `.opencode/rules/test-execution.md`)
 
 ## References
 
@@ -231,6 +264,7 @@ description: >
 - `references/component-testing.md`
 - `references/activity-integration.md`
 - `references/room-repository.md`
+- `references/exercise-icon-testing.md`
 - `references/running-tests.md`
 - `references/manual-verification.md`
 - `references/EXAMPLE.md`
