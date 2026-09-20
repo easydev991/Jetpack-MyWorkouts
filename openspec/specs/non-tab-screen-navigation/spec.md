@@ -17,7 +17,8 @@ single source of truth for navigation route strings; the navigation
 graph in `RootScreen` SHALL use `Screen.Main.route`, `Screen.Exercises.route`,
 `Screen.More.route`, `Screen.Appearance.route`, `Screen.AppData.route`,
 `Screen.EntryCreate.route`, `Screen.ExerciseCreate.route`,
-`Screen.ArchivedExercises.route` as the registered destinations.
+`Screen.ArchivedExercises.route`, `Screen.EntrySettings.route` as the
+registered destinations.
 
 #### Scenario: Screen has only route parameter
 
@@ -51,6 +52,18 @@ graph in `RootScreen` SHALL use `Screen.Main.route`, `Screen.Exercises.route`,
   `Screen`
 - **AND** `Screen.ArchivedExercises` НЕ входит в `BottomTabs` —
   паттерн `Screen.Appearance`
+
+#### Scenario: EntrySettings object added to sealed Screen
+
+- **WHEN** `Screen.EntrySettings` is referenced
+- **THEN** `Screen.EntrySettings.route == "entry_settings"`
+- **AND** `Screen.EntrySettings` is an `object` instance of `Screen`
+- **AND** `Screen.EntrySettings` НЕ входит в `BottomTabs` — паттерн
+  `Screen.Appearance` (системная панель навигации — см.
+  `entry-settings-screen/spec.md`)
+- **AND** нижняя навигация приложения скрыта при активном маршруте
+  `entry_settings` — как на экране создания/изменения записи
+
 ### Requirement: BottomTab data class holds tab UI metadata
 
 `BottomTab` SHALL be a `data class` with parameters `route: String`,
