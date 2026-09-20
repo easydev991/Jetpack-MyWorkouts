@@ -22,38 +22,7 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.myworkouts.R
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
-
-/**
- * Пары иконок упражнений: светлый вариант + тёмный (`_dark`, инверсия
- * яркости, генерируется `scripts/generate_dark_icon_variants.py`).
- *
- * Dev-каталог для просмотра: в прод-код не подключён, при release-сборке
- * вырезается R8 (`isMinifyEnabled = true`).
- */
-private val exerciseIconPairs =
-    listOf(
-        R.drawable.abs_hanging_leg_raises to R.drawable.abs_hanging_leg_raises_dark,
-        R.drawable.barbell to R.drawable.barbell_dark,
-        R.drawable.barbell_1 to R.drawable.barbell_1_dark,
-        R.drawable.barbell_2 to R.drawable.barbell_2_dark,
-        R.drawable.barbell_3 to R.drawable.barbell_3_dark,
-        R.drawable.barbell_4 to R.drawable.barbell_4_dark,
-        R.drawable.bars to R.drawable.bars_dark,
-        R.drawable.crunches to R.drawable.crunches_dark,
-        R.drawable.dumbbells to R.drawable.dumbbells_dark,
-        R.drawable.dumbbells_1 to R.drawable.dumbbells_1_dark,
-        R.drawable.jumping_rope to R.drawable.jumping_rope_dark,
-        R.drawable.lunges to R.drawable.lunges_dark,
-        R.drawable.pullups to R.drawable.pullups_dark,
-        R.drawable.pullups_australian to R.drawable.pullups_australian_dark,
-        R.drawable.pushups to R.drawable.pushups_dark,
-        R.drawable.pushups_knee to R.drawable.pushups_knee_dark,
-        R.drawable.run to R.drawable.run_dark,
-        R.drawable.squats to R.drawable.squats_dark,
-        R.drawable.squats_pistol to R.drawable.squats_pistol_dark
-    )
 
 /**
  * Одна строка каталога: иконка-вариант по текущей теме (без tint, как
@@ -61,12 +30,11 @@ private val exerciseIconPairs =
  */
 @Composable
 private fun ExerciseIconRow(
-    lightResId: Int,
-    darkResId: Int,
+    ref: ExerciseIcons.Ref,
     modifier: Modifier = Modifier
 ) {
-    val resId = if (isSystemInDarkTheme()) darkResId else lightResId
-    val entryName = LocalResources.current.getResourceEntryName(lightResId)
+    val resId = if (isSystemInDarkTheme()) ref.dark else ref.light
+    val entryName = LocalResources.current.getResourceEntryName(ref.light)
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -108,8 +76,8 @@ private fun ExerciseIconsCatalog(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         HorizontalDivider()
-        exerciseIconPairs.forEach { (lightResId, darkResId) ->
-            ExerciseIconRow(lightResId = lightResId, darkResId = darkResId)
+        ExerciseIcons.byNumber.values.forEach { ref ->
+            ExerciseIconRow(ref = ref)
         }
     }
 }
