@@ -3,6 +3,7 @@ package com.myworkouts.data.db
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.ui.icons.ExerciseIcons
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -102,10 +103,12 @@ class MappersTest {
 
     private fun sampleListItemEntity(
         weightKg: Double?,
-        comment: String? = null
+        comment: String? = null,
+        iconNumber: Int? = null
     ) = EntryListItemEntity(
         id = 1L,
         exerciseName = "Подтягивания",
+        iconNumber = iconNumber,
         sets = 4,
         reps = 10,
         durationSec = null,
@@ -169,5 +172,31 @@ class MappersTest {
 
         // Then
         assertEquals(null, item.comment)
+    }
+
+    @Test
+    fun toListItem_when_iconNumber_present_then_maps_to_domain() {
+        // Given — проекция строки записи с иконкой подтягиваний
+        // (exercise-icon-display: JOIN icon_number доезжает в домен)
+
+        // When
+        val item =
+            sampleListItemEntity(weightKg = null, iconNumber = ExerciseIcons.PULLUPS)
+                .toListItem()
+
+        // Then — номер иконки проброшен в доменную модель
+        assertEquals(ExerciseIcons.PULLUPS, item.iconNumber)
+    }
+
+    @Test
+    fun toListItem_when_iconNumber_null_then_maps_null() {
+        // Given — проекция строки записи упражнения без иконки
+
+        // When
+        val item =
+            sampleListItemEntity(weightKg = null, iconNumber = null).toListItem()
+
+        // Then — отсутствие иконки не теряется
+        assertEquals(null, item.iconNumber)
     }
 }

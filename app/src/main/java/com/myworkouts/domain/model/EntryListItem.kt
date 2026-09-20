@@ -11,6 +11,10 @@ package com.myworkouts.domain.model
  *
  * @property id Идентификатор записи
  * @property exerciseName Название упражнения каталога
+ * @property iconNumber Номер иконки упражнения из каталога (`null` —
+ *   иконка не назначена; подтягивается тем же JOIN, дефолт держит
+ *   фикстуры тестов/превью компилируемыми, exercise-icon-display
+ *   design Decision 2)
  * @property sets Количество подходов
  * @property reps Повторы в подходе (`null` для упражнений «на время»)
  * @property durationSec Длительность в секундах (`null` для упражнений «на повторы»)
@@ -24,6 +28,7 @@ package com.myworkouts.domain.model
 data class EntryListItem(
     val id: Long,
     val exerciseName: String,
+    val iconNumber: Int? = null,
     val sets: Int,
     val reps: Int?,
     val durationSec: Int?,

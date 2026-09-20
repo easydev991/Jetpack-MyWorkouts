@@ -10,6 +10,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -25,6 +26,8 @@ import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.ui.icons.EXERCISE_ICON_TEST_TAG
+import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.ArchivedExercisesUiState
 import com.myworkouts.ui.viewmodel.ArchivedExercisesViewModel
 import kotlinx.coroutines.flow.Flow
@@ -92,6 +95,30 @@ class ArchivedExercisesScreenTest {
         composeTestRule
             .onAllNodesWithText("Подтягивания")
             .assertCountEquals(0)
+    }
+
+    /**
+     * exercise-icon-display, design Decision 4: архивная строка
+     * переиспользует [ExerciseListItemRow], поэтому упражнение
+     * с назначенной иконкой показывает её без отдельной правки экрана;
+     * иконка хранится на упражнении и не зависит от архивного состояния.
+     */
+    @Test
+    fun archived_row_when_icon_assigned_then_shows_icon() {
+        // Given — архивное подтягивание с назначенной иконкой
+        setContentWith(
+            ArchivedExercisesUiState.Success(
+                exercises = listOf(pullups.copy(iconNumber = ExerciseIcons.PULLUPS))
+            )
+        )
+
+        // Then — строка отображается с иконкой
+        composeTestRule
+            .onNodeWithText("Подтягивания")
+            .assertIsDisplayed()
+        composeTestRule
+            .onAllNodesWithTag(EXERCISE_ICON_TEST_TAG, useUnmergedTree = true)
+            .assertCountEquals(1)
     }
 
     /**

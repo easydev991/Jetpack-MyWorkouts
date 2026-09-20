@@ -76,12 +76,14 @@ internal fun ExerciseEntry.toEntity(): ExerciseEntryEntity =
 /**
  * Проекция строки списка записей → доменная модель [EntryListItem]
  * (workout-entries-list, design Decision 2). JOIN-сторона даёт название
- * упражнения напрямую — отдельной подписки на каталог не нужно.
+ * упражнения и номер его иконки (exercise-icon-display) напрямую —
+ * отдельной подписки на каталог не нужно.
  */
 internal fun EntryListItemEntity.toListItem(): EntryListItem =
     EntryListItem(
         id = id,
         exerciseName = exerciseName,
+        iconNumber = iconNumber,
         sets = sets,
         reps = reps,
         durationSec = durationSec,

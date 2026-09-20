@@ -10,14 +10,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 
 /**
- * Превью строки записи: доп. вес и комментарий (конвенция проекта:
- * светлая + тёмная темы, `showBackground`, `locale = "ru"`, обёртка в
- * `JetpackMyWorkoutsTheme`).
+ * Превью строки записи: иконка упражнения, доп. вес и комментарий
+ * (конвенция проекта: светлая + тёмная темы, `showBackground`,
+ * `locale = "ru"`, обёртка в `JetpackMyWorkoutsTheme`).
  *
- * Ключевые состояния веса (spec «Дополнительный вес в строке записи»):
+ * Ключевые состояния иконки (exercise-icon-display): назначенная у
+ * большинства фикстур (Подтягивания — 13, Брусья — 7, Планка — 15) и
+ * отсутствующая у «Становой тяги» — строка без иконки. Ключевые
+ * состояния веса (spec «Дополнительный вес в строке записи»):
  * целый (5.0 → «5 кг»), дробный (2.5 → «2.5 кг») и без веса — строка
  * выглядит как одна «название — значение». Ключевые состояния
  * комментария (spec «Комментарий в строке записи», change
@@ -30,6 +34,7 @@ private val previewWholeWeightItem =
     EntryListItem(
         id = 1L,
         exerciseName = "Подтягивания",
+        iconNumber = ExerciseIcons.PULLUPS,
         sets = 4,
         reps = 10,
         durationSec = null,
@@ -41,6 +46,7 @@ private val previewFractionalWeightItem =
     EntryListItem(
         id = 2L,
         exerciseName = "Отжимания на брусьях",
+        iconNumber = ExerciseIcons.BARS,
         sets = 3,
         reps = 12,
         durationSec = null,
@@ -52,6 +58,7 @@ private val previewNoWeightItem =
     EntryListItem(
         id = 3L,
         exerciseName = "Планка",
+        iconNumber = ExerciseIcons.PUSHUPS,
         sets = 1,
         reps = null,
         durationSec = 20,
@@ -62,6 +69,7 @@ private val previewShortCommentItem =
     EntryListItem(
         id = 4L,
         exerciseName = "Подтягивания",
+        iconNumber = ExerciseIcons.PULLUPS,
         sets = 4,
         reps = 10,
         durationSec = null,
@@ -73,6 +81,9 @@ private val previewLongCommentWithWeightItem =
     EntryListItem(
         id = 5L,
         exerciseName = "Становая тяга",
+        // Кастомное упражнение без назначенной иконки — состояние
+        // «строка без иконки» (exercise-icon-display)
+        iconNumber = null,
         sets = 5,
         reps = 5,
         durationSec = null,
@@ -88,6 +99,7 @@ private val previewNoCommentItem =
     EntryListItem(
         id = 6L,
         exerciseName = "Планка",
+        iconNumber = ExerciseIcons.PUSHUPS,
         sets = 1,
         reps = null,
         durationSec = 20,

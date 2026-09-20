@@ -33,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import com.myworkouts.R
 import com.myworkouts.domain.model.Exercise
+import com.myworkouts.ui.icons.ExerciseIcon
 import com.myworkouts.ui.util.formatDurationResource
 import java.time.Instant
 import java.time.LocalDate
@@ -51,6 +52,9 @@ private const val DURATION_STEP_SEC: Int = 5
 
 /**
  * Выпадающий список упражнений каталога (`ExposedDropdownMenuBox`).
+ * Каждая опция показывает иконку упражнения в `leadingIcon` по общим
+ * правилам [ExerciseIcon] (exercise-icon-display); опция упражнения
+ * без известного номера — только текст.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,6 +91,14 @@ internal fun ExerciseDropdownField(
             exercises.forEach { exercise ->
                 DropdownMenuItem(
                     text = { Text(exercise.name) },
+                    // Иконка опции по общим правилам ExerciseIcon
+                    // (exercise-icon-display): известный номер — иконка
+                    // 24dp в leadingIcon, `null`/неизвестный — только
+                    // текст (слот не занимает места).
+                    leadingIcon =
+                        exercise.iconNumber?.let { iconNumber ->
+                            { ExerciseIcon(iconNumber = iconNumber) }
+                        },
                     onClick = {
                         onExerciseChange(exercise)
                         expanded = false

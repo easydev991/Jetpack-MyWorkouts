@@ -1071,6 +1071,71 @@ class RoomWorkoutDataRepositoryTest {
             )
         }
 
+    /**
+     * Иконка упражнения читается JOIN-ом и попадает в элемент списка
+     * записей (exercise-icon-display, spec-сценарий «Номер иконки в
+     * элементе списка»). Отличать от
+     * [addExercise_iconNumber_isPersistedAndDistinguishableFromNull]:
+     * тот проверяет round-trip через каталог, этот — проекцию `entries()`.
+     */
+    @Test
+    fun entries_exerciseIconNumber_reachesListItem() =
+        runBlocking {
+            // Given — упражнение с иконкой 13 и запись по нему; запись
+            // по «Подтягивания» из setUp (иконка не назначена)
+            val withIconId =
+                database.exerciseDao().insert(
+                    ExerciseEntity(
+                        name = "Отжимания",
+                        category = "PUSH",
+                        isCustom = false,
+                        createdAt = 0L,
+                        iconNumber = 13
+                    )
+                )
+            val withIconEntryId =
+                repository
+                    .addEntry(
+                        ExerciseEntry(
+                            id = 0L,
+                            exerciseId = withIconId,
+                            workoutId = null,
+                            date = 1_700_000_000_000L,
+                            sets = 4,
+                            reps = 10,
+                            weightKg = null,
+                            durationSec = null,
+                            comment = null,
+                            createdAt = 1L,
+                            modifiedAt = 1L
+                        )
+                    ).getOrThrow()
+            val nullIconEntryId =
+                repository
+                    .addEntry(
+                        ExerciseEntry(
+                            id = 0L,
+                            exerciseId = 1L,
+                            workoutId = null,
+                            date = 1_700_000_100_000L,
+                            sets = 3,
+                            reps = 8,
+                            weightKg = null,
+                            durationSec = null,
+                            comment = null,
+                            createdAt = 2L,
+                            modifiedAt = 2L
+                        )
+                    ).getOrThrow()
+
+            // When
+            val items = repository.entries().first()
+
+            // Then — иконка дошла через JOIN, отсутствие иконки — null
+            assertEquals(13, items.single { it.id == withIconEntryId }.iconNumber)
+            assertEquals(null, items.single { it.id == nullIconEntryId }.iconNumber)
+        }
+
     @Test
     fun entries_preserveWeightKg_nullAndValue() =
         runBlocking {

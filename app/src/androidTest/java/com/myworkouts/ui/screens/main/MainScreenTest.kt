@@ -1,9 +1,14 @@
 package com.myworkouts.ui.screens.main
 
+import android.content.res.Configuration
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -11,8 +16,10 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -21,13 +28,17 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.ui.icons.EXERCISE_ICON_TEST_TAG
+import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.MainUiState
+import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlin.math.abs
 
 /**
  * UI-тесты для [MainScreenContent] без ViewModel (workout-entries-list,
@@ -41,7 +52,11 @@ import org.junit.runner.RunWith
  * - пустое состояние при `entries = emptyList()` (5.1);
  * - long-press → меню «Удалить» → алерт подтверждения → отмена/подтверждение (5.3);
  * - комментарий в строке записи: показ текста / скрытие при null-blank
- *   (mainscreen-itemrow-comment).
+ *   (mainscreen-itemrow-comment);
+ * - иконка упражнения в строке записи (exercise-icon-display): назначенный
+ *   номер — иконка слева от названия, `null`/неизвестный номер — иконки
+ *   нет без падения, тёмная тема — тёмный вариант ресурса (эталонный
+ *   экран по design Decision 6).
  *
  * Позиция DropdownMenu относительно точки касания покрывается ручной
  * проверкой на эмуляторе (задача 5.5): `offset` меню не имеет семантики
@@ -649,6 +664,198 @@ class MainScreenTest {
     }
 
     /**
+     * Spec «Иконка упражнения в строке записи», сценарий «Запись
+     * упражнения с назначенной иконкой» (exercise-icon-display): запись
+     * с известным номером иконки показывает иконку слева от названия;
+     * запись с `iconNumber = null` — без иконки (место не резервируется).
+     */
+    @Test
+    fun row_when_icon_assigned_then_shows_icon_left_of_name_and_null_shows_none() {
+        // Given — подтягивания с назначенной иконкой и планка без иконки
+        setContent(
+            success(
+                listOf(
+                    repsItem.copy(iconNumber = ExerciseIcons.PULLUPS),
+                    timeItem
+                )
+            )
+        )
+
+        // Then — ровно одна иконка на экране: строка с `iconNumber = null`
+        // рендерится без узла иконки
+        composeTestRule
+            .onAllNodesWithTag(EXERCISE_ICON_TEST_TAG, useUnmergedTree = true)
+            .assertCountEquals(1)
+
+        // Then — иконка левее названия своей строки: оба узла берём из
+        // unmerged-дерева — в merged-дереве текст слит со строкой и его
+        // границы совпадают со всей строкой
+        val iconLeft =
+            composeTestRule
+                .onAllNodesWithTag(EXERCISE_ICON_TEST_TAG, useUnmergedTree = true)[0]
+                .fetchSemanticsNode()
+                .boundsInRoot.left
+        val nameLeft =
+            composeTestRule
+                .onNodeWithText(repsItem.exerciseName, useUnmergedTree = true)
+                .fetchSemanticsNode()
+                .boundsInRoot.left
+        assertTrue(
+            "Иконка должна отображаться слева от названия упражнения",
+            iconLeft < nameLeft
+        )
+
+        // Then — обе строки отображаются (значение не смещено с экрана)
+        composeTestRule.onNodeWithText(repsItem.exerciseName).assertIsDisplayed()
+        composeTestRule.onNodeWithText(timeItem.exerciseName).assertIsDisplayed()
+    }
+
+    /**
+     * Сценарий «Неизвестный номер иконки» (exercise-icon-display):
+     * `iconNumber` вне таблицы (например, значение из старого бэкапа) —
+     * иконка не отображается, приложение не падает и не показывает
+     * заглушку.
+     */
+    @Test
+    fun row_when_icon_number_unknown_then_shows_no_icon_without_crash() {
+        // Given — номера вне таблицы иконок (99 — за пределами 1..19,
+        // 0 — валидно различимое «не-иконка» в слое данных)
+        setContent(
+            success(
+                listOf(
+                    repsItem.copy(iconNumber = UNKNOWN_ICON_NUMBER),
+                    timeItem.copy(iconNumber = 0)
+                )
+            )
+        )
+
+        // Then — иконок нет, строки на месте
+        composeTestRule
+            .onAllNodesWithTag(EXERCISE_ICON_TEST_TAG, useUnmergedTree = true)
+            .assertCountEquals(0)
+        composeTestRule.onNodeWithText(repsItem.exerciseName).assertIsDisplayed()
+        composeTestRule.onNodeWithText(timeItem.exerciseName).assertIsDisplayed()
+    }
+
+    /**
+     * Сценарий «Тёмная тема использует тёмный вариант»
+     * (exercise-icon-display): при тёмной теме системы иконка рисуется
+     * тёмным вариантом ресурса. Варианты пары инвертированы по яркости
+     * (светлый ~ #434343, тёмный ~ #DCDCDC), поэтому в тёмной теме
+     * «чернила» светлые, а в светлой — тёмные. Два теста вместо одного
+     * с двойным `setContent`: sealed-правило Compose v2 запрещает
+     * второй `setContent` в одном тесте.
+     */
+    @Test
+    fun row_when_dark_theme_then_icon_uses_dark_variant() {
+        // Given/When — запись подтягиваний с иконкой при тёмной теме
+        showScreenWithNightMode(nightModeYes = true)
+        val luminance = capturedIconGlyphLuminance()
+
+        // Then — «чернила» светлые (тёмный вариант ресурса)
+        assertTrue(
+            "При тёмной теме иконка должна рисоваться тёмным (осветлённым) " +
+                "вариантом: средняя яркость чернил $luminance должна быть " +
+                "не меньше $DARK_VARIANT_MIN_LUMINANCE",
+            luminance >= DARK_VARIANT_MIN_LUMINANCE
+        )
+    }
+
+    /** Светлая тема — светлый вариант ресурса (тёмные «чернила»). */
+    @Test
+    fun row_when_light_theme_then_icon_uses_light_variant() {
+        // Given/When — та же запись при светлой теме
+        showScreenWithNightMode(nightModeYes = false)
+        val luminance = capturedIconGlyphLuminance()
+
+        // Then — «чернила» тёмные (светлый вариант ресурса)
+        assertTrue(
+            "При светлой теме иконка должна рисоваться светлым вариантом: " +
+                "средняя яркость чернил $luminance должна быть " +
+                "не больше $LIGHT_VARIANT_MAX_LUMINANCE",
+            luminance <= LIGHT_VARIANT_MAX_LUMINANCE
+        )
+    }
+
+    /** Рендер списка с одной записью в заданном режиме темы системы. */
+    private fun showScreenWithNightMode(nightModeYes: Boolean) {
+        composeTestRule.setContent {
+            val configuration = Configuration(context.resources.configuration)
+            // Бит night mode выставляется явно в ОБЕИХ ветках: иначе
+            // «светлая» ветка наследует uiMode эмулятора и тест
+            // детерминированно падает на устройстве с тёмной темой
+            configuration.uiMode =
+                (configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+                if (nightModeYes) {
+                    Configuration.UI_MODE_NIGHT_YES
+                } else {
+                    Configuration.UI_MODE_NIGHT_NO
+                }
+            CompositionLocalProvider(LocalConfiguration provides configuration) {
+                JetpackMyWorkoutsTheme {
+                    MainScreenContent(
+                        state =
+                            MainScreenState(
+                                uiState =
+                                    success(
+                                        listOf(
+                                            repsItem.copy(iconNumber = ExerciseIcons.PULLUPS)
+                                        )
+                                    ),
+                                onAddEntryClick = {},
+                                onRequestDelete = {},
+                                onContextMenuItemChange = {},
+                                onConfirmDelete = {},
+                                onCancelDelete = {}
+                            )
+                    )
+                }
+            }
+        }
+        composeTestRule.waitForIdle()
+    }
+
+    /**
+     * Средняя яркость «чернил» захваченной иконки: пикселей, отличных
+     * от фона по яркости больше порога. Иконки — монохромные векторы
+     * с инвертированной яркостью пары (светлый вариант ~ #434343,
+     * тёмный ~ #DCDCDC), фон строки — `colorScheme.surface`.
+     */
+    private fun capturedIconGlyphLuminance(): Double {
+        val bitmap =
+            composeTestRule
+                .onAllNodesWithTag(EXERCISE_ICON_TEST_TAG, useUnmergedTree = true)[0]
+                .captureToImage()
+        val pixels = bitmap.toPixelArray()
+
+        fun luminance(pixel: Int): Double =
+            (
+                0.299 * (pixel shr 16 and 0xFF) +
+                    0.587 * (pixel shr 8 and 0xFF) +
+                    0.114 * (pixel and 0xFF)
+            ) / 255.0
+
+        val backgroundLuminance = luminance(pixels.first())
+        var sum = 0.0
+        var count = 0
+        for (pixel in pixels) {
+            if (abs(luminance(pixel) - backgroundLuminance) > GLYPH_LUMINANCE_THRESHOLD) {
+                sum += luminance(pixel)
+                count++
+            }
+        }
+        check(count > 0) { "В захваченном битмапе иконки должны быть пиксели рисунка" }
+        return sum / count
+    }
+
+    /** ARGB-пиксели захваченного битмапа построчно. */
+    private fun ImageBitmap.toPixelArray(): IntArray {
+        val pixels = IntArray(width * height)
+        asAndroidBitmap().getPixels(pixels, 0, width, 0, 0, width, height)
+        return pixels
+    }
+
+    /**
      * Метка [higher] визуально выше [lower] — порядок пунктов меню
      * (образец — `assertDisplayedAbove` в `EntryCreateScreenTest`).
      */
@@ -667,5 +874,17 @@ class MainScreenTest {
                 .fetchSemanticsNode()
                 .boundsInRoot.top
         assertTrue("«$higher» должен быть выше «$lower»", higherTop < lowerTop)
+    }
+
+    private companion object {
+        /** Номер иконки вне таблицы `ExerciseIcons` (1..19). */
+        const val UNKNOWN_ICON_NUMBER = 99
+
+        /** Порог отличия пикселя «чернил» от фона по яркости (0..1). */
+        const val GLYPH_LUMINANCE_THRESHOLD = 0.5
+
+        /** Граница яркости «чернил» между вариантами пары (0..1). */
+        const val DARK_VARIANT_MIN_LUMINANCE = 0.5
+        const val LIGHT_VARIANT_MAX_LUMINANCE = 0.5
     }
 }

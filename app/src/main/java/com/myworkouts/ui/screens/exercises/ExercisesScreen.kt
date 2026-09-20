@@ -70,6 +70,7 @@ import com.myworkouts.analytics.UserActionType
 import com.myworkouts.domain.model.DeleteExerciseError
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.ui.icons.ExerciseIcon
 import com.myworkouts.ui.state.ExercisesUiState
 import com.myworkouts.ui.viewmodel.ExercisesViewModel
 
@@ -462,9 +463,11 @@ private fun ExercisesList(
 }
 
 /**
- * Строка каталога: название + лейбл типа измерения, комментарий
- * ниже при наличии (spec «Строка списка ExerciseListItemRow»;
- * образец — `EntryListItemRow` главного экрана). Фон анимируется
+ * Строка каталога: иконка упражнения + название + лейбл типа измерения,
+ * комментарий ниже при наличии (spec «Строка списка ExerciseListItemRow»;
+ * образец — `EntryListItemRow` главного экрана). Иконка — по общим
+ * правилам [ExerciseIcon] (exercise-icon-display, design Decision 4);
+ * `null`/неизвестный номер — строка как до изменения. Фон анимируется
  * в `surfaceVariant`, пока для строки открыто контекстное меню
  * (edit-delete-exercise §4.6.b).
  *
@@ -507,6 +510,15 @@ internal fun ExerciseListItemRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Иконка упражнения перед названием по общим правилам
+            // ExerciseIcon (exercise-icon-display): известный номер —
+            // иконка 24dp, `null`/неизвестный — ничего не рисуется, место
+            // не резервируется; лейбл типа измерения остаётся у правого
+            // края (название сохраняет `weight(1f)`).
+            ExerciseIcon(
+                iconNumber = exercise.iconNumber,
+                modifier = Modifier.padding(end = 8.dp)
+            )
             Text(
                 text = exercise.name,
                 style = MaterialTheme.typography.bodyLarge,

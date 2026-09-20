@@ -19,9 +19,10 @@ import com.myworkouts.domain.model.ExerciseMeasuredBy
  * @property measuredBy Тип измерения; дефолт `REPS` — большинство
  *   стандартных упражнений на повторы, `TIME` задают явно
  *   (планка, скакалка)
- * @property iconNumber Опциональный номер иконки; дефолт `null` — MVP
- *   не назначает иконки стандартным упражнениям, значения проставит
- *   будущее изменение (exercise-icon-mvp Decision 3)
+ * @property iconNumber Опциональный номер иконки; дефолт `null` —
+ *   стандартный набор задаёт номера явно (exercise-icon-display
+ *   design Decision 5), пользовательские упражнения без указания —
+ *   без иконки
  */
 data class StandardExercise(
     val name: String,

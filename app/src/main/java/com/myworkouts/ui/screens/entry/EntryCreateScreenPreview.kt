@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.EntryCreateUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import java.time.LocalDate
@@ -32,7 +33,8 @@ private val previewRepsExercise =
         isCustom = false,
         comment = null,
         createdAt = 0L,
-        measuredBy = ExerciseMeasuredBy.REPS
+        measuredBy = ExerciseMeasuredBy.REPS,
+        iconNumber = ExerciseIcons.PULLUPS
     )
 
 private val previewTimeExercise =
@@ -43,7 +45,8 @@ private val previewTimeExercise =
         isCustom = false,
         comment = null,
         createdAt = 0L,
-        measuredBy = ExerciseMeasuredBy.TIME
+        measuredBy = ExerciseMeasuredBy.TIME,
+        iconNumber = ExerciseIcons.PUSHUPS
     )
 
 private val previewCatalog = listOf(previewRepsExercise, previewTimeExercise)

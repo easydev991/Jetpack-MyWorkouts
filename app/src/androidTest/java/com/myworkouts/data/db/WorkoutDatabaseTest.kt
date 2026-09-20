@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.ui.icons.ExerciseIcons
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -78,21 +79,42 @@ class WorkoutDatabaseTest {
         }
 
     @Test
-    fun createDatabase_thenAllThirteenStandardExercisesHaveNullIconNumber() =
+    fun createDatabase_thenStandardExercisesHaveAssignedIconNumbers() =
         runBlocking {
-            // Given — БД с prepopulate из setUp (exercise-icon-mvp, spec-сценарий
-            // «Стандартный набор без иконок при prepopulate»: MVP номера
-            // не проставляет, seed-SQL пишет NULL в icon_number)
+            // Given — БД с prepopulate из setUp (exercise-icon-display,
+            // spec-сценарий «Стандартный набор prepopulate с номерами
+            // иконок»: назначение по фиксированной таблице design
+            // Decision 5; планка переиспользует иконку отжиманий)
+            val expectedByName =
+                mapOf(
+                    "Подтягивания" to ExerciseIcons.PULLUPS,
+                    "Австралийские подтягивания" to ExerciseIcons.PULLUPS_AUSTRALIAN,
+                    "Приседания" to ExerciseIcons.SQUATS,
+                    "Отжимания" to ExerciseIcons.PUSHUPS,
+                    "Отжимания на коленях" to ExerciseIcons.PUSHUPS_KNEE,
+                    "Выпады" to ExerciseIcons.LUNGES,
+                    "Отжимания на брусьях" to ExerciseIcons.BARS,
+                    "Планка" to ExerciseIcons.PUSHUPS,
+                    "Скручивания" to ExerciseIcons.CRUNCHES,
+                    "Подъёмы ног в висе" to ExerciseIcons.ABS_HANGING_LEG_RAISES,
+                    "Приседания пистолетиком" to ExerciseIcons.SQUATS_PISTOL,
+                    "Бег" to ExerciseIcons.RUN,
+                    "Скакалка" to ExerciseIcons.JUMPING_ROPE
+                )
 
             // When
             val exercises = database.exerciseDao().observeExercises("").first()
 
-            // Then — все 13 стандартных читаются с iconNumber = null
+            // Then — все 13 стандартных имеют ненулевой iconNumber
+            // согласно фиксированному соответствию
             assertEquals(13, exercises.size)
-            assertTrue(
-                "Prepopulate не назначает иконки: iconNumber = null у всех стандартных",
-                exercises.all { it.iconNumber == null }
-            )
+            exercises.forEach { exercise ->
+                assertEquals(
+                    "Иконка «${exercise.name}» не соответствует таблице design Decision 5",
+                    expectedByName[exercise.name],
+                    exercise.iconNumber
+                )
+            }
         }
 
     @Test

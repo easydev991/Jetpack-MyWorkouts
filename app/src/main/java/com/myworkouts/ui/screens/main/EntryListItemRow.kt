@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
 import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.ui.icons.ExerciseIcon
 import com.myworkouts.ui.util.formatDurationResource
 
 /**
@@ -33,7 +34,10 @@ import com.myworkouts.ui.util.formatDurationResource
  * «подходы × значение» через [formatEntryValue]: повторы — «4 х 10»,
  * длительность — человекочитаемый текст [formatDurationResource] —
  * «3 х 20 сек», «2 мин»; оба текста `FontWeight.Medium` — design
- * Decision 4), вторая — доп. вес: слева метка «Дополнительный
+ * Decision 4), перед названием — иконка упражнения [ExerciseIcon]
+ * (exercise-icon-display: известный номер — иконка 24dp слева от
+ * названия, `null`/неизвестный — строка как до изменения), вторая —
+ * доп. вес: слева метка «Дополнительный
  * вес» цветом `onSurfaceVariant`, справа значение («5 кг» через
  * [formatWeightKg] и ресурс `entry_list_weight_value`). Строка веса
  * рендерится только при `weightKg > 0.0`; без веса вид строки
@@ -120,7 +124,11 @@ internal fun EntryListItemRow(
                 },
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        TitleValueRow(exerciseName = item.exerciseName, value = value)
+        TitleValueRow(
+            iconNumber = item.iconNumber,
+            exerciseName = item.exerciseName,
+            value = value
+        )
         if (weightKg != null && weightKg > 0.0) {
             WeightRow(weightKg = weightKg)
         }
@@ -133,12 +141,16 @@ internal fun EntryListItemRow(
 
 /**
  * Первая строка [EntryListItemRow]: «название — значение», оба текста
- * `bodyLarge` с `FontWeight.Medium` (design Decision 4). Вынесено из
- * [EntryListItemRow] ради лимита detekt `LongMethod: 60` — как
- * [WeightRow] и [CommentRow].
+ * `bodyLarge` с `FontWeight.Medium` (design Decision 4); перед названием —
+ * иконка упражнения по общим правилам [ExerciseIcon] (известный номер —
+ * иконка 24dp, `null`/неизвестный — ничего не рисуется, место не
+ * резервируется; название сохраняет `weight(1f)`, значение остаётся у
+ * правого края). Вынесено из [EntryListItemRow] ради лимита detekt
+ * `LongMethod: 60` — как [WeightRow] и [CommentRow].
  */
 @Composable
 private fun TitleValueRow(
+    iconNumber: Int?,
     exerciseName: String,
     value: String
 ) {
@@ -147,6 +159,13 @@ private fun TitleValueRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        ExerciseIcon(
+            iconNumber = iconNumber,
+            // Отступ только при отрисованной иконке: при `null` рендер
+            // не выполняется и модификатор не применяется (spec — место
+            // под иконку не резервируется)
+            modifier = Modifier.padding(end = 8.dp)
+        )
         Text(
             text = exerciseName,
             style = MaterialTheme.typography.bodyLarge,

@@ -32,6 +32,7 @@ import com.myworkouts.R
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.ExercisesUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 
@@ -56,7 +57,8 @@ private val previewPullups =
         isCustom = false,
         comment = "широкий хват",
         createdAt = 1_721_000_000_000L,
-        measuredBy = ExerciseMeasuredBy.REPS
+        measuredBy = ExerciseMeasuredBy.REPS,
+        iconNumber = ExerciseIcons.PULLUPS
     )
 
 private val previewPlank =
@@ -67,7 +69,8 @@ private val previewPlank =
         isCustom = false,
         comment = null,
         createdAt = 1_721_100_000_000L,
-        measuredBy = ExerciseMeasuredBy.TIME
+        measuredBy = ExerciseMeasuredBy.TIME,
+        iconNumber = ExerciseIcons.PUSHUPS
     )
 
 private val previewRunning =
@@ -78,7 +81,8 @@ private val previewRunning =
         isCustom = false,
         comment = null,
         createdAt = 1_721_200_000_000L,
-        measuredBy = ExerciseMeasuredBy.TIME
+        measuredBy = ExerciseMeasuredBy.TIME,
+        iconNumber = ExerciseIcons.RUN
     )
 
 private val previewBench =
@@ -89,7 +93,10 @@ private val previewBench =
         isCustom = true,
         comment = null,
         createdAt = 1_721_300_000_000L,
-        measuredBy = ExerciseMeasuredBy.REPS
+        measuredBy = ExerciseMeasuredBy.REPS,
+        // Кастомное упражнение без назначенной иконки — состояние
+        // «строка без иконки» (exercise-icon-display)
+        iconNumber = null
     )
 
 private fun previewScreenState(uiState: ExercisesUiState): ExercisesScreenState =
@@ -146,11 +153,15 @@ internal fun ExercisesScreenContentLoadingPreview() {
 @Composable
 internal fun ExerciseListItemRowPreview() {
     JetpackMyWorkoutsTheme {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Обычная строка: с комментарием и лейблом «повторы»
-            ExerciseListItemRow(exercise = previewPullups)
-            // Подсвеченная — как при открытом long-press меню
-            ExerciseListItemRow(exercise = previewPlank, isSelected = true)
+        // Surface задаёт LocalContentColor = onSurface — без него тексты
+        // (без явного цвета) остаются чёрными в тёмной теме
+        Surface {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Обычная строка: с комментарием и лейблом «повторы»
+                ExerciseListItemRow(exercise = previewPullups)
+                // Подсвеченная — как при открытом long-press меню
+                ExerciseListItemRow(exercise = previewPlank, isSelected = true)
+            }
         }
     }
 }
@@ -165,32 +176,36 @@ internal fun ExerciseListItemRowPreview() {
 @Composable
 internal fun ExerciseContextMenuPreview() {
     JetpackMyWorkoutsTheme {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Кастомное (3 пункта): ${previewBench.name}")
-            Box {
-                Text(text = previewBench.name)
-                ExerciseContextMenu(
-                    offset = DpOffset.Zero,
-                    mode = ExerciseMenuMode.Active,
-                    isCustom = true,
-                    onMenuDismiss = {},
-                    onEditClick = {},
-                    onArchiveClick = {},
-                    onDeleteClick = {}
-                )
-            }
-            Text(text = "Стандартное (1 пункт): ${previewRunning.name}")
-            Box {
-                Text(text = previewRunning.name)
-                ExerciseContextMenu(
-                    offset = DpOffset.Zero,
-                    mode = ExerciseMenuMode.Active,
-                    isCustom = false,
-                    onMenuDismiss = {},
-                    onEditClick = {},
-                    onArchiveClick = {},
-                    onDeleteClick = {}
-                )
+        // Surface задаёт LocalContentColor = onSurface — без него тексты
+        // подписей (без явного цвета) остаются чёрными в тёмной теме
+        Surface {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(text = "Кастомное (3 пункта): ${previewBench.name}")
+                Box {
+                    Text(text = previewBench.name)
+                    ExerciseContextMenu(
+                        offset = DpOffset.Zero,
+                        mode = ExerciseMenuMode.Active,
+                        isCustom = true,
+                        onMenuDismiss = {},
+                        onEditClick = {},
+                        onArchiveClick = {},
+                        onDeleteClick = {}
+                    )
+                }
+                Text(text = "Стандартное (1 пункт): ${previewRunning.name}")
+                Box {
+                    Text(text = previewRunning.name)
+                    ExerciseContextMenu(
+                        offset = DpOffset.Zero,
+                        mode = ExerciseMenuMode.Active,
+                        isCustom = false,
+                        onMenuDismiss = {},
+                        onEditClick = {},
+                        onArchiveClick = {},
+                        onDeleteClick = {}
+                    )
+                }
             }
         }
     }

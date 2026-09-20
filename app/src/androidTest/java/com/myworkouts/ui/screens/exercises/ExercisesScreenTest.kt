@@ -14,6 +14,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -30,9 +31,12 @@ import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.navigation.Screen
+import com.myworkouts.ui.icons.EXERCISE_ICON_TEST_TAG
+import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.ExercisesUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -156,6 +160,54 @@ class ExercisesScreenTest {
             .onNodeWithText(context.getString(R.string.exercise_measured_by_time))
             .assertIsDisplayed()
     }
+
+    /**
+     * Spec «Иконка упражнения в строке списка», сценарий «Упражнение
+     * с назначенной иконкой» (exercise-icon-display): известный номер —
+     * иконка слева от названия в верхнем ряду, лейбл типа измерения
+     * остаётся у правого края; `iconNumber = null` — иконки нет
+     * (строка как до изменения).
+     */
+    @Test
+    fun row_when_icon_assigned_then_shows_icon_left_of_name_and_null_shows_none() {
+        // Given — подтягивания с назначенной иконкой, планка без иконки
+        setContentWith(
+            ExercisesUiState.Success(
+                exercises = listOf(pullups.copy(iconNumber = ExerciseIcons.PULLUPS), plank)
+            )
+        )
+
+        // Then — ровно одна иконка: строка без `iconNumber` — без узла иконки
+        composeTestRule
+            .onAllNodesWithTag(EXERCISE_ICON_TEST_TAG, useUnmergedTree = true)
+            .assertCountEquals(1)
+
+        // Then — иконка левее названия своей строки: оба узла берём из
+        // unmerged-дерева — в merged-дереве текст слит со строкой и его
+        // границы совпадают со всей строкой
+        val iconLeft =
+            composeTestRule
+                .onAllNodesWithTag(EXERCISE_ICON_TEST_TAG, useUnmergedTree = true)[0]
+                .fetchSemanticsNode()
+                .boundsInRoot.left
+        val nameLeft =
+            composeTestRule
+                .onNodeWithText(pullups.name, useUnmergedTree = true)
+                .fetchSemanticsNode()
+                .boundsInRoot.left
+        assertTrue(
+            "Иконка должна отображаться слева от названия упражнения",
+            iconLeft < nameLeft
+        )
+
+        // Then — лейбл типа измерения на месте (у правого края)
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_measured_by_reps))
+            .assertIsDisplayed()
+    }
+
+    // Тема-вариант иконки (тёмная тема) покрыт эталонно в `MainScreenTest`:
+    // рендер — общий `ExerciseIcon` (design Decision 6).
 
     /** Проверяет, что комментарий виден при наличии и отсутствует при null. */
     @Test

@@ -11,6 +11,8 @@ package com.myworkouts.data.db
  *
  * @property id Идентификатор записи
  * @property exerciseName Название упражнения каталога
+ * @property iconNumber Номер иконки упражнения (`null` — не назначена;
+ *   подтягивается тем же JOIN на `exercises`, exercise-icon-display)
  * @property sets Количество подходов
  * @property reps Повторы в подходе (`null` для упражнений «на время»)
  * @property durationSec Длительность в секундах (`null` для упражнений «на повторы»)
@@ -22,6 +24,7 @@ package com.myworkouts.data.db
 data class EntryListItemEntity(
     val id: Long,
     val exerciseName: String,
+    val iconNumber: Int?,
     val sets: Int,
     val reps: Int?,
     val durationSec: Int?,

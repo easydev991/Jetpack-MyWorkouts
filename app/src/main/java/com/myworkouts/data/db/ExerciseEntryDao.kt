@@ -33,7 +33,8 @@ interface ExerciseEntryDao {
 
     /**
      * Реактивный список записей с JOIN на каталог упражнений.
-     * Название упражнения (`exerciseName`) подтягивается из `exercises`,
+     * Название упражнения (`exerciseName`) и номер иконки
+     * (`iconNumber`, exercise-icon-display) подтягиваются из `exercises`,
      * сортировка — по `date DESC` (новые первыми, design Decision 1).
      * Проекция [EntryListItemEntity] — не `@Entity`, схема БД не меняется.
      * Комментарий записи (`comment`) включён в проекцию
@@ -42,6 +43,7 @@ interface ExerciseEntryDao {
     @Query(
         "SELECT e.id AS id, " +
             "x.name AS exerciseName, " +
+            "x.icon_number AS iconNumber, " +
             "e.sets AS sets, " +
             "e.reps AS reps, " +
             "e.duration_sec AS durationSec, " +

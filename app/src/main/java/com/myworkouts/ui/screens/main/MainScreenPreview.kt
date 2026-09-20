@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.MainUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import java.time.LocalDate
@@ -32,6 +33,7 @@ private val previewRepsItem =
     EntryListItem(
         id = 1L,
         exerciseName = "Подтягивания",
+        iconNumber = ExerciseIcons.PULLUPS,
         sets = 4,
         reps = 10,
         durationSec = null,
@@ -42,6 +44,7 @@ private val previewTimeItem =
     EntryListItem(
         id = 2L,
         exerciseName = "Планка",
+        iconNumber = ExerciseIcons.PUSHUPS,
         sets = 1,
         reps = null,
         durationSec = 20,
@@ -52,6 +55,7 @@ private val previewSingleRepsItem =
     EntryListItem(
         id = 3L,
         exerciseName = "Отжимания",
+        iconNumber = ExerciseIcons.PUSHUPS,
         sets = 3,
         reps = 12,
         durationSec = null,
@@ -63,6 +67,7 @@ private val previewLongDurationItem =
     EntryListItem(
         id = 4L,
         exerciseName = "Бег на месте",
+        iconNumber = ExerciseIcons.RUN,
         sets = 4,
         reps = null,
         durationSec = 150,
@@ -146,6 +151,7 @@ private fun sectionsPreviewEntries(): List<EntryListItem> {
         EntryListItem(
             id = 11L,
             exerciseName = "Подтягивания",
+            iconNumber = ExerciseIcons.PULLUPS,
             sets = 4,
             reps = 10,
             durationSec = null,
@@ -154,6 +160,7 @@ private fun sectionsPreviewEntries(): List<EntryListItem> {
         EntryListItem(
             id = 12L,
             exerciseName = "Приседания",
+            iconNumber = ExerciseIcons.SQUATS,
             sets = 3,
             reps = 15,
             durationSec = null,
@@ -164,6 +171,7 @@ private fun sectionsPreviewEntries(): List<EntryListItem> {
         EntryListItem(
             id = 13L,
             exerciseName = "Планка",
+            iconNumber = ExerciseIcons.PUSHUPS,
             sets = 2,
             reps = null,
             durationSec = 60,
@@ -174,6 +182,7 @@ private fun sectionsPreviewEntries(): List<EntryListItem> {
         EntryListItem(
             id = 14L,
             exerciseName = "Отжимания",
+            iconNumber = ExerciseIcons.PUSHUPS,
             sets = 3,
             reps = 12,
             durationSec = null,
@@ -210,38 +219,42 @@ internal fun MainScreenContentSectionsPreview() {
 @Composable
 internal fun EntryListItemRowPreview() {
     JetpackMyWorkoutsTheme {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // 4×10 (REPS)
-            EntryListItemRow(
-                item = previewRepsItem,
-                separator = " х ",
-                isSelected = false,
-                onOpenMenu = {}
-            )
-            // «20 сек» (один подход TIME) — выделена, как при показе контекстного меню
-            EntryListItemRow(
-                item = previewTimeItem,
-                separator = " х ",
-                isSelected = true,
-                onOpenMenu = {}
-            )
-            // «4 х 2 мин 30 сек» (несколько подходов TIME — составной пример)
-            EntryListItemRow(
-                item = previewLongDurationItem,
-                separator = " х ",
-                isSelected = false,
-                onOpenMenu = {}
-            )
-            // 3×12 (REPS)
-            EntryListItemRow(
-                item = previewSingleRepsItem,
-                separator = " х ",
-                isSelected = false,
-                onOpenMenu = {}
-            )
+        // Surface задаёт LocalContentColor = onSurface — без него тексты
+        // (без явного цвета) остаются чёрными в тёмной теме
+        Surface {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // 4×10 (REPS)
+                EntryListItemRow(
+                    item = previewRepsItem,
+                    separator = " х ",
+                    isSelected = false,
+                    onOpenMenu = {}
+                )
+                // «20 сек» (один подход TIME) — выделена, как при показе контекстного меню
+                EntryListItemRow(
+                    item = previewTimeItem,
+                    separator = " х ",
+                    isSelected = true,
+                    onOpenMenu = {}
+                )
+                // «4 х 2 мин 30 сек» (несколько подходов TIME — составной пример)
+                EntryListItemRow(
+                    item = previewLongDurationItem,
+                    separator = " х ",
+                    isSelected = false,
+                    onOpenMenu = {}
+                )
+                // 3×12 (REPS)
+                EntryListItemRow(
+                    item = previewSingleRepsItem,
+                    separator = " х ",
+                    isSelected = false,
+                    onOpenMenu = {}
+                )
+            }
         }
     }
 }

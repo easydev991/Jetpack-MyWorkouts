@@ -13,6 +13,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -27,6 +28,8 @@ import com.myworkouts.R
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.ui.icons.EXERCISE_ICON_TEST_TAG
+import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.EntryCreateUiState
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -74,9 +77,14 @@ class EntryCreateScreenTest {
             measuredBy = ExerciseMeasuredBy.TIME
         )
 
-    private fun stateFor(uiState: EntryCreateUiState = EntryCreateUiState()): EntryCreateScreenState =
+    private fun stateFor(
+        uiState: EntryCreateUiState = EntryCreateUiState(),
+        // Точный каталог вместо фикстур по умолчанию (тесты каталога
+        // с иконками); null — подставить стандартные фикстуры
+        exercises: List<Exercise>? = null
+    ): EntryCreateScreenState =
         EntryCreateScreenState(
-            uiState = uiState.copy(exercises = listOf(repsExercise, timeExercise)),
+            uiState = uiState.copy(exercises = exercises ?: listOf(repsExercise, timeExercise)),
             onExerciseChange = {},
             onSetsChange = {},
             onRepsChange = {},
@@ -89,9 +97,12 @@ class EntryCreateScreenTest {
             onBackClick = {}
         )
 
-    private fun setContent(uiState: EntryCreateUiState = EntryCreateUiState()) {
+    private fun setContent(
+        uiState: EntryCreateUiState = EntryCreateUiState(),
+        exercises: List<Exercise>? = null
+    ) {
         composeTestRule.setContent {
-            EntryCreateScreenContent(state = stateFor(uiState))
+            EntryCreateScreenContent(state = stateFor(uiState, exercises))
         }
     }
 
@@ -834,6 +845,110 @@ class EntryCreateScreenTest {
             // Один экземпляр — поле выбора (текущее значение),
             // в выпадающем списке нет
             .assertCountEquals(1)
+    }
+
+    /**
+     * Spec «Иконка упражнения в списке выбора упражнения»
+     * (exercise-icon-display): опция с известным номером иконки
+     * показывает иконку в `leadingIcon`; опция с `iconNumber = null` —
+     * только текст (слот иконки не занимает места). Тема-вариант
+     * (тёмная тема) покрыт эталонно в `MainScreenTest`: рендер — общий
+     * `ExerciseIcon` (design Decision 6).
+     */
+    @Test
+    fun dropdown_when_options_with_and_without_icon_then_only_iconed_options_show_icons() {
+        // Given — два упражнения с иконками и кастомное без иконки
+        val noIconExercise =
+            Exercise(
+                id = 100L,
+                name = "Жим",
+                category = ExerciseCategory.PUSH,
+                isCustom = true,
+                comment = null,
+                createdAt = 0L,
+                measuredBy = ExerciseMeasuredBy.REPS,
+                iconNumber = null
+            )
+        setContent(
+            exercises =
+                listOf(
+                    repsExercise.copy(iconNumber = ExerciseIcons.PULLUPS),
+                    timeExercise.copy(iconNumber = ExerciseIcons.PUSHUPS),
+                    noIconExercise
+                )
+        )
+
+        // Sanity — до открытия списка иконок нет: они только в опциях
+        composeTestRule
+            .onAllNodesWithTag(EXERCISE_ICON_TEST_TAG, useUnmergedTree = true)
+            .assertCountEquals(0)
+
+        // When — открытие выпадающего списка
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_field_exercise))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — все три опции в списке (третья может быть за нижним
+        // краем экрана — проверяем существование, не видимость)
+        composeTestRule.onNodeWithText("Подтягивания").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Планка").assertIsDisplayed()
+        composeTestRule
+            .onAllNodesWithText("Жим")
+            .assertCountEquals(1)
+
+        // Then — иконки ровно у двух опций: «Жим» без `iconNumber` —
+        // только текст
+        composeTestRule
+            .onAllNodesWithTag(EXERCISE_ICON_TEST_TAG, useUnmergedTree = true)
+            .assertCountEquals(2)
+    }
+
+    /**
+     * Сценарий «Архивное упражнение записи сохраняет иконку»
+     * (exercise-icon-display): в режиме редактирования архивное исходное
+     * упражнение, присутствующее в списке опций, показывает свою иконку
+     * на общих правилах — иконка хранится на упражнении и не зависит от
+     * архивного состояния.
+     */
+    @Test
+    fun dropdown_when_edit_mode_archived_source_in_options_then_option_keeps_icon() {
+        // Given — режим редактирования; архивное исходное упражнение —
+        // в списке опций (spec: «и оно присутствует в списке опций»);
+        // обе опции с иконками — архивное рендерится на общих правилах
+        val archivedSource =
+            repsExercise.copy(isArchived = true, iconNumber = ExerciseIcons.PULLUPS)
+        setContent(
+            uiState =
+                EntryCreateUiState(
+                    selectedExercise = archivedSource,
+                    isEditMode = true
+                ),
+            exercises =
+                listOf(
+                    archivedSource,
+                    timeExercise.copy(iconNumber = ExerciseIcons.PUSHUPS)
+                )
+        )
+
+        // When — открытие выпадающего списка
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_field_exercise))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — обе опции в списке, поле показывает исходное
+        composeTestRule
+            .onAllNodesWithText("Подтягивания")
+            // Поле выбора (текущее значение) + опция списка
+            .assertCountEquals(2)
+        composeTestRule.onNodeWithText("Планка").assertIsDisplayed()
+
+        // Then — иконка архивного исходного упражнения на месте
+        // (ровно две: опции «Подтягивания» и «Планка»)
+        composeTestRule
+            .onAllNodesWithTag(EXERCISE_ICON_TEST_TAG, useUnmergedTree = true)
+            .assertCountEquals(2)
     }
 
     @Test
