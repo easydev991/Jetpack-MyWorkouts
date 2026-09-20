@@ -17,6 +17,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
+import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
@@ -167,9 +168,16 @@ class MainScreenEditNavigationTest {
                 EntryCreateScreen(
                     viewModel =
                         viewModel(
-                            factory = EntryCreateViewModel.factory(repository, entryId, NoopAnalyticsProvider())
+                            factory =
+                                EntryCreateViewModel.factory(
+                                    repository,
+                                    entryId,
+                                    AppSettingsDataStore.create(context),
+                                    NoopAnalyticsProvider()
+                                )
                         ),
-                    onBackClick = {}
+                    onBackClick = {},
+                    onOpenSettings = {}
                 )
             }
         }

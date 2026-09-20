@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -52,7 +53,8 @@ import java.time.LocalDate
 @Composable
 fun EntryCreateScreen(
     viewModel: EntryCreateViewModel,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -69,6 +71,7 @@ fun EntryCreateScreen(
                 onTimeChange = viewModel::onTimeChange,
                 onCommentChange = viewModel::onCommentChange,
                 onSaveClick = { viewModel.save(onSaved = onBackClick) },
+                onOpenSettings = onOpenSettings,
                 onBackClick = onBackClick
             )
     )
@@ -89,6 +92,7 @@ internal data class EntryCreateScreenState(
     val onTimeChange: (hour: Int, minute: Int) -> Unit,
     val onCommentChange: (String) -> Unit,
     val onSaveClick: () -> Unit,
+    val onOpenSettings: () -> Unit,
     val onBackClick: () -> Unit
 )
 
@@ -135,6 +139,16 @@ internal fun EntryCreateScreenContent(state: EntryCreateScreenState) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.back)
+                        )
+                    }
+                },
+                actions = {
+                    // Настройки видимости полей (entry-settings-screen):
+                    // единственная точка входа на экран настроек
+                    IconButton(onClick = state.onOpenSettings) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = stringResource(R.string.entry_settings_content_description)
                         )
                     }
                 }
@@ -221,42 +235,54 @@ private fun EntryCreateForm(
         )
 
         // Поля выполнения — только после выбора упражнения (design
-        // Decision 4): подходы, типозависимое поле, доп. вес
+        // Decision 4): подходы, типозависимое поле, доп. вес. Видимость
+        // подходов и веса подчиняется настройкам (entry-settings-screen);
+        // типозависимое поле обязательное — всегда
         if (uiState.selectedExercise != null) {
-            NumberEntryField(
-                label = stringResource(R.string.entry_field_sets),
-                value = uiState.setsText,
-                onValueChange = state.onSetsChange
-            )
+            if (uiState.isSetsFieldVisible) {
+                NumberEntryField(
+                    label = stringResource(R.string.entry_field_sets),
+                    value = uiState.setsText,
+                    onValueChange = state.onSetsChange
+                )
+            }
 
             MeasuredByField(state = state)
 
-            NumberEntryField(
-                label = stringResource(R.string.entry_field_weight),
-                value = uiState.weightText,
-                onValueChange = state.onWeightChange,
-                keyboardType = KeyboardType.Decimal
+            if (uiState.isWeightFieldVisible) {
+                NumberEntryField(
+                    label = stringResource(R.string.entry_field_weight),
+                    value = uiState.weightText,
+                    onValueChange = state.onWeightChange,
+                    keyboardType = KeyboardType.Decimal
+                )
+            }
+        }
+
+        if (uiState.isDateFieldVisible) {
+            DateField(
+                date = uiState.date,
+                openMomentMillis = uiState.openMomentMillis,
+                onDateChange = state.onDateChange
             )
         }
 
-        DateField(
-            date = uiState.date,
-            openMomentMillis = uiState.openMomentMillis,
-            onDateChange = state.onDateChange
-        )
+        if (uiState.isTimeFieldVisible) {
+            TimeField(
+                hour = uiState.hour,
+                minute = uiState.minute,
+                onTimeChange = state.onTimeChange
+            )
+        }
 
-        TimeField(
-            hour = uiState.hour,
-            minute = uiState.minute,
-            onTimeChange = state.onTimeChange
-        )
-
-        OutlinedTextField(
-            value = uiState.comment,
-            onValueChange = state.onCommentChange,
-            label = { Text(stringResource(R.string.entry_field_comment)) },
-            modifier = Modifier.fillMaxWidth()
-        )
+        if (uiState.isCommentFieldVisible) {
+            OutlinedTextField(
+                value = uiState.comment,
+                onValueChange = state.onCommentChange,
+                label = { Text(stringResource(R.string.entry_field_comment)) },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 

@@ -149,4 +149,18 @@
     <string name="exercises_archive_button">Archived exercises</string>
     <string name="archived_exercises_title">Archived exercises</string>
     <string name="archived_exercises_empty">Archive is empty</string>
+
+    <!-- Entry settings screen (visibility of entry form fields) -->
+    <string name="entry_settings_title">Configure screen</string>
+    <string name="entry_settings_subtitle">Hide fields you don\'t need</string>
+    <string name="entry_settings_content_description">Configure screen</string>
+    <string name="entry_visibility_enable_all">Enable all</string>
+    <string name="entry_visibility_sets_label">Sets</string>
+    <string name="entry_visibility_sets_hint">Defaults to 1 set</string>
+    <string name="entry_visibility_weight_label">Extra weight</string>
+    <string name="entry_visibility_date_label">Date</string>
+    <string name="entry_visibility_date_hint">Defaults to today\'s date</string>
+    <string name="entry_visibility_time_label">Time</string>
+    <string name="entry_visibility_time_hint">Defaults to the current time</string>
+    <string name="entry_visibility_comment_label">Comment</string>
 </resources>

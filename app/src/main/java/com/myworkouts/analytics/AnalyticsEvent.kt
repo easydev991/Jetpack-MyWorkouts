@@ -13,6 +13,7 @@ enum class AppScreen {
     AppDataScreen,
     ArchivedExercisesScreen,
     EntryCreateScreen,
+    EntrySettingsScreen,
     ExerciseCreateScreen
 }
 
@@ -35,6 +36,8 @@ enum class UserActionType {
     SELECT_THEME,
     TOGGLE_DYNAMIC_COLORS,
     TOGGLE_EXERCISES_TAB,
+    TOGGLE_ENTRY_FIELD_VISIBILITY,
+    ENABLE_ALL_ENTRY_FIELDS,
     SEND_FEEDBACK
 }
 

@@ -20,6 +20,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.data.db.WorkoutDatabase
+import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
@@ -201,6 +202,7 @@ class EntryEditArchivedExerciseTest {
                 repository = repository,
                 nowProvider = { System.currentTimeMillis() },
                 entryId = entryId,
+                dataStore = AppSettingsDataStore.create(context),
                 analyticsProvider = NoopAnalyticsProvider()
             )
         )
@@ -208,7 +210,8 @@ class EntryEditArchivedExerciseTest {
             JetpackMyWorkoutsTheme {
                 EntryCreateScreen(
                     viewModel = currentViewModel,
-                    onBackClick = { backClicked = true }
+                    onBackClick = { backClicked = true },
+                    onOpenSettings = {}
                 )
             }
         }
@@ -252,6 +255,7 @@ class EntryEditArchivedExerciseTest {
                 repository = repository,
                 nowProvider = { System.currentTimeMillis() },
                 entryId = entryId,
+                dataStore = AppSettingsDataStore.create(context),
                 analyticsProvider = NoopAnalyticsProvider()
             )
         composeTestRule.runOnIdle {

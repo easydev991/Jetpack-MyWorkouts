@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.myworkouts.domain.model.AppTheme
+import com.myworkouts.domain.model.EntryField
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -136,7 +137,55 @@ class AppSettingsDataStore(
                 preferences[DONT_SHOW_ARCHIVE_DIALOG_KEY] ?: false
             }
 
+    /**
+     * Сохраняет видимость опционального поля формы записи.
+     *
+     * @param field Поле формы ([EntryField])
+     * @param visible Показывать ли поле на экране записи
+     */
+    suspend fun setFieldVisible(
+        field: EntryField,
+        visible: Boolean
+    ) {
+        dataStore.edit { preferences ->
+            preferences[fieldKey(field)] = visible
+        }
+    }
+
+    /**
+     * Flow карты видимости опциональных полей формы записи: одно
+     * чтение `data` для всех ключей (entry-settings-screen, design D2 —
+     * не combine пяти Flow-ов). Отсутствие ключа = поле отображается
+     * (дефолт `true`), миграция не нужна.
+     */
+    val entryFieldVisibility: Flow<Map<EntryField, Boolean>> =
+        dataStore.data
+            .map { preferences ->
+                EntryField.entries.associateWith { field -> preferences[fieldKey(field)] ?: true }
+            }
+
+    /**
+     * Включает все опциональные поля формы записи одной записью:
+     * один `edit` — одна перезапись файла и одно emission
+     * [entryFieldVisibility] (ревью `enableAll`).
+     */
+    suspend fun setAllFieldsVisible() {
+        dataStore.edit { preferences ->
+            EntryField.entries.forEach { field ->
+                preferences[fieldKey(field)] = true
+            }
+        }
+    }
+
     companion object {
+        /**
+         * DataStore-ключ видимости поля: деривируется из имени enum-константы
+         * (`SETS` → `show_sets_field`) — новое поле enum не требует новых
+         * методов хранилища (design D2).
+         */
+        private fun fieldKey(field: EntryField): Preferences.Key<Boolean> =
+            booleanPreferencesKey("show_${field.name.lowercase()}_field")
+
         /**
          * Singleton-per-file [DataStore] в файле `appearance_prefs` —
          * повторные обращения возвращают один и тот же инстанс (иначе

@@ -57,7 +57,8 @@ python3 scripts/test_report.py app/build/outputs/androidTest-results/connected/d
 (Только если XML ещё на диске — `make clean` его стирает.)
 
 HTML-отчёт Gradle остаётся в
-`app/build/reports/androidTests/connected/debug/index.html` — открывается
+`app/build/reports/androidTests/connected/debug/flavors/<flavor>/index.html`
+(AGP 9; до AGP 9 был `connected/debug/`) — открывается
 вручную (`make android-test-report` в Makefile отсутствует).
 
 ## Все тесты сразу
@@ -73,7 +74,7 @@ make android-test   # androidTest на подключённом устройст
 Результаты:
 - Unit: `app/build/test-results/`
 - Интеграционные: `app/build/outputs/androidTest-results/connected/debug/`
-  + `app/build/reports/androidTests/connected/debug/index.html`
+  + `app/build/reports/androidTests/connected/debug/flavors/<flavor>/index.html`
 
 ## Один класс
 

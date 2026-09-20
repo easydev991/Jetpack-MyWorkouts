@@ -151,4 +151,18 @@
     <string name="exercises_archive_button">Архив упражнений</string>
     <string name="archived_exercises_title">Архив упражнений</string>
     <string name="archived_exercises_empty">В архиве пусто</string>
+
+    <!-- Entry settings screen (настройка видимости полей формы записи) -->
+    <string name="entry_settings_title">Настроить экран</string>
+    <string name="entry_settings_subtitle">Скрывайте ненужные поля</string>
+    <string name="entry_settings_content_description">Настроить экран</string>
+    <string name="entry_visibility_enable_all">Включить все</string>
+    <string name="entry_visibility_sets_label">Подходы</string>
+    <string name="entry_visibility_sets_hint">По умолчанию всегда 1 подход</string>
+    <string name="entry_visibility_weight_label">Доп. вес</string>
+    <string name="entry_visibility_date_label">Дата</string>
+    <string name="entry_visibility_date_hint">По умолчанию дата открытия экрана</string>
+    <string name="entry_visibility_time_label">Время</string>
+    <string name="entry_visibility_time_hint">По умолчанию время открытия экрана</string>
+    <string name="entry_visibility_comment_label">Комментарий</string>
 </resources>

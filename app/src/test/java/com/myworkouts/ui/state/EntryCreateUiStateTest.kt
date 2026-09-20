@@ -3,6 +3,7 @@ package com.myworkouts.ui.state
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -216,5 +217,36 @@ class EntryCreateUiStateTest {
 
         // Then
         assertFalse(result, "Изменённая, но невалидная форма закрывается без диалога")
+    }
+
+    /**
+     * Скрытые опциональные поля (entry-settings-screen, §4.1): флаги
+     * видимости НЕ влияют на canSave и на значения полей — сохранение
+     * валидной формы доступно, сброса значений нет.
+     */
+    @Test
+    fun canSave_when_optional_fields_hidden_then_true_without_value_reset() {
+        // Given — валидная форма, все пять опциональных полей скрыты
+        val state =
+            EntryCreateUiState(
+                selectedExercise = repsExercise,
+                setsText = "3",
+                repsText = "10",
+                comment = "техника",
+                isSetsFieldVisible = false,
+                isWeightFieldVisible = false,
+                isDateFieldVisible = false,
+                isTimeFieldVisible = false,
+                isCommentFieldVisible = false
+            )
+
+        // When/Then
+        assertTrue(
+            state.canSave,
+            "Скрытие опциональных полей не блокирует сохранение"
+        )
+        assertEquals("3", state.setsText, "Значение подходов не сбрасывается")
+        assertEquals("10", state.repsText, "Значение повторов не сбрасывается")
+        assertEquals("техника", state.comment, "Значение комментария не сбрасывается")
     }
 }

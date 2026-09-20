@@ -35,6 +35,7 @@ import com.myworkouts.navigation.visibleTabs
 import com.myworkouts.ui.screens.appdata.AppDataScreen
 import com.myworkouts.ui.screens.appearance.AppearanceScreen
 import com.myworkouts.ui.screens.entry.EntryCreateScreen
+import com.myworkouts.ui.screens.entry.EntrySettingsScreen
 import com.myworkouts.ui.screens.exercises.ArchivedExercisesScreen
 import com.myworkouts.ui.screens.exercises.ExerciseCreateScreen
 import com.myworkouts.ui.screens.exercises.ExercisesScreen
@@ -44,6 +45,7 @@ import com.myworkouts.ui.viewmodel.AppDataViewModel
 import com.myworkouts.ui.viewmodel.AppearanceViewModel
 import com.myworkouts.ui.viewmodel.ArchivedExercisesViewModel
 import com.myworkouts.ui.viewmodel.EntryCreateViewModel
+import com.myworkouts.ui.viewmodel.EntrySettingsViewModel
 import com.myworkouts.ui.viewmodel.ExerciseCreateViewModel
 import com.myworkouts.ui.viewmodel.ExercisesViewModel
 import com.myworkouts.ui.viewmodel.MainViewModel
@@ -198,10 +200,14 @@ private fun AppNavHost(
                 onBackClick = { navController.popBackStack() }
             )
         }
+        composable(Screen.EntrySettings.route) {
+            EntrySettingsNavDestination(navController, dataStore, analyticsProvider)
+        }
         composable(Screen.EntryCreate.route, arguments = Screen.EntryCreate.arguments) { backStackEntry ->
             EntryCreateNavDestination(
                 backStackEntry = backStackEntry,
                 repository = repository,
+                dataStore = dataStore,
                 analyticsProvider = analyticsProvider,
                 navController = navController
             )
@@ -239,9 +245,31 @@ private fun screenForRoute(route: String?): AppScreen? =
         Screen.AppData.route -> AppScreen.AppDataScreen
         Screen.ArchivedExercises.route -> AppScreen.ArchivedExercisesScreen
         Screen.EntryCreate.route -> AppScreen.EntryCreateScreen
+        Screen.EntrySettings.route -> AppScreen.EntrySettingsScreen
         Screen.ExerciseCreate.route -> AppScreen.ExerciseCreateScreen
         else -> null
     }
+
+/**
+ * `composable(Screen.EntrySettings.route) { ... }` — вынесено из
+ * `AppNavHost` ради соблюдения detekt `LongMethod`. Экран настроек
+ * видимости полей записи (entry-settings-screen): нижний бар скрыт
+ * контрактом `shouldShowBottomBar`, отдельной правки не требует.
+ */
+@Composable
+private fun EntrySettingsNavDestination(
+    navController: NavHostController,
+    dataStore: AppSettingsDataStore,
+    analyticsProvider: AnalyticsProvider
+) {
+    EntrySettingsScreen(
+        viewModel =
+            viewModel(
+                factory = EntrySettingsViewModel.factory(dataStore, analyticsProvider)
+            ),
+        onBackClick = { navController.popBackStack() }
+    )
+}
 
 /**
  * `composable(Screen.EntryCreate.route) { ... }` — вынесено из
@@ -252,6 +280,7 @@ private fun screenForRoute(route: String?): AppScreen? =
 private fun EntryCreateNavDestination(
     backStackEntry: NavBackStackEntry,
     repository: WorkoutDataRepository,
+    dataStore: AppSettingsDataStore,
     analyticsProvider: AnalyticsProvider,
     navController: NavHostController
 ) {
@@ -262,9 +291,10 @@ private fun EntryCreateNavDestination(
         viewModel =
             viewModel(
                 factory =
-                    EntryCreateViewModel.factory(repository, entryId, analyticsProvider)
+                    EntryCreateViewModel.factory(repository, entryId, dataStore, analyticsProvider)
             ),
-        onBackClick = { navController.popBackStack() }
+        onBackClick = { navController.popBackStack() },
+        onOpenSettings = { navController.navigate(Screen.EntrySettings.route) }
     )
 }
 

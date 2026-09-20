@@ -37,6 +37,16 @@ sealed class Screen(
     object AppData : Screen(route = "app_data")
 
     /**
+     * Экран «Настроить экран» — видимость опциональных полей формы записи
+     * (не в нижней навигации). Единственная точка входа — IconButton в
+     * `TopAppBar` экрана [EntryCreate]. Паттерн — [Appearance]: маршрут
+     * регистрируется в `NavHost`, нижний бар скрыт контрактом
+     * `currentRoute in tabs.map { it.route }` (entry-settings-screen,
+     * non-tab-screen-navigation).
+     */
+    object EntrySettings : Screen(route = "entry_settings")
+
+    /**
      * Экран «Архив упражнений» — список архивных упражнений с
      * возможностью восстановления (не в нижней навигации). Доступен через
      * `TopAppBar`-кнопку архива на [Exercises]. Паттерн — [Appearance]:

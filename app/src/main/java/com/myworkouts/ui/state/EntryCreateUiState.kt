@@ -32,6 +32,12 @@ import java.time.LocalDate
  *   в БД (`getEntry` → `success(null)` или `failure`) — показать подсказку
  *   под кнопкой сохранения. Не меняется после `init {}` — отражает
  *   результат однократной загрузки при открытии экрана
+ * @property isSetsFieldVisible Видимость опционального поля «Подходы»
+ *   (entry-settings-screen; значение не связано с canSave/hasUnsavedChanges)
+ * @property isWeightFieldVisible Видимость опционального поля «Доп. вес»
+ * @property isDateFieldVisible Видимость опционального поля даты
+ * @property isTimeFieldVisible Видимость опционального поля времени
+ * @property isCommentFieldVisible Видимость опционального поля комментария
  */
 data class EntryCreateUiState(
     val exercises: List<Exercise> = emptyList(),
@@ -48,7 +54,12 @@ data class EntryCreateUiState(
     val isSaveError: Boolean = false,
     val isEditMode: Boolean = false,
     val hasChanges: Boolean = false,
-    val isEntryMissing: Boolean = false
+    val isEntryMissing: Boolean = false,
+    val isSetsFieldVisible: Boolean = true,
+    val isWeightFieldVisible: Boolean = true,
+    val isDateFieldVisible: Boolean = true,
+    val isTimeFieldVisible: Boolean = true,
+    val isCommentFieldVisible: Boolean = true
 ) {
     private val formValid: Boolean
         get() =

@@ -81,7 +81,8 @@ class EntryCreateScreenTest {
         uiState: EntryCreateUiState = EntryCreateUiState(),
         // Точный каталог вместо фикстур по умолчанию (тесты каталога
         // с иконками); null — подставить стандартные фикстуры
-        exercises: List<Exercise>? = null
+        exercises: List<Exercise>? = null,
+        onOpenSettings: () -> Unit = {}
     ): EntryCreateScreenState =
         EntryCreateScreenState(
             uiState = uiState.copy(exercises = exercises ?: listOf(repsExercise, timeExercise)),
@@ -94,6 +95,7 @@ class EntryCreateScreenTest {
             onTimeChange = { _, _ -> },
             onCommentChange = {},
             onSaveClick = {},
+            onOpenSettings = onOpenSettings,
             onBackClick = {}
         )
 
@@ -806,6 +808,7 @@ class EntryCreateScreenTest {
                         onTimeChange = { _, _ -> },
                         onCommentChange = {},
                         onSaveClick = {},
+                        onOpenSettings = {},
                         onBackClick = {}
                     )
             )
@@ -971,5 +974,53 @@ class EntryCreateScreenTest {
         composeTestRule
             .onAllNodesWithText(context.getString(R.string.entry_confirm_close_dialog_title))
             .assertCountEquals(0)
+    }
+
+    // ---------- entry-settings-screen: кнопка настроек и скрытие полей ----------
+
+    /** Кнопка настроек в TopAppBar: тап вызывает колбэк навигации (§8.2). */
+    @Test
+    fun content_when_settings_button_clicked_then_calls_on_open_settings() {
+        // Given
+        var openSettingsCalled = false
+        composeTestRule.setContent {
+            EntryCreateScreenContent(
+                state = stateFor(onOpenSettings = { openSettingsCalled = true })
+            )
+        }
+
+        // When — тап по IconButton «Настроить экран»
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.entry_settings_content_description))
+            .performClick()
+
+        // Then
+        assertTrue("Тап по настройкам вызывает колбэк навигации", openSettingsCalled)
+    }
+
+    /** Скрытое поле «Доп. вес» не рендерится, остальные — по правилам. */
+    @Test
+    fun content_when_weight_field_hidden_then_weight_field_not_rendered() {
+        // Given — упражнение выбрано, поле веса скрыто настройкой
+        setContent(
+            EntryCreateUiState(selectedExercise = repsExercise, isWeightFieldVisible = false)
+        )
+
+        // Then
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_field_weight))
+            .assertCountEquals(0)
+    }
+
+    /** Нон-регресс: при видимой настройке поле «Доп. вес» отображается. */
+    @Test
+    fun content_when_weight_field_visible_then_weight_field_rendered() {
+        // Given — упражнение выбрано, видимость веса — дефолт (включена)
+        setContent(EntryCreateUiState(selectedExercise = repsExercise))
+
+        // Then
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_field_weight))
+            .assertIsDisplayed()
     }
 }

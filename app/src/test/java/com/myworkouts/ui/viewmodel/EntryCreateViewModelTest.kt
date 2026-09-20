@@ -3,13 +3,17 @@ package com.myworkouts.ui.viewmodel
 import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
+import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.EntryField
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -199,6 +203,15 @@ class EntryCreateViewModelTest {
     private val repository =
         FakeWorkoutDataRepository(listOf(repsExercise, timeExercise, repsExercise2))
 
+    /**
+     * DataStore-настройки (entry-settings-screen, design D3 «Внимание к
+     * тестам»): combine в [EntryCreateViewModel] подписан на
+     * `entryFieldVisibility`, поэтому stub обязателен — на пустом Flow
+     * combine не эмитит и тесты зависают. По умолчанию все поля видимы.
+     */
+    private val visibilityFlow = MutableStateFlow(EntryField.entries.associateWith { true })
+    private val mockDataStore: AppSettingsDataStore = mockk(relaxed = true)
+
     /** 2024-07-15T12:30 UTC — фиксированный «сейчас» для тестов. */
     private val fixedNowMillis = 1_721_046_600_000L
 
@@ -229,6 +242,7 @@ class EntryCreateViewModelTest {
 
     @BeforeEach
     fun setUp() {
+        every { mockDataStore.entryFieldVisibility } returns visibilityFlow
         testDispatcher = StandardTestDispatcher()
         Dispatchers.setMain(testDispatcher)
     }
@@ -248,8 +262,38 @@ class EntryCreateViewModelTest {
             repository = repository,
             nowProvider = nowProvider,
             entryId = entryId,
+            dataStore = mockDataStore,
             analyticsProvider = fakeAnalytics
         )
+
+    /**
+     * Настройки видимости (entry-settings-screen, §4.1): флаги
+     * `isXxxFieldVisible` приходят из DataStore (`SETS: false` → false,
+     * остальные true); скрытие поля НЕ сбрасывает значений полей формы.
+     */
+    @Test
+    fun ui_state_when_sets_hidden_then_flag_false_others_true_and_values_kept() =
+        runTest(testDispatcher) {
+            // Given — SETS скрыт в DataStore
+            visibilityFlow.value =
+                EntryField.entries.associateWith { true } + mapOf(EntryField.SETS to false)
+
+            // When
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then — флаги видимости
+            val state = viewModel.uiState.value
+            assertFalse(state.isSetsFieldVisible, "Скрытый SETS — isSetsFieldVisible = false")
+            assertTrue(state.isWeightFieldVisible, "WEIGHT видим по умолчанию")
+            assertTrue(state.isDateFieldVisible, "DATE видим по умолчанию")
+            assertTrue(state.isTimeFieldVisible, "TIME видим по умолчанию")
+            assertTrue(state.isCommentFieldVisible, "COMMENT видим по умолчанию")
+            // значения полей не сбрасываются
+            assertEquals("1", state.setsText, "Значение подходов при скрытии поля не сбрасывается")
+            assertEquals("0", state.weightText, "Значение веса при скрытии полей не меняется")
+        }
 
     /**
      * `save` в режиме создания эмитит `UserAction(CREATE)` — на вызове

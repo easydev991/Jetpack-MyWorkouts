@@ -63,6 +63,7 @@ private fun previewScreenState(uiState: EntryCreateUiState): EntryCreateScreenSt
         onTimeChange = { _, _ -> },
         onCommentChange = {},
         onSaveClick = {},
+        onOpenSettings = {},
         onBackClick = {}
     )
 

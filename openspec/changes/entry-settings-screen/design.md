@@ -15,7 +15,7 @@ DataStore singleton) по паттерну «один Flow на ключ». Эк
 **Goals:**
 
 - Enum-driven дизайн: добавление опционального поля = одна строка в `EntryField`
-  + пара строк локализации; экран настроек, `EntrySettingsViewModel` и DataStore
+  плюс пара строк локализации; экран настроек, `EntrySettingsViewModel` и DataStore
   при этом не меняются (сторона формы — существующий паттерн флагов
   `EntryCreateUiState`: флаг, маппинг в combine, условие рендера — D3).
 - Видимость без побочных эффектов: скрытие поля не трогает значение, `canSave`,
@@ -82,10 +82,11 @@ DataStore singleton) по паттерну «один Flow на ключ». Эк
   с `contentDescription = R.string.back` (1-в-1 с AppearanceScreen); подзаголовок;
   скроллящийся Column; `EntryField.entries.forEach { FieldToggleRow(...) }`.
 - `FieldToggleRow` (private): Row `SpaceBetween`/`CenterVertically` — Text
-  (`Modifier.weight(1f)`) + Switch; ниже hint `bodySmall` если задан; отступы и
-  safe-area (`navigationBarsPadding().imePadding()`) по паттерну SaveBottomBar
-  `EntryCreateScreen`.
-- Кнопка «Включить все» (`TextButton`) внизу — видна при `hasAnyDisabled`.
+  (`Modifier.weight(1f)`) + Switch; ниже hint `bodySmall` если задан; отступы
+  контента — `paddingValues` собственного Scaffold экрана.
+- Кнопка «Включить все» (`TextButton`) — последний элемент скроллящегося списка,
+  видна при `hasAnyDisabled` (не `bottomBar`: закреплённая кнопка в ландшафте
+  отрисовывалась поверх прокручиваемого списка — ревью после реализации).
 - State-паттерн как у `EntryCreateScreen`: `EntrySettingsUiState` (data class:
   `visibility: Map<EntryField, Boolean>`, computed `hasAnyDisabled`) в `ui/state/`;
   `EntrySettingsScreenState` — плоский data class в файле экрана, 1-в-1 с прецедентами
@@ -108,8 +109,8 @@ DataStore singleton) по паттерну «один Flow на ключ». Эк
 - `screenForRoute`: `Screen.EntrySettings.route -> AppScreen.ENTRY_SETTINGS`.
 - Нижняя панель приложения скрывается автоматически: `shouldShowBottomBar = currentRoute in
   tabs.map { it.route }`, правки не нужны (как на `EntryCreate`). Системная панель
-  навигации Android не затрагивается — insets обрабатывает собственный Scaffold экрана
-  и `navigationBarsPadding()` на кнопке «Включить все» (D4).
+  навигации Android не затрагивается — insets обрабатывает собственный Scaffold экрана:
+  `paddingValues` применяется ко всему контенту, включая кнопку «Включить все» (D4).
 - Кнопка входа: `Icons.Filled.Settings` в `actions` TopAppBar `EntryCreateScreen`,
   `contentDescription = R.string.entry_settings_content_description`; onClick — колбэк
   `onOpenSettings` (экран работает через лямбды, как `onBackClick`), в
@@ -123,9 +124,9 @@ DataStore singleton) по паттерну «один Flow на ключ». Эк
   значением `"${field.name.lowercase()}_${if (visible) "on" else "off"}"` (паттерн
   value `TOGGLE_EXERCISES_TAB`), затем пишет в DataStore (прямой suspend в
   `viewModelScope.launch`, без `Result` — паттерн AppearanceViewModel).
-- `enableAll()` логирует ровно один `ENABLE_ALL_ENTRY_FIELDS` (value null) до цикла
-  `EntryField.entries.forEach { setFieldVisibleDataOnly(...) }` — внутри цикла отдельных
-  toggle-ивентов нет (аналитику не засоряем).
+- `enableAll()` логирует ровно один `ENABLE_ALL_ENTRY_FIELDS` (value null) до записи
+  `dataStore.setAllFieldsVisible()` — один `edit` всех ключей; отдельных toggle-ивентов
+  нет (аналитику не засоряем).
 
 ### D7. Тесты (TDD: JVM-тесты до реализации)
 

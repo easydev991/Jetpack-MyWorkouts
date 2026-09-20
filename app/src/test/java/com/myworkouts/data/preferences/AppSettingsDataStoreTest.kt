@@ -1,10 +1,12 @@
 package com.myworkouts.data.preferences
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.myworkouts.domain.model.EntryField
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -111,6 +113,81 @@ class AppSettingsDataStoreTest {
             assertFalse(
                 dataStore.dontShowArchiveDialog.first(),
                 "После установки false Flow эмитит false"
+            )
+        }
+
+    // ---------- entry-settings-screen: видимость опциональных полей формы записи ----------
+
+    /**
+     * Spec scenario «Все переключатели включены по умолчанию»: без записи
+     * ключей [AppSettingsDataStore.entryFieldVisibility] эмитит `true`
+     * для всех [EntryField] (отсутствие ключа = поле отображается).
+     */
+    @Test
+    fun entryFieldVisibility_first_collect_all_true() =
+        runTest {
+            // Given
+            val dataStore = newDataStore()
+
+            // When — первый сбор Flow без записи
+            val visibility = dataStore.entryFieldVisibility.first()
+
+            // Then
+            assertEquals(
+                EntryField.entries.associateWith { true },
+                visibility,
+                "До первой записи все опциональные поля видимы"
+            )
+        }
+
+    /**
+     * Spec scenario «Настройка восстанавливается после перезапуска»:
+     * `setFieldVisible(SETS, false)` → Flow эмитит `SETS = false`,
+     * остальные поля остаются `true` (persistence повторным чтением).
+     */
+    @Test
+    fun setFieldVisible_sets_false_then_collect_returns_false_others_true() =
+        runTest {
+            // Given
+            val dataStore = newDataStore()
+
+            // When
+            dataStore.setFieldVisible(EntryField.SETS, false)
+
+            // Then
+            val visibility = dataStore.entryFieldVisibility.first()
+            assertEquals(
+                false,
+                visibility[EntryField.SETS],
+                "После setFieldVisible(SETS, false) Flow эмитит false для SETS"
+            )
+            assertTrue(
+                visibility.filterKeys { it != EntryField.SETS }.all { it.value },
+                "Остальные поля остаются видимыми"
+            )
+        }
+
+    /**
+     * Ревью `enableAll` (entry-settings-screen): `setAllFieldsVisible`
+     * включает все поля одной записью — после вызова карта все-true,
+     * включая ранее скрытые поля.
+     */
+    @Test
+    fun setAllFieldsVisible_after_hidden_fields_then_all_true() =
+        runTest {
+            // Given — два поля скрыты
+            val dataStore = newDataStore()
+            dataStore.setFieldVisible(EntryField.DATE, false)
+            dataStore.setFieldVisible(EntryField.COMMENT, false)
+
+            // When
+            dataStore.setAllFieldsVisible()
+
+            // Then
+            assertEquals(
+                EntryField.entries.associateWith { true },
+                dataStore.entryFieldVisibility.first(),
+                "После setAllFieldsVisible все опциональные поля видимы"
             )
         }
 }

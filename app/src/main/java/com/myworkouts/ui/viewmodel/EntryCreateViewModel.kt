@@ -8,7 +8,9 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.UserActionType
+import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.model.EntryField
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
@@ -46,12 +48,15 @@ private const val MINUTES_PER_HOUR: Int = 60
  * @property nowProvider Провайдер текущего момента (epoch millis) —
  *   внедряется для детерминированных JVM-тестов
  * @property entryId Id редактируемой записи; [Screen.EntryCreate.NO_ENTRY_ID] — режим создания
+ * @property dataStore DataStore настроек (видимость опциональных полей,
+ *   entry-settings-screen)
  * @property analyticsProvider Провайдер аналитики
  */
 class EntryCreateViewModel(
     private val repository: WorkoutDataRepository,
     private val nowProvider: () -> Long,
     private val entryId: Long = Screen.EntryCreate.NO_ENTRY_ID,
+    private val dataStore: AppSettingsDataStore,
     private val analyticsProvider: AnalyticsProvider
 ) : ViewModel() {
     /**
@@ -114,17 +119,19 @@ class EntryCreateViewModel(
 
     /**
      * UI State экрана: реактивный каталог из репозитория, объединённый
-     * с изменяемым состоянием ввода. Производные поля (подстановка
-     * упражнения по `originalEntry.exerciseId`, `hasChanges`) считает
-     * [derivedState]; [save] читает [uiState] — экран и сохранение
+     * с изменяемым состоянием ввода и настройками видимости опциональных
+     * полей (entry-settings-screen, design D3). Производные поля
+     * (подстановка упражнения по `originalEntry.exerciseId`, `hasChanges`)
+     * считает [derivedState]; [save] читает [uiState] — экран и сохранение
      * видят одно состояние.
      */
     val uiState: StateFlow<EntryCreateUiState> =
         combine(
             repository.exercises(query = ""),
+            dataStore.entryFieldVisibility,
             mutableUiState
-        ) { exercises, state ->
-            derivedState(state, exercises)
+        ) { exercises, visibility, state ->
+            derivedState(state, exercises, visibility)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
@@ -231,7 +238,8 @@ class EntryCreateViewModel(
      */
     private fun derivedState(
         state: EntryCreateUiState,
-        exercises: List<Exercise>
+        exercises: List<Exercise>,
+        visibility: Map<EntryField, Boolean>
     ): EntryCreateUiState {
         val original = originalEntry
         val selected =
@@ -245,7 +253,15 @@ class EntryCreateViewModel(
                     originalExercise?.takeIf { orig -> exercises.none { it.id == orig.id } }
                 )
         val withSelected =
-            state.copy(exercises = options, selectedExercise = selected)
+            state.copy(
+                exercises = options,
+                selectedExercise = selected,
+                isSetsFieldVisible = visibility[EntryField.SETS] ?: true,
+                isWeightFieldVisible = visibility[EntryField.WEIGHT] ?: true,
+                isDateFieldVisible = visibility[EntryField.DATE] ?: true,
+                isTimeFieldVisible = visibility[EntryField.TIME] ?: true,
+                isCommentFieldVisible = visibility[EntryField.COMMENT] ?: true
+            )
         val draft = draftOf(withSelected, original)
         return withSelected.copy(
             hasChanges = original != null && draft != null && draft != original
@@ -347,12 +363,14 @@ class EntryCreateViewModel(
          *
          * @param repository Репозиторий данных тренировок
          * @param entryId Id редактируемой записи; дефолт — режим создания
+         * @param dataStore DataStore настроек (видимость опциональных полей)
          * @param analyticsProvider Провайдер аналитики
          * @return Factory для создания ViewModel
          */
         fun factory(
             repository: WorkoutDataRepository,
             entryId: Long = Screen.EntryCreate.NO_ENTRY_ID,
+            dataStore: AppSettingsDataStore,
             analyticsProvider: AnalyticsProvider
         ): ViewModelProvider.Factory =
             viewModelFactory {
@@ -361,6 +379,7 @@ class EntryCreateViewModel(
                         repository,
                         { System.currentTimeMillis() },
                         entryId,
+                        dataStore,
                         analyticsProvider
                     )
                 }
