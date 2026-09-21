@@ -1,6 +1,15 @@
 package com.myworkouts.ui.screens.main
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -8,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -31,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,12 +98,19 @@ fun MainScreen(
     // Само меню рисуется на уровне списка (design Decision 5), но
     // управляется корневым Composable — иначе его не видно из Content.
     var contextMenu by remember { mutableStateOf<ContextMenuState?>(null) }
+    // Транзитное состояние карточки деталей: id открытой записи или null.
+    // `rememberSaveable` — чтобы карточка переживала поворот экрана
+    // (workout-detail-view, design Decision 2); данные самой записи
+    // подтягиваются из `success.entries` по id на рендере.
+    var detailsEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
+    BackHandler(enabled = detailsEntryId != null) { detailsEntryId = null }
 
     MainScreenContent(
         state =
             MainScreenState(
                 uiState = uiState,
                 contextMenu = contextMenu,
+                detailsEntryId = detailsEntryId,
                 onAddEntryClick = {
                     // FAB-событие в точке нажатия (design D10)
                     analyticsProvider.log(
@@ -101,6 +119,30 @@ fun MainScreen(
                     onAddEntryClick()
                 },
                 onContextMenuItemChange = { newState -> contextMenu = newState },
+                onEntryTap = { item ->
+                    // Жест тапа и a11y-действие идут через разные колбэки:
+                    // жест — если меню было открыто, popup его «поглощает»,
+                    // карточку открывает повторный тап; a11y идёт мимо popup
+                    // и всегда закрывает меню + открывает карточку. Без
+                    // разделения при активном меню жест тапа открывал бы
+                    // карточку сразу (поведение Material3 DropdownMenu по
+                    // умолчанию тап не поглощает — work-out через
+                    // `dismissOnClickOutside`), противореча спеке
+                    // (workout-detail-view, design Risks/Trade-offs).
+                    val menuOpen = contextMenu != null
+                    contextMenu = null
+                    if (!menuOpen) {
+                        detailsEntryId = item.id
+                    }
+                },
+                onEntryOpenDetails = { item ->
+                    // A11y-канал деталей: всегда закрывает меню и открывает
+                    // карточку — действие TalkBack обходит popup
+                    // (workout-detail-view, design Risks/Trade-offs).
+                    contextMenu = null
+                    detailsEntryId = item.id
+                },
+                onCloseDetails = { detailsEntryId = null },
                 onRequestEdit = { item ->
                     // Паттерн onRequestDelete: обёртка закрывает меню,
                     // делегирует без побочных эффектов (design Decision 6)
@@ -130,12 +172,20 @@ internal data class ContextMenuState(
  * (образец — `EntryCreateScreenState`).
  *
  * @property contextMenu Транзитное состояние long-press меню (`null` — закрыто)
+ * @property detailsEntryId Id записи, для которой открыта карточка деталей
+ *   (`null` — карточка закрыта); по этому id в `MainScreenContent`
+ *   ищется запись в `uiState.Success.entries` (workout-detail-view,
+ *   design Decision 3)
  */
 internal data class MainScreenState(
     val uiState: MainUiState,
     val contextMenu: ContextMenuState? = null,
+    val detailsEntryId: Long? = null,
     val onAddEntryClick: () -> Unit = {},
     val onContextMenuItemChange: (ContextMenuState?) -> Unit = {},
+    val onEntryTap: (EntryListItem) -> Unit = {},
+    val onEntryOpenDetails: (EntryListItem) -> Unit = {},
+    val onCloseDetails: () -> Unit = {},
     val onRequestEdit: (EntryListItem) -> Unit = {},
     val onRequestDelete: (EntryListItem) -> Unit = {},
     val onConfirmDelete: () -> Unit = {},
@@ -144,8 +194,13 @@ internal data class MainScreenState(
 
 /**
  * Контент главного экрана: TopAppBar, тело (список или заглушка), FAB,
- * long-press меню и алерт подтверждения удаления. Используется для
- * UI-тестов в изоляции без ViewModel (задачи 5.1/5.3).
+ * long-press меню, алерт подтверждения удаления и overlay карточки
+ * деталей поверх Scaffold. Используется для UI-тестов в изоляции без
+ * ViewModel (задачи 5.1/5.3).
+ *
+ * Overlay рендерится ВНЕ `Scaffold` — внешний `Box` оборачивает и
+ * Scaffold, и overlay: только так затемнение накрывает FAB/TopAppBar
+ * (workout-detail-view, design Decision 1).
  *
  * @param state Данные экрана и колбэки (см. [MainScreenState])
  * @param modifier внешний модификатор
@@ -156,32 +211,118 @@ internal fun MainScreenContent(
     state: MainScreenState,
     modifier: Modifier = Modifier
 ) {
-    Scaffold(
-        modifier = modifier,
-        // System nav bar inset уже учтён NavigationBar в RootScreen;
-        // здесь оставляем только горизонтальные insets (displayCutout и т.п.).
-        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
-        topBar = {
-            TopAppBar(title = { Text(stringResource(R.string.workouts_title)) })
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = state.onAddEntryClick) {
-                Icon(
-                    Icons.Filled.Add,
-                    contentDescription = stringResource(R.string.add_workout)
-                )
+    Box(modifier = modifier.fillMaxSize()) {
+        Scaffold(
+            // System nav bar inset уже учтён NavigationBar в RootScreen;
+            // здесь оставляем только горизонтальные insets (displayCutout и т.п.).
+            contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
+            topBar = {
+                TopAppBar(title = { Text(stringResource(R.string.workouts_title)) })
+            },
+            floatingActionButton = {
+                FloatingActionButton(onClick = state.onAddEntryClick) {
+                    Icon(
+                        Icons.Filled.Add,
+                        contentDescription = stringResource(R.string.add_workout)
+                    )
+                }
+            }
+        ) { paddingValues ->
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+            ) {
+                when (val s = state.uiState) {
+                    MainUiState.Loading -> Unit
+                    is MainUiState.Success -> SuccessBody(state = state, success = s)
+                }
             }
         }
-    ) { paddingValues ->
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
+        // Карточка деталей ищется по id в уже загруженном списке —
+        // без запроса к БД (workout-detail-view, design Decision 3);
+        // `null` (запись удалили пока детали открыты) — карточка
+        // анимированно закрывается (спека: «закрывается автоматически»).
+        val success = state.uiState as? MainUiState.Success
+        val detailsItem =
+            success?.entries?.firstOrNull { it.id == state.detailsEntryId }
+        DetailsOverlay(
+            visible = detailsItem != null,
+            item = detailsItem,
+            onClose = state.onCloseDetails
+        )
+    }
+}
+
+/**
+ * Overlay карточки деталей: скрим 32% по всему экрану (плавно проявляется
+ * и гаснет) + карточка по центру с боковыми 24dp (выезжает снизу с
+ * проявлением, закрывается — уезжает вниз с затуханием). Тап по скриму
+ * закрывает карточку (workout-detail-view, design Decisions 1, 3, 6).
+ *
+ * Компонуется всегда, видимостью управляет [visible] — иначе не работают
+ * анимации исчезновения. Во время exit-анимации карточка рендерится по
+ * последней непустой записи ([item] уже `null`, а карточка ещё уезжает).
+ *
+ * Вынесено из [MainScreenContent] ради лимита detekt `LongMethod: 60` —
+ * overlay добавляет достаточно строк, чтобы увести функцию за лимит.
+ */
+@Composable
+private fun DetailsOverlay(
+    visible: Boolean,
+    item: EntryListItem?,
+    onClose: () -> Unit
+) {
+    var lastItem by remember { mutableStateOf<EntryListItem?>(null) }
+    item?.let { lastItem = it }
+    val shownItem = item ?: lastItem
+    val scrimInteractionSource = remember { MutableInteractionSource() }
+    Box(modifier = Modifier.fillMaxSize()) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(),
+            exit = fadeOut()
         ) {
-            when (val s = state.uiState) {
-                MainUiState.Loading -> Unit
-                is MainUiState.Success -> SuccessBody(state = state, success = s)
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
+                        // Скрим кликабелен по tap-зонам без карточки; ripple на
+                        // затемнении не нужен (design Decision 6): indication
+                        // отключён явно — дефолтный LocalIndication дал бы ripple.
+                        .clickable(
+                            interactionSource = scrimInteractionSource,
+                            indication = null,
+                            onClick = onClose
+                        )
+            )
+        }
+        // Компонуется ВСЕГДА: если создать AnimatedVisibility в момент,
+        // когда visible уже true (первое открытие после старта/поворота
+        // экрана), enter-анимация не выполнится — карточка появится рывком.
+        AnimatedVisibility(
+            visible = visible,
+            modifier = Modifier.align(Alignment.Center),
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+        ) {
+            shownItem?.let { shown ->
+                EntryDetailsCard(
+                    item = shown,
+                    onClose = onClose,
+                    modifier =
+                        Modifier
+                            // Безопасные зоны: сбоку — системная панель навигации/cutout
+                            // в ландшафте, сверху/снизу — статус-бар и жест-навигация
+                            // (иначе высокая карточка уходит под них).
+                            .windowInsetsPadding(WindowInsets.safeDrawing)
+                            // Дыхание сверху/снизу: карточка не липнет к границам
+                            // inset-зон при нехватке высоты (ландшафт).
+                            .padding(vertical = 12.dp)
+                            .padding(horizontal = 24.dp)
+                )
             }
         }
     }
@@ -219,8 +360,11 @@ private fun SuccessBody(
                 sections = sections,
                 separator = stringResource(R.string.entry_value_separator),
                 contextMenu = state.contextMenu,
+                detailsEntryId = state.detailsEntryId,
                 callbacks =
                     EntryListCallbacks(
+                        onItemTap = state.onEntryTap,
+                        onItemOpenDetails = state.onEntryOpenDetails,
                         onItemLongPress = { item, offsetInRoot ->
                             state.onContextMenuItemChange(
                                 ContextMenuState(item = item, offsetInRoot = offsetInRoot)
@@ -250,10 +394,12 @@ private fun SuccessBody(
  * (6) без `ignoreDefaultParameters: true`.
  */
 internal data class EntryListCallbacks(
+    val onItemTap: (EntryListItem) -> Unit,
     val onItemLongPress: (EntryListItem, Offset) -> Unit,
     val onMenuDismiss: () -> Unit,
     val onRequestEdit: (EntryListItem) -> Unit,
-    val onRequestDelete: (EntryListItem) -> Unit
+    val onRequestDelete: (EntryListItem) -> Unit,
+    val onItemOpenDetails: (EntryListItem) -> Unit = {}
 )
 
 /**
@@ -269,14 +415,14 @@ private fun EntryList(
     sections: List<DateSection>,
     separator: String,
     contextMenu: ContextMenuState?,
-    callbacks: EntryListCallbacks,
-    modifier: Modifier = Modifier
+    detailsEntryId: Long?,
+    callbacks: EntryListCallbacks
 ) {
     var anchorOrigin by remember { mutableStateOf(IntOffset.Zero) }
     var anchorHeight by remember { mutableIntStateOf(0) }
     Box(
         modifier =
-            modifier
+            Modifier
                 .fillMaxSize()
                 .onGloballyPositioned { coords ->
                     val pos = coords.positionInRoot()
@@ -287,8 +433,14 @@ private fun EntryList(
         EntryListItems(
             sections = sections,
             separator = separator,
-            isSelected = { contextMenu?.item?.id == it.id },
-            onLongPress = callbacks.onItemLongPress
+            // Строка выделена, если для неё открыто контекстное меню
+            // (старое поведение) ИЛИ карточка деталей (workout-detail-view,
+            // design Decision 4 / task 3.4).
+            isSelected = {
+                contextMenu?.item?.id == it.id ||
+                    detailsEntryId == it.id
+            },
+            callbacks = callbacks
         )
         if (contextMenu != null) {
             val density = LocalDensity.current
@@ -317,15 +469,21 @@ private fun EntryList(
 
 /**
  * `LazyColumn` секций: sticky-заголовки (кроме «Сегодня») + строки
- * с long-press. Разные `contentType` у заголовков/строк — раздельные
+ * с tap и long-press. Разные `contentType` у заголовков/строк — раздельные
  * пулы переиспользования против «моргания» при скролле.
+ *
+ * Жест тапа и a11y-действие «Показать детали» — разные колбэки: жест
+ * учитывает открытое меню (popup поглощает тап, work-out через
+ * `dismissOnClickOutside` Material3 DropdownMenu не делает этого сам —
+ * см. `MainScreen.onEntryTap`), a11y всегда открывает карточку
+ * (workout-detail-view, design Decision 4 + Risks/Trade-offs).
  */
 @Composable
 private fun EntryListItems(
     sections: List<DateSection>,
     separator: String,
     isSelected: (EntryListItem) -> Boolean,
-    onLongPress: (EntryListItem, Offset) -> Unit
+    callbacks: EntryListCallbacks
 ) {
     val yesterdayLabel = stringResource(R.string.entry_section_yesterday)
     val currentYearFormatter = remember { DateTimeFormatter.ofPattern("EEE, d MMM") }
@@ -360,21 +518,31 @@ private fun EntryListItems(
                     // того же onGloballyPositioned, что и long-press
                     // (accessibility-semantics-fixes, design D2/D3).
                     onOpenMenu = {
-                        onLongPress(
+                        callbacks.onItemLongPress(
                             item,
                             positionInRoot +
                                 Offset(x = rowSize.width / 2f, y = rowSize.height / 2f)
                         )
                     },
+                    // A11y-действие «Показать детали» — отдельный
+                    // колбэк: TalkBack обходит popup и должен всегда
+                    // открывать карточку (workout-detail-view, design
+                    // Risks/Trade-offs).
+                    onOpenDetails = { callbacks.onItemOpenDetails(item) },
                     modifier =
                         Modifier
                             .onGloballyPositioned { coords ->
                                 positionInRoot = coords.positionInRoot()
                                 rowSize = coords.size
                             }.pointerInput(item.id) {
+                                // Оба жеста в одном детекторе: long-press
+                                // имеет приоритет, тап открывает карточку
+                                // деталей (workout-detail-view, design
+                                // Decision 4).
                                 detectTapGestures(
+                                    onTap = { callbacks.onItemTap(item) },
                                     onLongPress = { localOffset ->
-                                        onLongPress(item, positionInRoot + localOffset)
+                                        callbacks.onItemLongPress(item, positionInRoot + localOffset)
                                     }
                                 )
                             }

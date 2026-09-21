@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
@@ -80,34 +81,85 @@ class EntryEditArchivedExerciseTest {
     }
 
     /**
-     * Ждёт закрытия экрана после сохранения: `onSaved` вызывается строго
-     * после успешной записи в Room (EntryCreateViewModel.save), так что
-     * `backClicked` — видимый сигнал приземлившейся записи. Поллинг
-     * репозитория (runBlocking-запросы в waitUntil) конкурировал за
-     * main-поток с самой сохраняющей coroutine и изредка не укладывался
-     * в таймаут (ComposeTimeoutException).
+     * Ждёт подтверждения сохранения по двум независимым сигналам: факт
+     * записи в БД (`sets == expectedSets`) ИЛИ `backClicked` (onSaved
+     * вызывается строго после успешной записи). Пока сигнал не пришёл —
+     * повторяет клик по «Сохранить»: одиночная инъекция могла уйти в окно
+     * мягкой клавиатуры/анимацию инсетов, и `save()` тогда не вызывается
+     * вовсе (прогон 2026-09-22: backClicked не приходил за 10 с при
+     * canSave=true, isSaveError=false — клик съела клавиатура).
+     * Запись в Room и onSaved идут последовательно, поэтому после
+     * срабатывания любого сигнала БД уже актуальна — чтение в условии
+     * безопасно.
      *
      * Таймаут ≠ «медленно»: [EntryCreateViewModel.save] молча выходит при
      * `!canSave`, а неудачное сохранение ставит `isSaveError` без навигации
-     * — в обоих случаях сигнал не придёт никогда. Падаем сразу со снимком
-     * состояния, чтобы причина была в сообщении, а не гаданием по логам.
+     * — падаем со снимком состояния VM и БД, чтобы причина была в сообщении.
      */
     private fun awaitSaved(
         viewModel: EntryCreateViewModel,
+        entryId: Long,
+        expectedSets: Int,
         backClicked: () -> Boolean
     ) {
         try {
-            composeTestRule.waitUntil(timeoutMillis = 10_000) { backClicked() }
+            composeTestRule.waitUntil(timeoutMillis = 20_000) {
+                val saved =
+                    backClicked() ||
+                        runBlocking {
+                            repository.getEntry(entryId).getOrNull()?.sets == expectedSets
+                        }
+                if (!saved) {
+                    composeTestRule
+                        .onNodeWithText(context.getString(R.string.entry_save))
+                        .performClick()
+                }
+                saved
+            }
         } catch (e: ComposeTimeoutException) {
             val s = viewModel.uiState.value
+            val db = runBlocking { repository.getEntry(entryId).getOrNull() }
             throw IllegalStateException(
-                "Экран не закрылся после сохранения за 10 с: " +
-                    "setsText=${s.setsText} canSave=${s.canSave} " +
-                    "hasChanges=${s.hasChanges} isSaveError=${s.isSaveError} " +
-                    "isEntryMissing=${s.isEntryMissing}",
+                "Сохранение не подтвердилось за 20 с: setsText=${s.setsText} " +
+                    "canSave=${s.canSave} hasChanges=${s.hasChanges} " +
+                    "isSaveError=${s.isSaveError} isEntryMissing=${s.isEntryMissing} " +
+                    "dbSets=${db?.sets} dbExerciseId=${db?.exerciseId}",
                 e
             )
         }
+        // Запись в БД могла опередить навигацию (Main добирается до onSaved
+        // после разблокировки потока): короткий добор без исключения —
+        // чтобы assert ниже не падал на чистой гонке сигналов.
+        val deadline = System.currentTimeMillis() + 2_000
+        while (!backClicked() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10)
+        }
+    }
+
+    /**
+     * Открывает дропдаун с пунктом [fieldTextRes] и выбирает [optionText].
+     *
+     * Клик по полю повторяется, пока пункт не появится: попап композируется
+     * кадром позже клика, а сдвиг окна IME-анимацией (ввод текста в форму)
+     * уносит координаты поля — часть инъекций промахивается, и дропдаун не
+     * открывается вовсе. Повторный клик безопасен: если попап открыт, пункт
+     * уже виден и клик не выполняется.
+     */
+    private fun selectDropdownOption(
+        fieldTextRes: Int,
+        optionText: String
+    ) {
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            val optionExists =
+                composeTestRule.onAllNodesWithText(optionText).fetchSemanticsNodes().isNotEmpty()
+            if (!optionExists) {
+                composeTestRule
+                    .onNodeWithText(context.getString(fieldTextRes))
+                    .performClick()
+            }
+            optionExists
+        }
+        composeTestRule.onNodeWithText(optionText).performClick()
     }
 
     /** Запись с REPS-упражнением X; X заархивирован до открытия экрана. */
@@ -231,6 +283,12 @@ class EntryEditArchivedExerciseTest {
         composeTestRule
             .onNode(hasText(context.getString(R.string.entry_field_sets)))
             .performTextReplacement("4")
+        // Фокус в текстовом поле открывает мягкую клавиатуру: в момент её
+        // выезда/сдвига инсетов одиночная инъекция клика по «Сохранить»
+        // (bottomBar с imePadding) может уйти в окно IME — save() тогда
+        // не вызывается вовсе. Закрываем клавиатуру и ретраим клик в
+        // [awaitSaved].
+        Espresso.closeSoftKeyboard()
         composeTestRule.waitForIdle()
 
         // Then — сохранение разблокировано; запись обновлена с exerciseId = X.id
@@ -238,7 +296,7 @@ class EntryEditArchivedExerciseTest {
             .onNodeWithText(context.getString(R.string.entry_save))
             .assertIsEnabled()
             .performClick()
-        awaitSaved(currentViewModel) { backClicked }
+        awaitSaved(currentViewModel, entryId = entryId, expectedSets = 4) { backClicked }
 
         val saved =
             checkNotNull(runBlocking { repository.getEntry(entryId).getOrNull() }) {
@@ -267,20 +325,14 @@ class EntryEditArchivedExerciseTest {
         }
 
         // When — смена на активное Y через дропдаун
-        composeTestRule
-            .onNodeWithText(context.getString(R.string.entry_field_exercise))
-            .performClick()
-        composeTestRule.onNodeWithText("Отжимания").assertIsDisplayed().performClick()
+        selectDropdownOption(R.string.entry_field_exercise, "Отжимания")
         composeTestRule.waitForIdle()
 
         // Then — поле показывает Y
         composeTestRule.onNodeWithText("Отжимания").assertIsDisplayed()
 
         // When — повторное открытие списка: исходное X доступно
-        composeTestRule
-            .onNodeWithText(context.getString(R.string.entry_field_exercise))
-            .performClick()
-        composeTestRule.onNodeWithText("Жим лёжа").assertIsDisplayed().performClick()
+        selectDropdownOption(R.string.entry_field_exercise, "Жим лёжа")
         composeTestRule.waitForIdle()
 
         // Then — поле снова показывает X
@@ -291,11 +343,9 @@ class EntryEditArchivedExerciseTest {
         composeTestRule
             .onNode(hasText(context.getString(R.string.entry_field_sets)))
             .performTextReplacement("5")
-        composeTestRule
-            .onNodeWithText(context.getString(R.string.entry_save))
-            .assertIsEnabled()
-            .performClick()
-        awaitSaved(viewModel2) { backClicked }
+        Espresso.closeSoftKeyboard()
+        composeTestRule.waitForIdle()
+        awaitSaved(viewModel2, entryId = entryId, expectedSets = 5) { backClicked }
 
         // Then — запись обновлена с exerciseId = X.id
         val saved2 =

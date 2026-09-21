@@ -52,27 +52,35 @@ import com.myworkouts.ui.util.formatDurationResource
  * (`Modifier.semantics { selected = ... }`) дублирует состояние
  * для accessibility и Compose UI Test.
  *
- * Accessibility-канал меню (accessibility-semantics-fixes, design D1/D2):
- * в тот же `semantics(mergeDescendants = true)`-блок добавляется
- * custom-действие с лейблом `a11y_open_menu` — TalkBack показывает его
- * в меню действий. Действие вызывает [onOpenMenu] без точки касания;
- * офсет меню (центр строки) вычисляет вызывающая сторона — она уже
- * отслеживает позицию строки для long-press.
+ * Accessibility-каналы меню и деталей (workout-detail-view):
+ * в тот же `semantics(mergeDescendants = true)`-блок добавляются два
+ * custom-действия — «Открыть меню» (существующее) и «Показать детали»
+ * (новое, для TalkBack-пользователей: обычный тап по строке без
+ * кликабельной семантики недоступен — design Decision 4). Действия
+ * вызывают соответствующие колбэки без точки касания; офсет меню
+ * (центр строки) вычисляет вызывающая сторона — она уже отслеживает
+ * позицию строки для long-press.
  *
  * @param item Элемент списка (проекция из DAO JOIN)
  * @param separator Локализованный разделитель (« х »/« x »)
  * @param isSelected `true` пока для этой записи открыто контекстное
- *   меню (design Decision 5)
+ *   меню или карточка деталей (design Decision 5 / workout-detail-view
+ *   Decision 4)
  * @param onOpenMenu Колбэк открытия контекстного меню (a11y-действие)
+ * @param onOpenDetails Колбэк открытия карточки деталей (a11y-действие);
+ *   по умолчанию `{}` — в превью, где строка показывается изолированно
+ *   без экрана, действие недоступно
  * @param modifier Внешний модификатор (для gesture/position из списка)
  */
+@Suppress("LongParameterList")
 @Composable
 internal fun EntryListItemRow(
     item: EntryListItem,
     separator: String,
     isSelected: Boolean,
     onOpenMenu: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenDetails: () -> Unit = {}
 ) {
     // Тип значения различается: повторы или отформатированная длительность
     // (spec «Формат значения записи»). «Оба null» недостижимо при валидной
@@ -98,6 +106,7 @@ internal fun EntryListItemRow(
         ).value
     val weightKg = item.weightKg
     val openMenuLabel = stringResource(R.string.a11y_open_menu)
+    val showDetailsLabel = stringResource(R.string.a11y_show_details)
 
     Column(
         modifier =
@@ -112,12 +121,18 @@ internal fun EntryListItemRow(
                     // находил строку (а не отдельный Text), иначе свойство
                     // Selected останется только у родителя.
                     selected = isSelected
-                    // Меню действий TalkBack: то же контекстное меню, что
-                    // по long-press (design D1).
+                    // Меню действий TalkBack: «Открыть меню» — то же
+                    // контекстное меню, что по long-press (design D1);
+                    // «Показать детали» — обычный тап для тех, кому он
+                    // недоступен (workout-detail-view, design Decision 4).
                     customActions =
                         listOf(
                             CustomAccessibilityAction(openMenuLabel) {
                                 onOpenMenu()
+                                true
+                            },
+                            CustomAccessibilityAction(showDetailsLabel) {
+                                onOpenDetails()
                                 true
                             }
                         )

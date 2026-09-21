@@ -106,12 +106,18 @@
     <!-- Accessibility: единый лейбл действия «открыть контекстное меню»
          для строк всех трёх списков (accessibility-semantics-fixes, D4) -->
     <string name="a11y_open_menu">Открыть меню</string>
+    <!-- Accessibility: действие открытия карточки деталей записи
+         по тапу (workout-detail-view) -->
+    <string name="a11y_show_details">Показать детали</string>
     <string name="entry_list_delete_dialog_title">Удалить запись?</string>
     <string name="entry_list_delete_dialog_message">Удалить «%1$s»?</string>
     <string name="entry_list_empty">Добавьте первую запись</string>
     <string name="entry_list_weight_label">Дополнительный вес</string>
     <string name="entry_list_weight_value">%1$s кг</string>
     <string name="entry_section_yesterday">Вчера</string>
+
+    <!-- Детали записи (черновик дизайна, выбор варианта) -->
+    <string name="entry_details_weight_suffix">(+ %1$s кг)</string>
 
     <!-- Exercise edit / delete (заголовок edit-режима, меню, алерт, снекбары) -->
     <string name="exercise_edit_title">Изменить упражнение</string>

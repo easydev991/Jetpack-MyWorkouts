@@ -2,6 +2,10 @@ package com.myworkouts.ui.screens.main
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import java.time.LocalDateTime
+import java.time.Month
+import java.time.ZoneId
+import java.util.Locale
 
 /**
  * JVM-тесты форматтера значения записи главного экрана.
@@ -143,5 +147,129 @@ class EntryValueFormatterTest {
 
         // Then — «12.25» без округления
         assertEquals("12.25", result)
+    }
+
+    // ==== Детальный формат значения (workout-detail-view) ====
+
+    @Test
+    fun format_entry_details_value_when_multiple_sets_and_weight_then_sets_x_value_plus_weight_suffix() {
+        // Given — 4 подхода, 10 повторов, локализованный суффикс веса
+
+        // When
+        val result =
+            formatEntryDetailsValue(
+                sets = 4,
+                value = "10",
+                separator = " х ",
+                weightSuffix = "(+ 5 кг)"
+            )
+
+        // Then — «4 х 10 (+ 5 кг)»
+        assertEquals("4 х 10 (+ 5 кг)", result)
+    }
+
+    @Test
+    fun format_entry_details_value_when_single_set_and_weight_then_value_plus_weight_suffix() {
+        // Given — 1 подход, 12 повторов, с весом
+
+        // When
+        val result =
+            formatEntryDetailsValue(
+                sets = 1,
+                value = "12",
+                separator = " х ",
+                weightSuffix = "(+ 10 кг)"
+            )
+
+        // Then — «12 (+ 10 кг)» (без префикса подходов при одном)
+        assertEquals("12 (+ 10 кг)", result)
+    }
+
+    @Test
+    fun format_entry_details_value_when_multiple_sets_no_weight_then_sets_x_value_only() {
+        // Given — 3 подхода длительностью без веса
+
+        // When
+        val result =
+            formatEntryDetailsValue(
+                sets = 3,
+                value = "20 сек",
+                separator = " х ",
+                weightSuffix = null
+            )
+
+        // Then — «3 х 20 сек» (без суффикса веса)
+        assertEquals("3 х 20 сек", result)
+    }
+
+    @Test
+    fun format_entry_details_value_when_single_set_no_weight_then_value_only() {
+        // Given — один подход без веса (один подход + null суффикс)
+
+        // When
+        val result =
+            formatEntryDetailsValue(
+                sets = 1,
+                value = "10",
+                separator = " х ",
+                weightSuffix = null
+            )
+
+        // Then — «10»
+        assertEquals("10", result)
+    }
+
+    // ==== Форматтер даты/времени (workout-detail-view) ====
+
+    @Test
+    fun format_detail_date_time_when_fixed_zone_and_locale_ru_then_ru_long_date() {
+        // Given — 20 сентября 2025, 18:30 в зоне Europe/Moscow, ru-локаль
+
+        val dateMillis =
+            LocalDateTime
+                .of(2025, Month.SEPTEMBER, 20, 18, 30)
+                .atZone(ZONE_MOSCOW)
+                .toInstant()
+                .toEpochMilli()
+
+        // When
+        val result =
+            formatDetailDateTime(
+                dateMillis = dateMillis,
+                locale = LOCALE_RU,
+                zoneId = ZONE_MOSCOW
+            )
+
+        // Then — «20 сентября 2025, 18:30»
+        assertEquals("20 сентября 2025, 18:30", result)
+    }
+
+    @Test
+    fun format_detail_date_time_when_fixed_zone_and_locale_en_then_en_long_date() {
+        // Given — 20 September 2025, 18:30 в зоне Europe/Moscow, en-локаль
+
+        val dateMillis =
+            LocalDateTime
+                .of(2025, Month.SEPTEMBER, 20, 18, 30)
+                .atZone(ZONE_MOSCOW)
+                .toInstant()
+                .toEpochMilli()
+
+        // When
+        val result =
+            formatDetailDateTime(
+                dateMillis = dateMillis,
+                locale = LOCALE_EN,
+                zoneId = ZONE_MOSCOW
+            )
+
+        // Then — «20 September 2025, 18:30»
+        assertEquals("20 September 2025, 18:30", result)
+    }
+
+    private companion object {
+        val ZONE_MOSCOW: ZoneId = ZoneId.of("Europe/Moscow")
+        val LOCALE_RU: Locale = Locale("ru")
+        val LOCALE_EN: Locale = Locale.ENGLISH
     }
 }

@@ -81,6 +81,31 @@ class ExerciseCreateScreenTest {
             onBackClick = {}
         )
 
+    /**
+     * Открывает дропдаун категории и выбирает вариант [optionText].
+     *
+     * Клик по полю повторяется, пока пункт меню не появится: попап
+     * `ExposedDropdownMenu` композируется кадром позже клика, а окно
+     * открытой мягкой клавиатуры накрывает поле «Категория» (нижняя часть
+     * формы) — одиночная инъекция клика уходит в IME, и дропдаун не
+     * открывается вовсе (flake roundTrip-теста: «could not find any node
+     * that satisfies: contains 'Толкающие'»). Повторный клик безопасен:
+     * если попап открыт — пункт уже виден и клик не выполняется.
+     */
+    private fun selectCategory(optionText: String) {
+        composeTestRule.waitUntil(10_000) {
+            val optionExists =
+                composeTestRule.onAllNodesWithText(optionText).fetchSemanticsNodes().isNotEmpty()
+            if (!optionExists) {
+                composeTestRule
+                    .onNode(hasText(context.getString(R.string.exercise_field_category)))
+                    .performClick()
+            }
+            optionExists
+        }
+        composeTestRule.onNodeWithText(optionText).performClick()
+    }
+
     private fun setContent(uiState: ExerciseCreateUiState = ExerciseCreateUiState()) {
         composeTestRule.setContent {
             ExerciseCreateScreenContent(state = stateFor(uiState))
@@ -158,10 +183,7 @@ class ExerciseCreateScreenTest {
         }
 
         // When — открыли меню и выбрали категорию
-        composeTestRule
-            .onNode(hasText(context.getString(R.string.exercise_field_category)))
-            .performClick()
-        composeTestRule.onNodeWithText(context.getString(R.string.exercise_category_push)).performClick()
+        selectCategory(context.getString(R.string.exercise_category_push))
 
         // Then — выбранная категория отображается, Save активна
         composeTestRule.onNodeWithText(context.getString(R.string.exercise_category_push)).assertIsDisplayed()
@@ -775,12 +797,12 @@ class ExerciseCreateScreenTest {
             composeTestRule
                 .onNode(hasText(context.getString(R.string.exercise_field_name)))
                 .performTextReplacement("Жим с иконкой")
-            composeTestRule
-                .onNode(hasText(context.getString(R.string.exercise_field_category)))
-                .performClick()
-            composeTestRule
-                .onNodeWithText(context.getString(R.string.exercise_category_push))
-                .performClick()
+            // Фокус в текстовом поле открывает мягкую клавиатуру: она
+            // накрывает низ формы, где лежит поле «Категория», и инъекции
+            // кликов уходят в окно IME — закрываем перед дальнейшими тапами
+            Espresso.closeSoftKeyboard()
+            composeTestRule.waitForIdle()
+            selectCategory(context.getString(R.string.exercise_category_push))
             // When — выбор иконки 7 через тап по ячейке
             composeTestRule
                 .onNode(
