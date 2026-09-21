@@ -2,7 +2,7 @@
 
 ## 1. Unit-тесты (TDD — красная фаза)
 
-- [ ] 1.1 В `ImportBackupUseCaseTest` добавить кейсы `mergeBackup`: файл
+- [x] 1.1 В `ImportBackupUseCaseTest` добавить кейсы `mergeBackup`: файл
   дублирует существующее активное упражнение с `isArchived = true` →
   id существующего попадает в список архивации; файл с
   `isArchived = false` при архивном существующем → id не попадает
@@ -12,7 +12,7 @@
   красный прогон падает ошибкой компиляции — это ожидаемо. Прогон
   красный:
   `./gradlew testDebugUnitTest --tests "*ImportBackupUseCaseTest*"`
-- [ ] 1.2 В `ImportBackupUseCaseTest` кейс сквозного `invoke`: после
+- [x] 1.2 В `ImportBackupUseCaseTest` кейс сквозного `invoke`: после
   успешного слияния существующее упражнение из файла с
   `isArchived = true` переведено в архив. Существующий тест
   `import_when_duplicateExercise_then_existingIsArchivedUnchanged`
@@ -26,7 +26,7 @@
 
 ## 2. Реализация (зелёная фаза)
 
-- [ ] 2.1 `mergeBackup` возвращает `Triple`, третьим элементом —
+- [x] 2.1 `mergeBackup` возвращает `Triple`, третьим элементом —
   `List<Long>` id к архивации (совпадение имени без учёта регистра,
   файл `isArchived = true`, существующее активно); `invoke` после
   успешного `importData` применяет их через `repository.setArchived(id, true)`,
@@ -36,9 +36,9 @@
 
 ## 3. Финальная проверка
 
-- [ ] 3.1 `make format && make lint` — без новых detekt-предупреждений
+- [x] 3.1 `make format && make lint` — без новых detekt-предупреждений
   (лимит `maxIssues: 5` не повышается)
-- [ ] 3.2 `make test` — все unit-тесты зелёные, отчёт
+- [x] 3.2 `make test` — все unit-тесты зелёные, отчёт
   `scripts/test_report.py` без упавших
 
 ## 4. Синхронизация спеки и архивация

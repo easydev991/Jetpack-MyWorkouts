@@ -529,12 +529,97 @@ class ImportBackupUseCaseTest {
         }
 
     @Test
-    fun import_when_duplicateExercise_then_existingIsArchivedUnchanged() =
+    fun mergeBackup_when_fileArchived_duplicateOfActiveExisting_then_idInArchiveList() {
+        // Given: в каталоге активная «Планка», файл дублирует имя с
+        // isArchived = true — односторонняя архивация (spec-сценарий
+        // «Архивация существующего упражнения из файла применяется»)
+        val existing =
+            pullUps.copy(
+                name = "Планка",
+                category = ExerciseCategory.CORE,
+                createdAt = 1_757_371_150_000L,
+                measuredBy = ExerciseMeasuredBy.TIME
+            )
+        val fileExercise = existing.copy(id = 0L, isArchived = true)
+
+        // When
+        val (toInsert, _, toArchive) =
+            mergeBackup(listOf(existing), emptyList(), listOf(fileExercise), emptyList())
+
+        // Then
+        assertTrue(toInsert.isEmpty(), "Дубликат имени не попадает в список вставки")
+        assertEquals(
+            listOf(existing.id),
+            toArchive,
+            "id существующего упражнения попадает в список архивации"
+        )
+    }
+
+    @Test
+    fun mergeBackup_when_fileActive_duplicateOfArchivedExisting_then_idNotInArchiveList() {
+        // Given: в каталоге архивная «Планка», файл содержит её с
+        // isArchived = false — разархивация не выполняется (spec-сценарий
+        // «Признак архивации существующего упражнения при дедупликации
+        // не меняется»)
+        val existing =
+            pullUps.copy(
+                name = "Планка",
+                category = ExerciseCategory.CORE,
+                createdAt = 1_757_371_150_000L,
+                measuredBy = ExerciseMeasuredBy.TIME,
+                isArchived = true
+            )
+        val fileExercise = existing.copy(id = 0L, isArchived = false)
+
+        // When
+        val (toInsert, _, toArchive) =
+            mergeBackup(listOf(existing), emptyList(), listOf(fileExercise), emptyList())
+
+        // Then
+        assertTrue(toInsert.isEmpty(), "Дубликат имени не попадает в список вставки")
+        assertTrue(
+            toArchive.isEmpty(),
+            "Разархивации нет: id архивного существующего не попадает в список архивации"
+        )
+    }
+
+    @Test
+    fun mergeBackup_when_nameWithoutMatch_then_toInsertList_notArchiveList() {
+        // Given: в каталоге «Подтягивания», файл содержит «Планку» — имени
+        // нет в каталоге, даже с isArchived = true упражнение идёт во вставку
+        val fileExercise =
+            pullUps.copy(
+                id = 0L,
+                name = "Планка",
+                category = ExerciseCategory.CORE,
+                measuredBy = ExerciseMeasuredBy.TIME,
+                isArchived = true
+            )
+
+        // When
+        val (toInsert, _, toArchive) =
+            mergeBackup(listOf(pullUps), emptyList(), listOf(fileExercise), emptyList())
+
+        // Then
+        assertEquals(
+            listOf("Планка"),
+            toInsert.map { it.name },
+            "Новое имя попадает в список вставки"
+        )
+        assertTrue(
+            toArchive.isEmpty(),
+            "Без совпадения имени в списке архивации пусто"
+        )
+    }
+
+    @Test
+    fun import_when_duplicateExerciseArchivedInFile_then_existingArchived() =
         runTest {
             // Given: в каталоге «Планка» активна (isArchived = false), файл
             // содержит «Планка» с isArchived = true — дедупликация по имени
-            // (spec-сценарий «Признак архивации существующего упражнения при
-            // дедупликации не меняется»)
+            // (spec-сценарий «Архивация существующего упражнения из файла
+            // применяется»): восстановление после «Удалить все данные»
+            // возвращает архивацию
             val existingActivePlank =
                 pullUps.copy(
                     name = "Планка",
@@ -560,7 +645,7 @@ class ImportBackupUseCaseTest {
             // When
             val result = useCase(uri)
 
-            // Then — дубликат не вставляется, существующее остаётся активным
+            // Then — дубликат не вставляется, существующее уходит в архив
             assertTrue(result.isSuccess, "Дедупликация не ломает импорт")
             val exercisesSlot = slot<List<Exercise>>()
             coVerify { repository.importData(capture(exercisesSlot), any()) }
@@ -568,14 +653,9 @@ class ImportBackupUseCaseTest {
                 exercisesSlot.captured.isEmpty(),
                 "Дубликат имени не создаёт новое упражнение"
             )
-            assertFalse(
-                repository
-                    .getAllExercises()
-                    .getOrThrow()
-                    .single()
-                    .isArchived,
-                "Существующее упражнение остаётся со своим прежним isArchived = false"
-            )
+            coVerify {
+                repository.setArchived(existingActivePlank.id, true)
+            }
         }
 
     @Test

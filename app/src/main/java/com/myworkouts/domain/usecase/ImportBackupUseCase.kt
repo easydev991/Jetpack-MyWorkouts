@@ -95,9 +95,22 @@ class ImportBackupUseCase(
             repository.getAllEntries().getOrElse { error ->
                 return Result.failure(error)
             }
-        val (exercisesToInsert, entriesToInsert) =
+        val (exercisesToInsert, entriesToInsert, idsToArchive) =
             mergeBackup(existingExercises, existingEntries, fileExercises, fileEntries)
-        return repository.importData(exercisesToInsert, entriesToInsert)
+        val importResult = repository.importData(exercisesToInsert, entriesToInsert)
+        importResult.getOrElse { error ->
+            return Result.failure(error)
+        }
+        // Односторонняя архивация после успешного слияния (design Decision 2):
+        // id взяты из снимка, сделанного в этом же вызове, поэтому сбой
+        // архивации практически недостижим и проваливает импорт loud'ом;
+        // повторный импорт безопасен — merge идемпотентен по построению.
+        idsToArchive.forEach { id ->
+            repository.setArchived(id, true).getOrElse { error ->
+                return Result.failure(error)
+            }
+        }
+        return importResult
     }
 }
 
@@ -117,29 +130,38 @@ private data class EntryContentKey(
 )
 
 /**
- * Чистая функция merge (design Decision 4): возвращает пару «упражнения к
- * вставке, записи к вставке». Упражнения — отсутствующие в текущем каталоге
- * по ключу `name.trim().lowercase()`, всегда с `isCustom = true` (файл
- * недоверенный) и `id = 0` (присвоит БД). Записи — с разрешённым по имени
- * упражнением, прошедшие [EntryValidator] против его `measuredBy` и не
- * дублирующие по содержимому ни текущие, уже взятые из этого же файла.
- * «Плохие» элементы пропускаются без провала всего импорта.
+ * Чистая функция merge (design Decision 4): возвращает тройку «упражнения к
+ * вставке, записи к вставке, id существующих упражнений к архивации».
+ * Упражнения — отсутствующие в текущем каталоге по ключу
+ * `name.trim().lowercase()`, всегда с `isCustom = true` (файл недоверенный)
+ * и `id = 0` (присвоит БД). Записи — с разрешённым по имени упражнением,
+ * прошедшие [EntryValidator] против его `measuredBy` и не дублирующие по
+ * содержимому ни текущие, уже взятые из этого же файла. «Плохие» элементы
+ * пропускаются без провала всего импорта. Третий элемент — односторонняя
+ * архивация (design Decision 1): id существующих упражнений, которые в файле
+ * помечены `isArchived = true`, а сами активны; разархивация из файла
+ * не выполняется.
  */
 internal fun mergeBackup(
     existingExercises: List<Exercise>,
     existingEntries: List<ExerciseEntry>,
     fileExercises: List<Exercise>,
     fileEntries: List<BackupEntry>
-): Pair<List<Exercise>, List<BackupEntry>> {
-    val existingKeys =
-        existingExercises
-            .map { it.name.trim().lowercase() }
-            .toSet()
+): Triple<List<Exercise>, List<BackupEntry>, List<Long>> {
+    val existingByName =
+        existingExercises.associateBy { it.name.trim().lowercase() }
     val exercisesToInsert =
         fileExercises
-            .filter { it.name.trim().lowercase() !in existingKeys }
+            .filter { it.name.trim().lowercase() !in existingByName }
             .distinctBy { it.name.trim().lowercase() }
             .map { it.copy(isCustom = true, id = 0L) }
+    val idsToArchive =
+        fileExercises
+            .filter { it.isArchived }
+            .mapNotNull { existingByName[it.name.trim().lowercase()] }
+            .filter { !it.isArchived }
+            .map { it.id }
+            .distinct()
     val measuredByKey =
         buildMap {
             existingExercises.forEach { put(it.name.trim().lowercase(), it.measuredBy) }
@@ -187,7 +209,7 @@ internal fun mergeBackup(
         }
         entriesToInsert.add(backupEntry)
     }
-    return exercisesToInsert to entriesToInsert
+    return Triple(exercisesToInsert, entriesToInsert, idsToArchive)
 }
 
 private fun ExerciseEntry.contentKey(name: String): EntryContentKey =
