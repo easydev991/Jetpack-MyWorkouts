@@ -106,6 +106,18 @@ private val previewNoCommentItem =
         date = 1_721_600_000_000L
     )
 
+private val previewAustralianPullupsItem =
+    EntryListItem(
+        id = 7L,
+        exerciseName = "Австралийские подтягивания",
+        iconNumber = ExerciseIcons.PULLUPS_AUSTRALIAN,
+        sets = 3,
+        reps = 12,
+        durationSec = null,
+        comment = "ноги на опоре, тело в прямой линии",
+        date = 1_721_700_000_000L
+    )
+
 @Preview(showBackground = true, locale = "ru")
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
 @Composable
@@ -169,6 +181,14 @@ internal fun EntryListItemRowCommentPreview() {
                 // Длинный комментарий с весом — после строки веса, «…»
                 EntryListItemRow(
                     item = previewLongCommentWithWeightItem,
+                    separator = " х ",
+                    isSelected = false,
+                    onOpenMenu = {}
+                )
+                // Длинное название + комментарий — контроль отступов
+                // на «Австралийских подтягиваниях»
+                EntryListItemRow(
+                    item = previewAustralianPullupsItem,
                     separator = " х ",
                     isSelected = false,
                     onOpenMenu = {}

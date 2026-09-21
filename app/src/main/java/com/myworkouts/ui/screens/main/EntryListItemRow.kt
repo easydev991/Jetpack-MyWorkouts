@@ -176,7 +176,11 @@ private fun TitleValueRow(
             text = value,
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.End
+            textAlign = TextAlign.End,
+            // Гарантированный минимальный зазор до названия: SpaceBetween
+            // оставляет 0dp, когда длинное название (weight(1f)) занимает
+            // всю ширину
+            modifier = Modifier.padding(start = 12.dp)
         )
     }
 }

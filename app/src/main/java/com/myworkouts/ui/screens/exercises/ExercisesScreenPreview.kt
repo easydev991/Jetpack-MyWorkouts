@@ -1,4 +1,4 @@
-// TooManyFunctions подавлен осознанно: 11 preview-функций — это требование
+// TooManyFunctions подавлен осознанно: 10 preview-функций — это требование
 // конвенции проекта (светлая + тёмная тема для каждого ключевого состояния,
 // AGENTS.md), а не раздувание логики; дробить превью на файлы хуже подавления.
 @file:Suppress("TooManyFunctions")
@@ -144,24 +144,6 @@ internal fun ExercisesScreenContentLoadingPreview() {
         Surface(modifier = Modifier.fillMaxSize()) {
             // Начальное состояние до первой эмиссии: тело пустое, FAB виден
             ExercisesScreenContent(state = previewScreenState(uiState = ExercisesUiState.Loading))
-        }
-    }
-}
-
-@Preview(showBackground = true, locale = "ru")
-@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
-@Composable
-internal fun ExerciseListItemRowPreview() {
-    JetpackMyWorkoutsTheme {
-        // Surface задаёт LocalContentColor = onSurface — без него тексты
-        // (без явного цвета) остаются чёрными в тёмной теме
-        Surface {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // Обычная строка: с комментарием и лейблом «повторы»
-                ExerciseListItemRow(exercise = previewPullups)
-                // Подсвеченная — как при открытом long-press меню
-                ExerciseListItemRow(exercise = previewPlank, isSelected = true)
-            }
         }
     }
 }
