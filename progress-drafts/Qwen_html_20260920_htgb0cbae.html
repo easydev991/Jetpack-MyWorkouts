@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --bg-body: #0f0f0f;
+    --bg-phone: #121212;
+    --bg-card: #1E1E1E;
+    --bg-elev: #2A2A2A;
+    --border: #222;
+    --text: #FFF;
+    --text-dim: #888;
+    --text-mute: #666;
+    --bg-selected: #232B27;
+    --shadow: rgba(0, 0, 0, 0.5);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg-body: #F5F5F5;
+      --bg-phone: #FFFFFF;
+      --bg-card: #F0F0F0;
+      --bg-elev: #E5E5E5;
+      --border: #DDDDDD;
+      --text: #1A1A1A;
+      --text-dim: #555;
+      --text-mute: #888;
+      --bg-selected: #C8E6C9;
+      --shadow: rgba(0, 0, 0, 0.08);
+    }
+  }
+
+body { background: var(--bg-phone); font-family: sans-serif; display: flex; justify-content: center; padding: 20px 0; margin: 0; }
+  .phone { width: 380px; background: var(--bg-card); border-radius: 30px; padding: 20px; color: var(--text); }
+  .header { font-size: 24px; font-weight: bold; margin-bottom: 20px; }
+
+  .selector { background: var(--bg-elev); padding: 12px 16px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; font-size: 14px;}
+  .selector-value { color: #29B6F6; font-weight: bold; }
+
+  .big-metric { text-align: center; margin-bottom: 24px; }
+  .big-metric-label { font-size: 14px; color: var(--text-dim); }
+  .big-metric-value { font-size: 48px; font-weight: bold; color: #29B6F6; }
+  .big-metric-diff { font-size: 14px; color: #00E676; }
+
+  .line-chart { height: 150px; position: relative; margin-bottom: 30px; border-bottom: 1px solid var(--border); border-left: 1px solid var(--border);}
+  .chart-line { position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; }
+
+  /* Баланс по нашим категориям (PUSH/PULL/LEGS/CORE/CARDIO) */
+  .cat-breakdown { background: var(--bg-elev); padding: 16px; border-radius: 16px; }
+  .cat-item { margin-bottom: 16px; }
+  .cat-item:last-child { margin-bottom: 0; }
+  .cat-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+  .cat-bar-bg { height: 8px; background: var(--bg-card); border-radius: 4px; overflow: hidden; }
+  .cat-bar-fill { height: 100%; background: #29B6F6; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="header">Прогресс</div>
+
+  <!-- Селектор упражнения — bodyweight -->
+  <div class="selector">
+    <span>Упражнение:</span>
+    <span class="selector-value">Подтягивания ▾</span>
+  </div>
+
+  <!-- Было: "Расчетный 1ПМ 112.5 кг" + "▲ +2.5 кг". Убрано: 1RM нет,
+       штанга не основной сценарий. Заменено на max reps. -->
+  <div class="big-metric">
+    <div class="big-metric-label">Лучший подход (Месяц)</div>
+    <div class="big-metric-value">15</div>
+    <div class="big-metric-diff">повторений · ▲ +3 к прошлому месяцу</div>
+  </div>
+
+  <div class="line-chart">
+    <svg class="chart-line" viewBox="0 0 300 150" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#29B6F6" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="#29B6F6" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d="M0,120 L50,100 L100,110 L150,80 L200,60 L250,40 L300,20 L300,150 L0,150 Z" fill="url(#grad)" />
+      <path d="M0,120 L50,100 L100,110 L150,80 L200,60 L250,40 L300,20" fill="none" stroke="#29B6F6" stroke-width="3" />
+    </svg>
+  </div>
+
+  <!-- Было: "Нагрузка на группы мышц: Грудь/Ноги/Спина/Руки" —
+       это группы мышц отдельной сущностью, у нас их нет. Заменено
+       на распределение по категориям ExerciseCategory. -->
+  <div class="section-title" style="font-size: 16px; font-weight: bold; margin-bottom: 16px;">Распределение по категориям</div>
+  <div class="cat-breakdown">
+    <div class="cat-item">
+      <div class="cat-header"><span>PUSH</span><span>35%</span></div>
+      <div class="cat-bar-bg"><div class="cat-bar-fill" style="width: 35%;"></div></div>
+    </div>
+    <div class="cat-item">
+      <div class="cat-header"><span>PULL</span><span>30%</span></div>
+      <div class="cat-bar-bg"><div class="cat-bar-fill" style="width: 30%;"></div></div>
+    </div>
+    <div class="cat-item">
+      <div class="cat-header"><span>LEGS</span><span>20%</span></div>
+      <div class="cat-bar-bg"><div class="cat-bar-fill" style="width: 20%;"></div></div>
+    </div>
+    <div class="cat-item">
+      <div class="cat-header"><span>CORE</span><span>10%</span></div>
+      <div class="cat-bar-bg"><div class="cat-bar-fill" style="width: 10%;"></div></div>
+    </div>
+    <div class="cat-item">
+      <div class="cat-header"><span>CARDIO</span><span>5%</span></div>
+      <div class="cat-bar-bg"><div class="cat-bar-fill" style="width: 5%;"></div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

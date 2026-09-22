@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --bg-body: #0f0f0f;
+    --bg-phone: #121212;
+    --bg-card: #1E1E1E;
+    --bg-elev: #2A2A2A;
+    --border: #222;
+    --text: #FFF;
+    --text-dim: #888;
+    --text-mute: #666;
+    --bg-selected: #232B27;
+    --shadow: rgba(0, 0, 0, 0.5);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg-body: #F5F5F5;
+      --bg-phone: #FFFFFF;
+      --bg-card: #F0F0F0;
+      --bg-elev: #E5E5E5;
+      --border: #DDDDDD;
+      --text: #1A1A1A;
+      --text-dim: #555;
+      --text-mute: #888;
+      --bg-selected: #C8E6C9;
+      --shadow: rgba(0, 0, 0, 0.08);
+    }
+  }
+
+body { background: var(--bg-phone); font-family: sans-serif; display: flex; justify-content: center; padding: 20px 0; margin: 0; }
+  .phone { width: 380px; background: var(--bg-card); border-radius: 30px; padding: 20px; color: var(--text); }
+  .header { font-size: 24px; font-weight: bold; margin-bottom: 20px; }
+
+  .streak-card { background: linear-gradient(135deg, #FF5722, #FF9800); padding: 24px; border-radius: 20px; text-align: center; margin-bottom: 24px; }
+  .streak-fire { font-size: 48px; }
+  .streak-value { font-size: 36px; font-weight: bold; margin: 8px 0; }
+  .streak-label { font-size: 14px; opacity: 0.9; }
+
+  .heatmap { background: var(--bg-elev); padding: 16px; border-radius: 16px; margin-bottom: 24px; overflow-x: auto; }
+  .heatmap-title { font-size: 14px; color: var(--text-dim); margin-bottom: 12px; }
+  .heatmap-grid { display: grid; grid-template-rows: repeat(7, 12px); grid-auto-flow: column; gap: 4px; width: max-content; }
+  .day { width: 12px; height: 12px; border-radius: 3px; background: var(--border); }
+  .day.l1 { background: #1B5E20; }
+  .day.l2 { background: #2E7D32; }
+  .day.l3 { background: #4CAF50; }
+  .day.l4 { background: #81C784; }
+
+  /* Краткая сводка вместо удалённых "Достижений" */
+  .summary { background: var(--bg-elev); border-radius: 16px; overflow: hidden; }
+  .summary-item { padding: 14px 16px; display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); }
+  .summary-item:last-child { border-bottom: none; }
+  .summary-label { font-size: 13px; color: var(--text-dim); }
+  .summary-val { font-size: 16px; font-weight: bold; color: #69F0AE; }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="header">Активность</div>
+
+  <!-- Streak: вычисляется из date в ExerciseEntry -->
+  <div class="streak-card">
+    <div class="streak-fire">🔥</div>
+    <div class="streak-value">14 дней</div>
+    <div class="streak-label">Рекорд серии: 21 день</div>
+  </div>
+
+  <!-- Heatmap: дни с записями за N месяцев, интенсивность = кол-во записей -->
+  <div class="heatmap">
+    <div class="heatmap-title">Активность за последние 4 месяца</div>
+    <div class="heatmap-grid">
+      <div class="day l1"></div><div class="day l3"></div><div class="day"></div><div class="day l2"></div><div class="day l4"></div><div class="day l1"></div><div class="day"></div>
+      <div class="day l2"></div><div class="day"></div><div class="day l1"></div><div class="day l4"></div><div class="day l2"></div><div class="day"></div><div class="day l3"></div>
+      <div class="day"></div><div class="day l2"></div><div class="day l3"></div><div class="day l1"></div><div class="day"></div><div class="day l4"></div><div class="day l1"></div>
+    </div>
+  </div>
+
+  <!-- Было: "Достижения (Месяц) — Тоннажник/День ног/Молния" — удалено:
+       достижений (badges) в приложении нет, "Тоннажник" опирался на кг.
+       Заменено простой сводкой месяца. -->
+  <div class="section-title" style="font-size: 16px; font-weight: bold; margin-bottom: 16px;">За месяц</div>
+  <div class="summary">
+    <div class="summary-item"><span class="summary-label">Тренировок</span><span class="summary-val">16</span></div>
+    <div class="summary-item"><span class="summary-label">Всего повторений</span><span class="summary-val">3 240</span></div>
+    <div class="summary-item"><span class="summary-label">Уникальных упражнений</span><span class="summary-val">8</span></div>
+  </div>
+</div>
+
+</body>
+</html>

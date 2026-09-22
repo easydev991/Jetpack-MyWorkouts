@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --bg-body: #0f0f0f;
+    --bg-phone: #121212;
+    --bg-card: #1E1E1E;
+    --bg-elev: #2A2A2A;
+    --border: #222;
+    --text: #FFF;
+    --text-dim: #888;
+    --text-mute: #666;
+    --bg-selected: #232B27;
+    --shadow: rgba(0, 0, 0, 0.5);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg-body: #F5F5F5;
+      --bg-phone: #FFFFFF;
+      --bg-card: #F0F0F0;
+      --bg-elev: #E5E5E5;
+      --border: #DDDDDD;
+      --text: #1A1A1A;
+      --text-dim: #555;
+      --text-mute: #888;
+      --bg-selected: #C8E6C9;
+      --shadow: rgba(0, 0, 0, 0.08);
+    }
+  }
+
+body { background: var(--bg-body); font-family: -apple-system, sans-serif; display: flex; justify-content: center; padding: 20px 0; margin: 0; }
+  .phone { width: 380px; background: var(--bg-phone); border-radius: 32px; padding: 20px; color: var(--text); }
+
+  .ex-selector { background: var(--bg-card); padding: 14px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;}
+  .ex-name { font-size: 16px; font-weight: bold; }
+  .ex-arrow { color: var(--text-dim); }
+
+  .max-reps { text-align: center; margin-bottom: 24px; padding: 20px; background: var(--bg-card); border-radius: 20px; border: 1px solid var(--border);}
+  .max-label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px;}
+  .max-val { font-size: 42px; font-weight: bold; color: #69F0AE; margin: 8px 0; }
+  .max-sub { font-size: 13px; color: var(--text-dim); }
+
+  .chart-card { background: var(--bg-card); padding: 16px; border-radius: 16px; margin-bottom: 20px;}
+  .chart-header { display: flex; justify-content: space-between; margin-bottom: 16px; }
+  .chart-title { font-size: 14px; font-weight: 600; }
+  .chart-legend { font-size: 12px; color: var(--text-dim); }
+  .chart-area { height: 120px; position: relative; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-left: 10px;}
+  .dot { position: absolute; width: 8px; height: 8px; background: #448AFF; border-radius: 50%; transform: translate(-50%, 50%); border: 2px solid var(--bg-phone);}
+  .dot.max { background: #69F0AE; width: 10px; height: 10px; }
+
+  .records { background: var(--bg-card); border-radius: 16px; overflow: hidden;}
+  .rec-item { padding: 14px 16px; display: flex; justify-content: space-between; border-bottom: 1px solid var(--border);}
+  .rec-item:last-child { border-bottom: none;}
+  .rec-type { font-size: 13px; color: var(--text-dim);}
+  .rec-val { font-size: 14px; font-weight: bold; color: #69F0AE;}
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="ex-selector">
+    <span class="ex-name">Подтягивания</span>
+    <span class="ex-arrow">▾</span>
+  </div>
+
+  <div class="max-reps">
+    <div class="max-label">Лучший подход (Месяц)</div>
+    <div class="max-val">15</div>
+    <div class="max-sub">повторений без дополнительного веса</div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-header">
+      <div class="chart-title">Рост Max Reps</div>
+      <div class="chart-legend">Последние 6 тренировок</div>
+    </div>
+    <div class="chart-area">
+      <div class="dot" style="left: 10%; bottom: 30%;"></div>
+      <div class="dot" style="left: 25%; bottom: 35%;"></div>
+      <div class="dot" style="left: 40%; bottom: 40%;"></div>
+      <div class="dot" style="left: 55%; bottom: 45%;"></div>
+      <div class="dot" style="left: 70%; bottom: 55%;"></div>
+      <div class="dot max" style="left: 85%; bottom: 70%;"></div>
+      <div class="dot max" style="left: 100%; bottom: 75%;"></div>
+    </div>
+  </div>
+
+  <div class="records">
+    <div class="rec-item"><span class="rec-type">Max Reps (за подход)</span><span class="rec-val">15 повт.</span></div>
+    <div class="rec-item"><span class="rec-type">Max Volume (за тренировку)</span><span class="rec-val">60 повт.</span></div>
+    <div class="rec-item"><span class="rec-type">Всего подходов (Месяц)</span><span class="rec-val">24</span></div>
+  </div>
+</div>
+
+</body>
+</html>

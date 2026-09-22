@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --bg-body: #0f0f0f;
+    --bg-phone: #121212;
+    --bg-card: #1E1E1E;
+    --bg-elev: #2A2A2A;
+    --border: #222;
+    --text: #FFF;
+    --text-dim: #888;
+    --text-mute: #666;
+    --bg-selected: #232B27;
+    --shadow: rgba(0, 0, 0, 0.5);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg-body: #F5F5F5;
+      --bg-phone: #FFFFFF;
+      --bg-card: #F0F0F0;
+      --bg-elev: #E5E5E5;
+      --border: #DDDDDD;
+      --text: #1A1A1A;
+      --text-dim: #555;
+      --text-mute: #888;
+      --bg-selected: #C8E6C9;
+      --shadow: rgba(0, 0, 0, 0.08);
+    }
+  }
+
+body { background: var(--bg-body); font-family: -apple-system, sans-serif; display: flex; justify-content: center; padding: 20px 0; margin: 0; }
+  .phone { width: 380px; background: var(--bg-phone); border-radius: 32px; padding: 20px; color: var(--text); min-height: 700px; }
+
+  .top-tabs { display: flex; background: var(--bg-card); border-radius: 12px; padding: 4px; margin-bottom: 16px; }
+  .top-tab { flex: 1; text-align: center; padding: 10px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--text-dim); }
+  .top-tab.active { background: #2962FF; color: var(--text); }
+
+  .date-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 0 4px;}
+  .date-arrow { width: 32px; height: 32px; background: var(--bg-card); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--text-dim);}
+  .date-text { font-size: 14px; font-weight: 500; text-align: center; }
+  .date-sub { font-size: 12px; color: var(--text-dim); display: block; margin-top: 2px;}
+
+  .widgets { display: flex; gap: 10px; margin-bottom: 24px; }
+  .widget { flex: 1; background: var(--bg-card); padding: 14px; border-radius: 16px; }
+  .widget-label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; display: flex; justify-content: space-between;}
+  .widget-val { font-size: 22px; font-weight: bold; }
+  .widget-diff { font-size: 11px; font-weight: bold; }
+  .diff-up { color: #00E676; }
+  .diff-down { color: #FF5252; }
+
+  .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-dim);}
+  .bar-chart { display: flex; justify-content: space-between; align-items: flex-end; height: 100px; background: var(--bg-card); padding: 16px 12px 8px; border-radius: 16px; }
+  .bar-col { display: flex; flex-direction: column; align-items: center; flex: 1; }
+  .bar { width: 16px; background: #2962FF; border-radius: 4px; margin-bottom: 6px; }
+  .bar.empty { background: var(--bg-elev); }
+  .bar-label { font-size: 10px; color: var(--text-mute); }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="top-tabs">
+    <div class="top-tab active">Активность</div>
+    <div class="top-tab">Упражнения</div>
+  </div>
+
+  <div class="date-nav">
+    <div class="date-arrow">‹</div>
+    <div class="date-text">
+      14 Сент — 20 Сент
+      <span class="date-sub">Неделя 3</span>
+    </div>
+    <div class="date-arrow">›</div>
+  </div>
+
+  <!-- Было: "Тренировки / Объем (тонн) / Время".
+       Убрано: объём в тоннах (нет единой метрики, bodyweight) и
+       длительность тренировки (нет Workout entity).
+       Заменено на "Всего повторений" — sum(reps) за период. -->
+  <div class="widgets">
+    <div class="widget">
+      <div class="widget-label">Тренировки</div>
+      <div class="widget-val">3</div>
+      <div class="widget-diff diff-up">▲ +1 к пр. нед.</div>
+    </div>
+    <div class="widget">
+      <div class="widget-label">Всего повторений</div>
+      <div class="widget-val">840</div>
+      <div class="widget-diff diff-up">▲ +120</div>
+    </div>
+    <div class="widget">
+      <div class="widget-label">Уникальных упражнений</div>
+      <div class="widget-val">6</div>
+      <div class="widget-diff diff-down">▼ -1</div>
+    </div>
+  </div>
+
+  <!-- Было: "Объем по дням (кг)" — удалено.
+       Заменено на "Повторения по дням" — sum(reps) по дате. -->
+  <div class="chart-title">Повторения по дням</div>
+  <div class="bar-chart">
+    <div class="bar-col"><div class="bar" style="height: 60%;"></div><div class="bar-label">Пн</div></div>
+    <div class="bar-col"><div class="bar empty" style="height: 10%;"></div><div class="bar-label">Вт</div></div>
+    <div class="bar-col"><div class="bar" style="height: 80%;"></div><div class="bar-label">Ср</div></div>
+    <div class="bar-col"><div class="bar empty" style="height: 10%;"></div><div class="bar-label">Чт</div></div>
+    <div class="bar-col"><div class="bar" style="height: 100%;"></div><div class="bar-label">Пт</div></div>
+    <div class="bar-col"><div class="bar" style="height: 40%;"></div><div class="bar-label">Сб</div></div>
+    <div class="bar-col"><div class="bar empty" style="height: 10%;"></div><div class="bar-label">Вс</div></div>
+  </div>
+</div>
+
+</body>
+</html>

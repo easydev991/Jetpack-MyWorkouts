@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stats Dashboard</title>
+<style>
+  :root {
+    --bg-body: #0f0f0f;
+    --bg-phone: #121212;
+    --bg-card: #1E1E1E;
+    --bg-elev: #2A2A2A;
+    --border: #222;
+    --text: #FFF;
+    --text-dim: #888;
+    --text-mute: #666;
+    --bg-selected: #232B27;
+    --shadow: rgba(0, 0, 0, 0.5);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg-body: #F5F5F5;
+      --bg-phone: #FFFFFF;
+      --bg-card: #F0F0F0;
+      --bg-elev: #E5E5E5;
+      --border: #DDDDDD;
+      --text: #1A1A1A;
+      --text-dim: #555;
+      --text-mute: #888;
+      --bg-selected: #C8E6C9;
+      --shadow: rgba(0, 0, 0, 0.08);
+    }
+  }
+
+body { background: var(--bg-phone); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; padding: 20px 0; margin: 0; }
+  .phone { width: 380px; background: var(--bg-card); border-radius: 30px; padding: 20px; color: var(--text); box-shadow: 0 10px 30px var(--shadow); }
+  .header { font-size: 24px; font-weight: bold; margin-bottom: 20px; }
+  .tabs { display: flex; background: var(--bg-elev); border-radius: 12px; padding: 4px; margin-bottom: 24px; }
+  .tab { flex: 1; text-align: center; padding: 10px 0; border-radius: 10px; font-size: 14px; color: var(--text-dim); font-weight: 500; }
+  .tab.active { background: #00E676; color: #000; font-weight: bold; }
+
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: var(--bg-elev); padding: 16px; border-radius: 16px; }
+  .stat-card.wide { grid-column: span 2; }
+  .stat-label { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+  .stat-value { font-size: 24px; font-weight: bold; }
+  .stat-value span { font-size: 14px; color: var(--text-dim); font-weight: normal; }
+
+  .chart-section { margin-bottom: 24px; }
+  .section-title { font-size: 16px; font-weight: bold; margin-bottom: 16px; }
+  .bar-chart { display: flex; justify-content: space-between; align-items: flex-end; height: 120px; padding: 0 10px; }
+  .bar-wrapper { display: flex; flex-direction: column; align-items: center; flex: 1; }
+  .bar { width: 20px; background: #00E676; border-radius: 4px 4px 0 0; margin-bottom: 8px; transition: height 0.3s; }
+  .bar-label { font-size: 10px; color: var(--text-dim); }
+
+  .pr-list { background: var(--bg-elev); border-radius: 16px; overflow: hidden; }
+  .pr-item { display: flex; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--border); }
+  .pr-item:last-child { border-bottom: none; }
+  .pr-name { font-weight: 500; }
+  .pr-weight { color: #00E676; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="header">Статистика</div>
+
+  <div class="tabs">
+    <div class="tab">День</div>
+    <div class="tab active">Неделя</div>
+    <div class="tab">Месяц</div>
+    <div class="tab">Год</div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Тренировок</div>
+      <div class="stat-value">4</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Всего повторений</div>
+      <div class="stat-value">840</div>
+    </div>
+    <div class="stat-card wide">
+      <div class="stat-label">В среднем за тренировку</div>
+      <div class="stat-value">210 <span>повторений</span></div>
+    </div>
+  </div>
+
+  <div class="chart-section">
+    <div class="section-title">Повторения по дням</div>
+    <div class="bar-chart">
+      <div class="bar-wrapper"><div class="bar" style="height: 40%;"></div><div class="bar-label">Пн</div></div>
+      <div class="bar-wrapper"><div class="bar" style="height: 80%;"></div><div class="bar-label">Вт</div></div>
+      <div class="bar-wrapper"><div class="bar" style="height: 0%;"></div><div class="bar-label">Ср</div></div>
+      <div class="bar-wrapper"><div class="bar" style="height: 60%;"></div><div class="bar-label">Чт</div></div>
+      <div class="bar-wrapper"><div class="bar" style="height: 100%;"></div><div class="bar-label">Пт</div></div>
+      <div class="bar-wrapper"><div class="bar" style="height: 30%;"></div><div class="bar-label">Сб</div></div>
+      <div class="bar-wrapper"><div class="bar" style="height: 0%;"></div><div class="bar-label">Вс</div></div>
+    </div>
+  </div>
+
+  <div class="section-title">Личные рекорды (Неделя)</div>
+  <div class="pr-list">
+    <div class="pr-item"><span class="pr-name">Подтягивания</span><span class="pr-weight">15 повторений</span></div>
+    <div class="pr-item"><span class="pr-name">Отжимания</span><span class="pr-weight">50 повторений</span></div>
+  </div>
+</div>
+
+</body>
+</html>

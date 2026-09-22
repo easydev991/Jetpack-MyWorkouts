@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Progress drafts</title>
+<style>
+  body {
+    background: #0d0d0d;
+    color: #ddd;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+  }
+  .tabbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 16px;
+    background: #1a1a1a;
+    border-bottom: 1px solid #2a2a2a;
+  }
+  .tab {
+    background: #222;
+    color: #aaa;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    text-decoration: none;
+    border: 1px solid #2a2a2a;
+  }
+  .tab:hover { color: #fff; border-color: #444; }
+  .tab.active {
+    background: #00E676;
+    border-color: #00E676;
+    color: #000;
+    font-weight: 600;
+  }
+  .tab.primary { border-color: #00E676; color: #00E676; }
+  .tab.primary.active { color: #000; }
+  .divider {
+    width: 1px;
+    height: 22px;
+    background: #2a2a2a;
+    margin: 0 4px;
+  }
+  iframe {
+    display: block;
+    width: 100%;
+    height: calc(100vh - 53px);
+    border: 0;
+    background: #0d0d0d;
+  }
+</style>
+</head>
+<body>
+
+<div class="tabbar">
+  <a class="tab primary" href="iter4_v1.html" target="view">Портрет</a>
+  <a class="tab primary" href="iter5_compare.html" target="view">Ландшафт</a>
+  <span class="divider"></span>
+  <a class="tab" href="Qwen_html_20260920_0kpfuwwrg.html" target="view">Статистика</a>
+  <a class="tab" href="Qwen_html_20260920_4fd7cqzwx.html" target="view">Баланс</a>
+  <a class="tab" href="Qwen_html_20260920_9ptreqnzi.html" target="view">История</a>
+  <a class="tab" href="Qwen_html_20260920_eqqw6vivg.html" target="view">Интенсивность</a>
+  <a class="tab" href="Qwen_html_20260920_f1017n9my.html" target="view">Рекорд</a>
+  <a class="tab" href="Qwen_html_20260920_htgb0cbae.html" target="view">Прогресс</a>
+  <a class="tab" href="Qwen_html_20260920_jmwt6s6q6.html" target="view">Активность</a>
+  <a class="tab" href="Qwen_html_20260920_tn05z0lv4.html" target="view">Max Reps</a>
+  <a class="tab" href="Qwen_html_20260920_whjpy3i8m.html" target="view">Дашборд</a>
+</div>
+
+<iframe name="view" src="iter4_v1.html" title="draft"></iframe>
+
+<script>
+  const tabs = document.querySelectorAll('.tab');
+  tabs.forEach((t) => {
+    if (t.getAttribute('href') === 'iter4_v1.html') t.classList.add('active');
+    t.addEventListener('click', () => {
+      tabs.forEach((x) => x.classList.remove('active'));
+      t.classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>

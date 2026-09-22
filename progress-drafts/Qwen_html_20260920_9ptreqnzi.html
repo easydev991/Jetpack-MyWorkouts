@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<style>
+  :root {
+    --bg-body: #0f0f0f;
+    --bg-phone: #121212;
+    --bg-card: #1E1E1E;
+    --bg-elev: #2A2A2A;
+    --border: #222;
+    --text: #FFF;
+    --text-dim: #888;
+    --text-mute: #666;
+    --bg-selected: #232B27;
+    --shadow: rgba(0, 0, 0, 0.5);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg-body: #F5F5F5;
+      --bg-phone: #FFFFFF;
+      --bg-card: #F0F0F0;
+      --bg-elev: #E5E5E5;
+      --border: #DDDDDD;
+      --text: #1A1A1A;
+      --text-dim: #555;
+      --text-mute: #888;
+      --bg-selected: #C8E6C9;
+      --shadow: rgba(0, 0, 0, 0.08);
+    }
+  }
+
+body { background: var(--bg-body); font-family: -apple-system, sans-serif; display: flex; justify-content: center; padding: 20px 0; margin: 0; }
+  .phone { width: 380px; background: var(--bg-phone); border-radius: 32px; padding: 20px; color: var(--text); }
+
+  .title { font-size: 20px; font-weight: bold; margin-bottom: 20px; }
+
+  /* Категории PUSH/PULL/LEGS/CORE/CARDIO — те же, что в ExerciseCategory */
+  .section { margin-bottom: 24px; }
+  .section-title { font-size: 14px; font-weight: 600; color: var(--text-dim); margin-bottom: 12px; }
+  .cat-row { margin-bottom: 14px; }
+  .cat-header { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+  .cat-bar { height: 8px; background: var(--bg-card); border-radius: 4px; overflow: hidden; }
+  .cat-fill { height: 100%; border-radius: 4px; }
+  .fill-push { background: #FF5252; width: 35%; }
+  .fill-pull { background: #448AFF; width: 30%; }
+  .fill-legs { background: #69F0AE; width: 20%; }
+  .fill-core { background: #E040FB; width: 10%; }
+  .fill-cardio { background: #FFD740; width: 5%; }
+
+  .history-card { background: var(--bg-card); border-radius: 16px; overflow: hidden; }
+  .history-item { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .history-item:last-child { border-bottom: none; }
+  .hist-date { font-size: 12px; color: var(--text-dim); }
+  .hist-ex { font-size: 14px; font-weight: 500; margin-top: 2px; }
+  .hist-stats { text-align: right; }
+  .hist-reps { font-size: 16px; font-weight: bold; color: #448AFF; }
+  .hist-sets { font-size: 12px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="title">Баланс и Детали</div>
+
+  <!-- Баланс по нашим категориям: PUSH/PULL/LEGS/CORE/CARDIO -->
+  <div class="section">
+    <div class="section-title">Распределение по категориям (Месяц)</div>
+    <div class="cat-row">
+      <div class="cat-header"><span>PUSH</span><span>294 повт.</span></div>
+      <div class="cat-bar"><div class="cat-fill fill-push"></div></div>
+    </div>
+    <div class="cat-row">
+      <div class="cat-header"><span>PULL</span><span>252 повт.</span></div>
+      <div class="cat-bar"><div class="cat-fill fill-pull"></div></div>
+    </div>
+    <div class="cat-row">
+      <div class="cat-header"><span>LEGS</span><span>168 повт.</span></div>
+      <div class="cat-bar"><div class="cat-fill fill-legs"></div></div>
+    </div>
+    <div class="cat-row">
+      <div class="cat-header"><span>CORE</span><span>84 повт.</span></div>
+      <div class="cat-bar"><div class="cat-fill fill-core"></div></div>
+    </div>
+    <div class="cat-row">
+      <div class="cat-header"><span>CARDIO</span><span>42 мин</span></div>
+      <div class="cat-bar"><div class="cat-fill fill-cardio"></div></div>
+    </div>
+  </div>
+
+  <!-- История по упражнению — bodyweight, без штанги -->
+  <div class="section">
+    <div class="section-title">История: Подтягивания</div>
+    <div class="history-card">
+      <div class="history-item">
+        <div>
+          <div class="hist-date">18 Сентября</div>
+          <div class="hist-ex">Подтягивания</div>
+        </div>
+        <div class="hist-stats">
+          <div class="hist-reps">15 повт.</div>
+          <div class="hist-sets">3 × 10</div>
+        </div>
+      </div>
+      <div class="history-item">
+        <div>
+          <div class="hist-date">14 Сентября</div>
+          <div class="hist-ex">Подтягивания</div>
+        </div>
+        <div class="hist-stats">
+          <div class="hist-reps">12 повт.</div>
+          <div class="hist-sets">3 × 8</div>
+        </div>
+      </div>
+      <div class="history-item">
+        <div>
+          <div class="hist-date">10 Сентября</div>
+          <div class="hist-ex">Подтягивания</div>
+        </div>
+        <div class="hist-stats">
+          <div class="hist-reps">10 повт.</div>
+          <div class="hist-sets">3 × 8</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

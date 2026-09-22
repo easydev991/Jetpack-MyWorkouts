@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Обзор — Итерация 4</title>
+<style>
+  :root {
+    --bg-body: #0f0f0f;
+    --bg-phone: #121212;
+    --bg-card: #1E1E1E;
+    --bg-elev: #2A2A2A;
+    --border: #222;
+    --text: #FFF;
+    --text-dim: #888;
+    --text-mute: #666;
+    --bg-selected: #232B27;
+    --shadow: rgba(0, 0, 0, 0.5);
+    --accent-text: #00E676;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg-body: #F5F5F5;
+      --bg-phone: #FFFFFF;
+      --bg-card: #F0F0F0;
+      --bg-elev: #E5E5E5;
+      --border: #DDDDDD;
+      --text: #1A1A1A;
+      --text-dim: #555;
+      --text-mute: #888;
+      --bg-selected: #C8E6C9;
+      --shadow: rgba(0, 0, 0, 0.08);
+      --accent-text: #000000;
+    }
+  }
+
+body { background: var(--bg-body); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; padding: 20px 0; margin: 0; }
+  .phone { width: 380px; background: var(--bg-phone); border-radius: 32px; padding: 20px; color: var(--text); min-height: 760px; box-sizing: border-box; }
+
+  /* .title moved into .title-row */
+
+  /* Sub-tabs */
+  .tabs { display: flex; background: var(--bg-card); border-radius: 12px; padding: 4px; margin-bottom: 20px; }
+  .tabs button { flex: 1; appearance: none; background: transparent; border: 0; color: var(--text-dim); font: inherit; font-size: 14px; font-weight: 600; padding: 10px; border-radius: 10px; cursor: pointer; }
+  .tabs button.active { background: #00E676; color: #000; }
+
+  /* Период (живёт внутри stats панели) — стиль как у records-toggle */
+  .period {
+    display: flex;
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 20px;
+  }
+  .period button {
+    flex: 1;
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 10px;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .period button.active { background: #00E676; color: #000; }
+
+  .panel[hidden] { display: none; }
+  [hidden] { display: none !important; }
+
+  /* ===== Stats panel ===== */
+  .donut-wrap {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    margin: 8px auto 24px;
+  }
+  .donut { width: 100%; height: 100%; display: block; }
+  .donut .seg {
+    transition: stroke-width 0.2s ease, opacity 0.2s ease;
+  }
+  .donut .seg.dimmed { opacity: 0.25; }
+  .donut .seg.selected { stroke-width: 28; }
+  .donut .donut-reset {
+    fill: transparent;
+    pointer-events: all;
+  }
+  /* Центр donut всегда пустой — только для позиционирования. */
+  .donut-center {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .legend {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+  .legend-row {
+    background: var(--bg-card);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: opacity 0.2s ease, background 0.2s ease;
+  }
+  .legend-row.dimmed { opacity: 0.35; }
+  .legend-row.selected { background: var(--bg-selected); }
+  .legend-row .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+  .legend-swatch {
+    width: 14px; height: 14px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .legend-name { flex: 1; font-size: 14px; }
+  .legend-val { font-size: 14px; font-weight: bold; color: var(--text-dim); }
+
+  .legend-detail {
+    display: none;
+    border-top: 1px solid var(--bg-elev);
+  }
+  .legend-row.expanded .legend-detail { display: block; }
+  .ex-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  .ex-row + .ex-row { border-top: 1px solid var(--border); }
+  .ex-name { color: var(--text); }
+  .ex-val { color: var(--accent-text); font-weight: bold; }
+
+  /* Кнопка «назад к категориям» при drill-down */
+  .legend-back {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 10px 12px;
+    cursor: pointer;
+    color: var(--accent-text);
+    font-weight: 600;
+    font-size: 13px;
+    user-select: none;
+  }
+  .legend-back:hover { background: var(--bg-selected); }
+
+  /* ===== Records panel ===== */
+  .records-toggle {
+    display: flex;
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 20px;
+  }
+  .records-toggle button {
+    flex: 1;
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 10px;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .records-toggle button.active { background: #00E676; color: #000; }
+
+  .records-section {
+    background: var(--bg-card);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .rec-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .rec-row:first-of-type { border-top: 0; }
+  .rec-name { flex: 1; color: var(--text); }
+  .rec-val-block { display: flex; flex-direction: column; align-items: flex-end; }
+  .rec-val { color: var(--accent-text); font-weight: bold; }
+  .rec-date { font-size: 12px; color: var(--text-mute); }
+
+  .empty-hint {
+    padding: 16px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-mute);
+    background: var(--bg-card);
+    border-radius: 12px;
+  }
+
+  /* ===== Drill-down entries (EntryListItemRow + SectionHeader) ===== */
+  .workout-list { margin-top: 20px; }
+  .section-hdr {
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    color: var(--text-dim);
+    padding: 8px 0;
+  }
+  .section-hdr .line { flex: 1; height: 1px; background: var(--text-dim); }
+  .section-hdr .text { padding: 0 12px; }
+  .entry-row {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 8px;
+  }
+  .entry-row .title-v { display: flex; justify-content: space-between; align-items: center; }
+  .entry-row .title-v .name { font-weight: 500; }
+  .entry-row .title-v .val  { font-weight: 500; padding-left: 12px; }
+  .entry-row .weight-v {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-top: 4px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .entry-row .comment-v {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-top: 4px;
+  }
+
+  /* ===== Header (title + settings) ===== */
+  .title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .title-col { display: flex; flex-direction: column; }
+  .title { font-size: 24px; font-weight: bold; }
+  .title-sub { font-size: 14px; color: var(--text-dim); font-weight: normal; margin-top: 2px; }
+  .icon-btn {
+    appearance: none;
+    background: var(--bg-card);
+    border: 0;
+    color: var(--text);
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .icon-btn:hover { background: var(--bg-elev); }
+
+  /* ===== Settings panel ===== */
+  .settings-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .settings-title { font-size: 20px; font-weight: bold; }
+  .settings-list { background: var(--bg-card); border-radius: 16px; overflow: hidden; }
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 15px;
+  }
+  .settings-row:last-child { border-bottom: none; }
+  .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--bg-elev);
+    border-radius: 24px;
+    transition: 0.2s;
+  }
+  .slider::before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+  input:checked + .slider { background: #00E676; }
+  input:checked + .slider::before { transform: translateX(20px); background: #000; }
+
+  /* ===== Activity panel ===== */
+  .streak-card { background: linear-gradient(135deg, #FF5722, #FF9800); padding: 14px 18px; border-radius: 16px; margin-bottom: 16px; color: #FFF; display: flex; align-items: center; gap: 14px; }
+  .streak-icon { font-size: 32px; }
+  .streak-body { display: flex; flex-direction: column; }
+  .streak-val { font-size: 22px; font-weight: bold; line-height: 1.1; }
+  .streak-sub { font-size: 12px; opacity: 0.9; }
+  .heatmap { background: var(--bg-card); padding: 16px; border-radius: 16px; margin-bottom: 20px; overflow-x: auto; }
+  .heatmap-grid { display: grid; grid-template-rows: repeat(7, 12px); grid-auto-flow: column; gap: 4px; width: max-content; }
+  .day { width: 12px; height: 12px; border-radius: 3px; background: var(--bg-elev); }
+  .day.l1 { background: #1B5E20; }
+  .day.l2 { background: #2E7D32; }
+  .day.l3 { background: #4CAF50; }
+  .day.l4 { background: #81C784; }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="title-row" id="title-row">
+    <div class="title-col">
+      <div class="title" id="main-title">Обзор</div>
+      <div class="title-sub" id="title-sub" hidden></div>
+    </div>
+    <button class="icon-btn" id="settings-btn" aria-label="Настройки">⚙</button>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-tab="stats" class="active">Статистика</button>
+    <button data-tab="records">Рекорды</button>
+    <button data-tab="activity">Активность</button>
+  </div>
+
+  <!-- Stats panel -->
+  <div class="panel" id="panel-stats">
+    <div class="period" id="period">
+      <button data-period="day">День</button>
+      <button data-period="week" class="active">Неделя</button>
+      <button data-period="month">Месяц</button>
+      <button data-period="year">Год</button>
+    </div>
+
+    <div class="donut-wrap">
+      <svg id="donut" class="donut" viewBox="0 0 200 200"></svg>
+      <div class="donut-center" id="donut-center"></div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="workout-list" id="workout-list"></div>
+  </div>
+
+  <!-- Records panel -->
+  <div class="panel" id="panel-records" hidden>
+    <div class="records-toggle" id="records-toggle">
+      <button data-mode="set" class="active">За подход</button>
+      <button data-mode="workout">За день</button>
+    </div>
+    <div class="records-section">
+      <div id="records-list"></div>
+    </div>
+  </div>
+
+  <!-- Activity panel -->
+  <div class="panel" id="panel-activity" hidden>
+    <div class="streak-card">
+      <div class="streak-icon">🔥</div>
+      <div class="streak-body">
+        <div class="streak-val">14 дней</div>
+        <div class="streak-sub">Рекорд серии: 21 день</div>
+      </div>
+    </div>
+
+    <div class="period" id="activity-period">
+      <button data-period="month" class="active">Месяц</button>
+      <button data-period="quarter">Квартал</button>
+      <button data-period="halfyear">Полгода</button>
+    </div>
+
+    <div class="heatmap">
+      <div class="heatmap-grid" id="heatmap-grid"></div>
+    </div>
+  </div>
+
+  <!-- Settings panel -->
+  <div class="panel" id="panel-settings" hidden>
+    <div class="settings-header">
+      <button class="icon-btn" id="settings-back-btn" aria-label="Назад">←</button>
+      <div class="settings-title">Настройки</div>
+    </div>
+    <div class="settings-list">
+      <div class="settings-row">
+        <span>Статистика</span>
+        <label class="switch"><input type="checkbox" data-tab-key="stats" checked><span class="slider"></span></label>
+      </div>
+      <div class="settings-row">
+        <span>Рекорды</span>
+        <label class="switch"><input type="checkbox" data-tab-key="records" checked><span class="slider"></span></label>
+      </div>
+      <div class="settings-row">
+        <span>Активность</span>
+        <label class="switch"><input type="checkbox" data-tab-key="activity" checked><span class="slider"></span></label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== Цвета и названия категорий =====
+  const COLORS = {
+    PUSH: '#FF5252',
+    PULL: '#448AFF',
+    LEGS: '#69F0AE',
+    CORE: '#E040FB',
+    CARDIO: '#FFD740',
+  };
+  const NAMES = {
+    PUSH: 'Толкающие',
+    PULL: 'Тянущие',
+    LEGS: 'Ноги',
+    CORE: 'Кор',
+    CARDIO: 'Кардио',
+  };
+
+  // ===== Демо-данные для donut (по категориям) =====
+  const DATA = {
+    day: {
+      PUSH:   { total: 80,  exercises: [
+        { name: 'Отжимания', amount: 60 },
+        { name: 'Отжимания узким хватом', amount: 20 },
+      ]},
+      PULL:   { total: 45,  exercises: [
+        { name: 'Подтягивания', amount: 30 },
+        { name: 'Австралийские подтягивания', amount: 15 },
+      ]},
+      LEGS:   { total: 70,  exercises: [
+        { name: 'Приседания', amount: 50 },
+        { name: 'Выпады', amount: 20 },
+      ]},
+      CORE:   { total: 0,   exercises: [] },
+      CARDIO: { total: 30,  exercises: [
+        { name: 'Бёрпи', amount: 30 },
+      ]},
+    },
+    week: {
+      PUSH:   { total: 480, exercises: [
+        { name: 'Отжимания', amount: 360 },
+        { name: 'Отжимания узким хватом', amount: 120 },
+      ]},
+      PULL:   { total: 240, exercises: [
+        { name: 'Подтягивания', amount: 180 },
+        { name: 'Австралийские подтягивания', amount: 60 },
+      ]},
+      LEGS:   { total: 380, exercises: [
+        { name: 'Приседания', amount: 280 },
+        { name: 'Выпады', amount: 100 },
+      ]},
+      CORE:   { total: 200, exercises: [
+        { name: 'Скручивания', amount: 130 },
+        { name: 'Подъём ног', amount: 70 },
+      ]},
+      CARDIO: { total: 180, exercises: [
+        { name: 'Бёрпи', amount: 120 },
+        { name: 'Скакалка', amount: 60 },
+      ]},
+    },
+    month: {
+      PUSH:   { total: 2100, exercises: [
+        { name: 'Отжимания', amount: 1500 },
+        { name: 'Отжимания узким хватом', amount: 600 },
+      ]},
+      PULL:   { total: 1050, exercises: [
+        { name: 'Подтягивания', amount: 750 },
+        { name: 'Австралийские подтягивания', amount: 300 },
+      ]},
+      LEGS:   { total: 1700, exercises: [
+        { name: 'Приседания', amount: 1200 },
+        { name: 'Выпады', amount: 500 },
+      ]},
+      CORE:   { total: 880, exercises: [
+        { name: 'Скручивания', amount: 560 },
+        { name: 'Подъём ног', amount: 320 },
+      ]},
+      CARDIO: { total: 720, exercises: [
+        { name: 'Бёрпи', amount: 480 },
+        { name: 'Скакалка', amount: 240 },
+      ]},
+    },
+    year: {
+      PUSH:   { total: 24000, exercises: [
+        { name: 'Отжимания', amount: 18000 },
+        { name: 'Отжимания узким хватом', amount: 6000 },
+      ]},
+      PULL:   { total: 12000, exercises: [
+        { name: 'Подтягивания', amount: 9000 },
+        { name: 'Австралийские подтягивания', amount: 3000 },
+      ]},
+      LEGS:   { total: 19500, exercises: [
+        { name: 'Приседания', amount: 14000 },
+        { name: 'Выпады', amount: 5500 },
+      ]},
+      CORE:   { total: 10500, exercises: [
+        { name: 'Скручивания', amount: 6800 },
+        { name: 'Подъём ног', amount: 3700 },
+      ]},
+      CARDIO: { total: 8400, exercises: [
+        { name: 'Бёрпи', amount: 5600 },
+        { name: 'Скакалка', amount: 2800 },
+      ]},
+    },
+  };
+
+  // ===== Демо-данные для рекордов (по упражнениям, со всеми подходами) =====
+  // Каждая запись — { date, sets: [n1, n2, ...] }, n_i = повторов в i-м подходе.
+  const TODAY = new Date('2026-09-22');
+  function seedRand(name) {
+    let r = [...name].reduce((s, c) => s + c.charCodeAt(0), 0) || 1;
+    return () => {
+      r = (r * 1103515245 + 12345) & 0x7fffffff;
+      return r / 0x7fffffff;
+    };
+  }
+  function genLogs(name, count, baseReps, trend) {
+    // trend: 'up' | 'down' | 'flat' | 'wave'
+    const rand = seedRand(name);
+    const logs = [];
+    for (let i = 0; i < count; i++) {
+      const baseDays = Math.floor((i / count) * 365);
+      const jitter = Math.floor((rand() - 0.5) * 18);
+      const daysAgo = Math.max(0, baseDays + jitter);
+      let progress;
+      if (trend === 'up') progress = 1 - daysAgo / 365;
+      else if (trend === 'down') progress = daysAgo / 365;
+      else if (trend === 'wave') progress = 0.5 + Math.sin(daysAgo / 28) * 0.45;
+      else progress = 0.5;
+      const noise = (rand() - 0.5) * baseReps * 0.35;
+      const targetReps = Math.max(1, Math.round(baseReps * (0.5 + progress * 0.5) + noise));
+
+      // Разные тренировки одного упражнения имеют разное число подходов (2..5).
+      const setCount = 2 + Math.floor(rand() * 4);
+      const sets = [];
+      for (let j = 0; j < setCount; j++) {
+        const drop = Math.floor(j * 1.5 + rand() * 3);
+        sets.push(Math.max(1, targetReps - drop));
+      }
+
+      const date = new Date(TODAY);
+      date.setDate(date.getDate() - daysAgo);
+      logs.push({ date: date.toISOString().slice(0, 10), sets });
+    }
+    const map = new Map();
+    logs.forEach((l) => { if (!map.has(l.date)) map.set(l.date, l); });
+    return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  const LOGS = {
+    'Отжимания':               { type: 'reps', entries: genLogs('Отжимания', 70, 25, 'up') },
+    'Подтягивания':            { type: 'reps', entries: genLogs('Подтягивания', 35, 10, 'flat') },
+    'Приседания':              { type: 'reps', entries: genLogs('Приседания', 28, 40, 'up') },
+    'Отжимания узким хватом':  { type: 'reps', entries: genLogs('Отжимания узким хватом', 22, 15, 'flat') },
+    'Бёрпи':                   { type: 'reps', entries: genLogs('Бёрпи', 18, 15, 'wave') },
+    'Скакалка':                { type: 'reps', entries: genLogs('Скакалка', 12, 80, 'down') },
+    'Планка':                  { type: 'time', entries: genLogs('Планка', 40, 60, 'up') },
+    'Бег':                     { type: 'time', entries: genLogs('Бег', 15, 1200, 'wave') },
+  };
+
+  // ===== Демо-записи для drill-down (аналог EntryListItemRow) =====
+  // Каждая запись: { date: 'YYYY-MM-DD', name, sets, reps, weightKg?, comment? }.
+  // Генерируем воспроизводимо (тот же seedRand, что в genLogs).
+  const COMMENTS = [
+    null, null, null, null, null,                                 // чаще без
+    'сразу после сна', 'темп медленный', 'ноги на опоре', 'в быстром темпе',
+    'Держал спину прямо, лопатки сведены; в следующий раз добавить вес и отдохнуть подольше между подходами',
+    'ноги на опоре, тело в прямой линии',
+  ];
+  function genEntry(name, count, baseReps, weightEveryN) {
+    const rand = seedRand('entries:' + name);
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      const daysAgo = 1 + Math.floor(rand() * 110);                // 1..110 дней назад
+      const date = new Date(TODAY);
+      date.setDate(date.getDate() - daysAgo);
+      const sets = 2 + Math.floor(rand() * 4);                     // 2..5 подходов
+      const reps = Math.max(1, Math.round(baseReps * (0.7 + rand() * 0.6)));
+      const item = { date: date.toISOString().slice(0, 10), name, sets, reps };
+      if (rand() < weightEveryN) item.weightKg = Math.round((2.5 + rand() * 17.5) * 2) / 2;
+      const c = COMMENTS[Math.floor(rand() * COMMENTS.length)];
+      if (c) item.comment = c;
+      out.push(item);
+    }
+    // Дедупликация по дате (на упражнение одна запись в день).
+    const map = new Map();
+    out.forEach((it) => { if (!map.has(it.date)) map.set(it.date, it); });
+    return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
+  }
+  const ENTRIES = [
+    ...genEntry('Отжимания',                  40, 25, 0.7),
+    ...genEntry('Отжимания узким хватом',     22, 15, 0.3),
+    ...genEntry('Подтягивания',               30, 10, 0.5),
+    ...genEntry('Австралийские подтягивания', 14, 12, 0.0),
+    ...genEntry('Приседания',                 28, 30, 0.6),
+    ...genEntry('Выпады',                     20, 20, 0.2),
+    ...genEntry('Скручивания',                24, 30, 0.0),
+    ...genEntry('Подъём ног',                 16, 15, 0.0),
+    ...genEntry('Бёрпи',                      18, 15, 0.1),
+    ...genEntry('Скакалка',                   12, 80, 0.0),
+  ];
+
+  // ===== Состояние =====
+  let period = 'week';
+  let activeTab = 'stats';
+  let selected = null;             // категория (stats)
+  let recordsMode = 'set';         // 'set' | 'workout'
+  const R = 70;
+
+  // ===== Helpers =====
+  function visibleCategories(data) {
+    return Object.keys(data).filter((c) => data[c].total > 0);
+  }
+  function totalOf(data, cats) {
+    return cats.reduce((s, c) => s + data[c].total, 0);
+  }
+
+  // Сдвиг светлоты HSL: возвращает HEX с L, сдвинутым на deltaL (в процентах).
+  // Положительный deltaL — светлее, отрицательный — темнее. Hue и saturation сохраняются,
+  // поэтому оттенки остаются узнаваемо «из одной семьи» цвета категории.
+  function shade(hex, deltaL) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 510;
+    if (max === min) {
+      h = s = 0;
+    } else {
+      const d = max - min;
+      s = l > 0.5 ? d / (510 - max - min) : d / (max + min);
+      if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+      else if (max === g) h = ((b - r) / d + 2) / 6;
+      else h = ((r - g) / d + 4) / 6;
+    }
+    l = Math.max(0.08, Math.min(0.92, l + deltaL / 100));
+    let r1, g1, b1;
+    if (s === 0) {
+      r1 = g1 = b1 = Math.round(l * 255);
+    } else {
+      const hue2rgb = (p, q, t) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q - p) * 6 * t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+      };
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      r1 = Math.round(hue2rgb(p, q, h + 1/3) * 255);
+      g1 = Math.round(hue2rgb(p, q, h) * 255);
+      b1 = Math.round(hue2rgb(p, q, h - 1/3) * 255);
+    }
+    const toHex = (n) => Math.round(n).toString(16).padStart(2, '0');
+    return `#${toHex(r1)}${toHex(g1)}${toHex(b1)}`;
+  }
+  // Чередуем светлее/темнее для соседних долей — контраст между 2–3 упражнениями сильный.
+  const SHADE_DELTAS = [0, 32, -28, 45, -40];
+
+  // Рекорд по упражнению за всё время. Возвращает { value, date } — date тренировки-рекордсмена.
+  function bestWorkoutTotal(logs) {
+    let best = 0;
+    let date = null;
+    logs.forEach((log) => {
+      const sum = log.sets.reduce((s, x) => s + x, 0);
+      if (sum > best) { best = sum; date = log.date; }
+    });
+    return { value: best, date };
+  }
+  function bestSetMax(logs) {
+    let best = 0;
+    let date = null;
+    logs.forEach((log) => {
+      log.sets.forEach((x) => { if (x > best) { best = x; date = log.date; } });
+    });
+    return { value: best, date };
+  }
+
+  // ===== Stats panel: рендер =====
+  // Общий вид: donut = доли категорий, легенда = категории (accordion).
+  // Drill-down (selected !== null): donut = доли упражнений категории, центр = название + «назад»,
+  // легенда = упражнения категории + кнопка «← Категории».
+  function renderDonut(slices, total, drillCat) {
+    // slices: cats[] при общем виде, exercises[] при drill-down.
+    // Доли кликабельными не делаем — переключение только через легенду.
+    let offset = 0;
+    let segs = '';
+    slices.forEach((s, i) => {
+      const isDrill = drillCat !== null;
+      const value = isDrill ? s.amount : DATA[period][s].total;
+      const pct = (value / total) * 100;
+      const base = isDrill ? COLORS[drillCat] : COLORS[s];
+      const stroke = isDrill ? shade(base, SHADE_DELTAS[Math.min(i, SHADE_DELTAS.length - 1)]) : base;
+      segs += `<circle class="seg" cx="100" cy="100" r="${R}" `
+        + `fill="transparent" stroke="${stroke}" `
+        + `stroke-width="24" pathLength="100" `
+        + `stroke-dasharray="${pct.toFixed(3)} 100" `
+        + `stroke-dashoffset="${-offset.toFixed(3)}" `
+        + `transform="rotate(-90 100 100)" />`;
+      offset += pct;
+    });
+    document.getElementById('donut').innerHTML = segs;
+  }
+
+  function renderCenter() {
+    // Центр всегда пустой — никакого текста и кнопок внутри диаграммы.
+    document.getElementById('donut-center').innerHTML = '';
+  }
+
+  function renderLegend(data, cats, drillCat) {
+    if (drillCat) {
+      // Drill-down: кнопка назад + упражнения выбранной категории.
+      const exercises = data[drillCat].exercises.filter((e) => e.amount > 0);
+      const rows = exercises.map((e, i) => {
+        const swatch = shade(COLORS[drillCat], SHADE_DELTAS[Math.min(i, SHADE_DELTAS.length - 1)]);
+        return `
+          <div class="legend-row" data-ex="${e.name}">
+            <div class="legend-item">
+              <span class="legend-swatch" style="background:${swatch}"></span>
+              <span class="legend-name">${e.name}</span>
+              <span class="legend-val">${e.amount} повт.</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('legend').innerHTML =
+        `<div class="legend-back">← Категории</div>${rows}`;
+      return;
+    }
+    // Общий вид: категории (accordion как в iter3).
+    document.getElementById('legend').innerHTML = cats.map((cat) => `
+      <div class="legend-row" data-cat="${cat}">
+        <div class="legend-item">
+          <span class="legend-swatch" style="background:${COLORS[cat]}"></span>
+          <span class="legend-name">${NAMES[cat]}</span>
+          <span class="legend-val">${data[cat].total} повт.</span>
+        </div>
+        <div class="legend-detail">
+          ${data[cat].exercises.map((e) => `
+            <div class="ex-row">
+              <span class="ex-name">${e.name}</span>
+              <span class="ex-val">${e.amount} повт.</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderStats() {
+    const data = DATA[period];
+    const cats = visibleCategories(data);
+    const total = totalOf(data, cats);
+    if (cats.length === 0 || total === 0) {
+      document.getElementById('donut').innerHTML = '';
+      document.getElementById('legend').innerHTML = '<div class="empty-hint">Нет тренировок за выбранный период</div>';
+      document.getElementById('workout-list').innerHTML = '';
+      renderCenter();
+      return;
+    }
+    if (selected) {
+      // Drill-down внутрь категории.
+      const catData = data[selected];
+      const exercises = catData ? catData.exercises.filter((e) => e.amount > 0) : [];
+      const exTotal = exercises.reduce((s, e) => s + e.amount, 0);
+      if (exercises.length === 0 || exTotal === 0) {
+        // Категория схлопнулась (пустая в выбранном периоде) — возвращаемся.
+        selected = null;
+        renderStats();
+        return;
+      }
+      renderDonut(exercises, exTotal, selected);
+      renderLegend(data, cats, selected);
+      renderCenter();
+      renderEntriesForCategory(catData);
+    } else {
+      renderDonut(cats, total, null);
+      renderLegend(data, cats, null);
+      renderCenter();
+      document.getElementById('workout-list').innerHTML = '';
+    }
+  }
+
+  // ===== Drill-down: список записей по категории =====
+  const MONTHS_RU = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+  const WEEKDAYS_RU_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+  function fmtDate(iso) {
+    const d = new Date(iso);
+    const today = TODAY;
+    if (iso === today.toISOString().slice(0, 10)) return null;       // Сегодня — без заголовка
+    const yest = new Date(today); yest.setDate(yest.getDate() - 1);
+    if (iso === yest.toISOString().slice(0, 10)) return 'Вчера';
+    const dow = WEEKDAYS_RU_SHORT[d.getDay()];
+    if (d.getFullYear() === today.getFullYear()) return `${dow}, ${d.getDate()} ${MONTHS_RU[d.getMonth()]}`;
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return `${dow}, ${dd}.${mm}.${d.getFullYear()}`;
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function renderEntriesForCategory(catData) {
+    const names = new Set(catData.exercises.map((e) => e.name));
+    // Группируем записи по дате с убыванием.
+    const filtered = ENTRIES.filter((it) => names.has(it.name));
+    const byDate = new Map();
+    filtered.forEach((it) => {
+      if (!byDate.has(it.date)) byDate.set(it.date, []);
+      byDate.get(it.date).push(it);
+    });
+    const dates = Array.from(byDate.keys()).sort((a, b) => b.localeCompare(a));
+    if (dates.length === 0) {
+      document.getElementById('workout-list').innerHTML =
+        '<div class="empty-hint">Нет записей</div>';
+      return;
+    }
+    let html = '';
+    for (const date of dates) {
+      const hdr = fmtDate(date);
+      if (hdr) html += `<div class="section-hdr"><div class="line"></div><div class="text">${hdr}</div><div class="line"></div></div>`;
+      for (const it of byDate.get(date)) {
+        const value = `${it.sets} х ${it.reps}`;
+        let rows = `<div class="entry-row">
+          <div class="title-v">
+            <span class="name">${escapeHtml(it.name)}</span>
+            <span class="val">${value}</span>
+          </div>`;
+        if (it.weightKg != null && it.weightKg > 0) {
+          rows += `<div class="weight-v"><span>Дополнительный вес</span><span>${it.weightKg} кг</span></div>`;
+        }
+        if (it.comment) {
+          rows += `<div class="comment-v">${escapeHtml(it.comment)}</div>`;
+        }
+        rows += `</div>`;
+        html += rows;
+      }
+    }
+    document.getElementById('workout-list').innerHTML = html;
+  }
+
+  // ===== Records panel: рендер =====
+  const MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+  function fmtDateShort(iso) {
+    if (!iso) return '';
+    const [, m, d] = iso.split('-').map(Number);
+    return `${d} ${MONTHS_SHORT[m - 1]}`;
+  }
+  function renderRecords() {
+    const names = Object.keys(LOGS);
+    const rows = names.map((name) => {
+      const log = LOGS[name];
+      const { value, date } = recordsMode === 'workout'
+        ? bestWorkoutTotal(log.entries)
+        : bestSetMax(log.entries);
+      const unit = log.type === 'time' ? 'сек.' : 'повт.';
+      return { name, value, date, unit };
+    });
+    rows.sort((a, b) => b.date.localeCompare(a.date));
+    const list = document.getElementById('records-list');
+    if (rows.every((r) => r.value === 0)) {
+      list.innerHTML = '<div class="empty-hint">Нет тренировок</div>';
+      return;
+    }
+    list.innerHTML = rows.map((r, i) => `
+      <div class="rec-row">
+        <span class="rec-name">${r.name}</span>
+        <div class="rec-val-block">
+          <span class="rec-val">${r.value} ${r.unit}</span>
+          <span class="rec-date">${fmtDateShort(r.date)}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ===== Главный рендер =====
+  function render() {
+    if (activeTab === 'stats') renderStats();
+    else if (activeTab === 'records') renderRecords();
+  }
+
+  // ===== Сеттеры =====
+  function setSelectedCategory(cat) {
+    selected = selected === cat ? null : cat;
+    render();
+  }
+  function setPeriod(p) {
+    period = p;
+    selected = null;
+    document.querySelectorAll('#period button').forEach((b) => {
+      b.classList.toggle('active', b.dataset.period === p);
+    });
+    render();
+  }
+  function setRecordsMode(m) {
+    recordsMode = m;
+    document.querySelectorAll('.records-toggle button').forEach((b) => {
+      b.classList.toggle('active', b.dataset.mode === m);
+    });
+    render();
+  }
+  // ===== Tab visibility (settings) =====
+  const TAB_KEYS = ['stats', 'records', 'activity'];
+  const TAB_LABELS = { stats: 'Статистика', records: 'Рекорды', activity: 'Активность' };
+  const tabEnabled = { stats: true, records: true, activity: true };
+  function visibleTabs() { return TAB_KEYS.filter((k) => tabEnabled[k]); }
+  function firstVisibleTab() { return visibleTabs()[0]; }
+  function applyTabVisibility() {
+    document.querySelectorAll('#tabs button').forEach((b) => {
+      b.hidden = !tabEnabled[b.dataset.tab];
+    });
+    document.getElementById('tabs').hidden = activeTab === 'settings' || visibleTabs().length < 2;
+    const vis = visibleTabs();
+    const sub = document.getElementById('title-sub');
+    if (vis.length === 1) {
+      sub.textContent = TAB_LABELS[vis[0]];
+      sub.hidden = false;
+    } else {
+      sub.hidden = true;
+    }
+  }
+
+  function setActiveTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll('#tabs button').forEach((b) => {
+      b.classList.toggle('active', b.dataset.tab === tab);
+    });
+    const isSettings = (tab === 'settings');
+    document.getElementById('panel-stats').hidden = (tab !== 'stats');
+    document.getElementById('panel-records').hidden = (tab !== 'records');
+    document.getElementById('panel-activity').hidden = (tab !== 'activity');
+    document.getElementById('panel-settings').hidden = !isSettings;
+    document.getElementById('title-row').hidden = isSettings;
+    document.getElementById('tabs').hidden = isSettings || visibleTabs().length < 2;
+    if (!isSettings) render();
+  }
+
+  // ===== Activity heatmap =====
+  const ACTIVITY_PERIODS = { month: 30, quarter: 91, halfyear: 182 };
+  let activityPeriod = 'month';
+  function renderHeatmap() {
+    const grid = document.getElementById('heatmap-grid');
+    grid.innerHTML = '';
+    const days = ACTIVITY_PERIODS[activityPeriod];
+    let html = '';
+    for (let i = 0; i < days; i++) {
+      const lvl = Math.floor(Math.abs(Math.sin(i * 0.7 + 1.3)) * 5); // 0..4
+      const cls = lvl === 0 ? '' : ` l${lvl}`;
+      html += `<div class="day${cls}"></div>`;
+    }
+    grid.innerHTML = html;
+  }
+  renderHeatmap();
+
+  // ===== Делегирование кликов =====
+  document.addEventListener('click', (e) => {
+    // Кнопка «⚙» — открыть настройки.
+    if (e.target.closest('#settings-btn')) { setActiveTab('settings'); return; }
+    // Кнопка «←» — возврат из настроек к первой видимой вкладке.
+    if (e.target.closest('#settings-back-btn')) { setActiveTab(firstVisibleTab()); return; }
+
+    const tabBtn = e.target.closest('#tabs button');
+    if (tabBtn) { setActiveTab(tabBtn.dataset.tab); return; }
+
+    if (activeTab === 'stats') {
+      const pb = e.target.closest('#period button');
+      if (pb) { setPeriod(pb.dataset.period); return; }
+      // «← Категории» в легенде — возврат из drill-down.
+      if (e.target.closest('.legend-back')) { selected = null; render(); return; }
+      // Клик по строке легенды — drill-down или возврат.
+      const lr = e.target.closest('.legend-row');
+      if (lr && lr.dataset.cat) { setSelectedCategory(lr.dataset.cat); return; }
+    } else if (activeTab === 'records') {
+      const rb = e.target.closest('.records-toggle button');
+      if (rb) { setRecordsMode(rb.dataset.mode); return; }
+    } else if (activeTab === 'activity') {
+      const ap = e.target.closest('#activity-period button');
+      if (ap) {
+        document.querySelectorAll('#activity-period button').forEach((b) => b.classList.toggle('active', b === ap));
+        activityPeriod = ap.dataset.period;
+        renderHeatmap();
+        return;
+      }
+    }
+  });
+
+  // ===== Switches: запрет выключить все вкладки =====
+  document.querySelectorAll('#panel-settings input[type="checkbox"]').forEach((cb) => {
+    cb.addEventListener('change', (e) => {
+      const key = cb.dataset.tabKey;
+      const next = cb.checked;
+      if (!next && visibleTabs().length <= 1) {
+        // Откат: последнюю включённую выключить нельзя.
+        cb.checked = true;
+        return;
+      }
+      tabEnabled[key] = next;
+      applyTabVisibility();
+      // Если активная вкладка теперь скрыта (например, после возврата из настроек) — переключиться.
+      if (activeTab !== 'settings' && !tabEnabled[activeTab]) setActiveTab(firstVisibleTab());
+    });
+  });
+
+  render();
+</script>
+
+</body>
+</html>
