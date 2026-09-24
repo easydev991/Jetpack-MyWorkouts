@@ -21,6 +21,7 @@ import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
@@ -92,6 +93,8 @@ class MainScreenEditNavigationTest {
             override fun exercises(query: String): Flow<List<Exercise>> = MutableStateFlow(listOf(repsExercise))
 
             override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(listOf(listItem))
+
+            override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 
             override suspend fun addEntry(entry: ExerciseEntry): Result<Long> = Result.success(0L)
 

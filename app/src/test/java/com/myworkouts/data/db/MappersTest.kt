@@ -105,10 +105,14 @@ class MappersTest {
         weightKg: Double?,
         comment: String? = null,
         iconNumber: Int? = null
-    ) = EntryListItemEntity(
+    ) = EntryListItemWithExerciseEntity(
         id = 1L,
+        exerciseId = 2L,
         exerciseName = "Подтягивания",
         iconNumber = iconNumber,
+        category = "PULL",
+        measuredBy = "REPS",
+        exerciseComment = null,
         sets = 4,
         reps = 10,
         durationSec = null,
@@ -198,5 +202,72 @@ class MappersTest {
 
         // Then — отсутствие иконки не теряется
         assertEquals(null, item.iconNumber)
+    }
+
+    // ---------- overview-screen: проекция записи с данными упражнения ----------
+
+    private fun sampleWithExerciseEntity(
+        exerciseComment: String?,
+        comment: String?,
+        weightKg: Double?
+    ) = EntryListItemWithExerciseEntity(
+        id = 3L,
+        exerciseId = 7L,
+        exerciseName = "Подтягивания",
+        iconNumber = ExerciseIcons.PULLUPS,
+        category = "PULL",
+        measuredBy = "REPS",
+        exerciseComment = exerciseComment,
+        sets = 4,
+        reps = 10,
+        durationSec = null,
+        weightKg = weightKg,
+        comment = comment,
+        date = 1_700_000_000_000L
+    )
+
+    @Test
+    fun toEntryWithExercise_when_all_fields_then_maps_to_domain() {
+        // Given — проекция обзора с полными данными каталога
+
+        // When
+        val item =
+            sampleWithExerciseEntity(
+                exerciseComment = "Хват шире плеч",
+                comment = "сразу после сна",
+                weightKg = 5.0
+            ).toEntryWithExercise()
+
+        // Then — все поля доезжают, категория и тип измерения переводятся в enum
+        assertEquals(3L, item.id)
+        assertEquals(7L, item.exerciseId)
+        assertEquals("Подтягивания", item.exerciseName)
+        assertEquals(ExerciseIcons.PULLUPS, item.iconNumber)
+        assertEquals(ExerciseCategory.PULL, item.category)
+        assertEquals(ExerciseMeasuredBy.REPS, item.measuredBy)
+        assertEquals("Хват шире плеч", item.exerciseComment)
+        assertEquals(4, item.sets)
+        assertEquals(10, item.reps)
+        assertEquals(5.0, item.weightKg)
+        assertEquals("сразу после сна", item.comment)
+        assertEquals(1_700_000_000_000L, item.date)
+    }
+
+    @Test
+    fun toEntryWithExercise_when_optional_fields_null_then_maps_null() {
+        // Given — проекция без комментариев и веса (nullable-ветка)
+
+        // When
+        val item =
+            sampleWithExerciseEntity(
+                exerciseComment = null,
+                comment = null,
+                weightKg = null
+            ).toEntryWithExercise()
+
+        // Then — null доезжает без искажений во всех nullable-полях
+        assertEquals(null, item.exerciseComment)
+        assertEquals(null, item.comment)
+        assertEquals(null, item.weightKg)
     }
 }

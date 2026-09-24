@@ -46,13 +46,21 @@
 
 ### Decision 1: Данные — новый JOIN-метод репозитория `entriesWithExercise()`
 
-Новый запрос DAO `observeEntriesWithExercise()` (SQL JOIN
+Один широкий SQL-запрос DAO `observeEntryRows()` (SQL JOIN
 `exercise_entries e JOIN exercises x ON x.id = e.exercise_id`, проекция в
-plain data class, `ORDER BY e.date DESC` — копия паттерна
-`observeEntries()`) + метод интерфейса
-`fun entriesWithExercise(): Flow<List<EntryWithExercise>>`.
+plain data class `EntryListItemWithExerciseEntity`, `ORDER BY e.date DESC`)
+- метод интерфейса `fun entriesWithExercise(): Flow<List<EntryWithExercise>>`.
 
-`EntryWithExercise` — новая доменная модель: поля `EntryListItem` плюс
+*Пост-ревью уточнение (ponytail-review): два копипастных SQL
+(`observeEntries` и `observeEntriesWithExercise`) консолидированы в один
+широкий запрос — ревью верно подсветило риск дрейфа двух копий при
+эволюции схемы. Доменные модели и потребители не изменились: сужение
+широкой проекции до нужного виду — в репозитории мапперами
+`toListItem()` (список главного экрана; 4 доп. колонки игнорирует) и
+`toEntryWithExercise()` (обзор). Отдельная узкая проекция
+`EntryListItemEntity` удалена.*
+
+`EntryWithExercise` — доменная модель обзора: поля `EntryListItem` плюс
 `exerciseId`, `category: ExerciseCategory`, `measuredBy: ExerciseMeasuredBy`,
 `exerciseComment: String?` (комментарий упражнения из каталога);
 столбец `created_at` в проекцию не включается (прецедент — `EntryListItem`,
@@ -62,6 +70,10 @@ plain data class, `ORDER BY e.date DESC` — копия паттерна
 - Отвергнуто: `combine(entries(), exercises())` в VM — join/сортировка в
   памяти при каждой эмиссии, VM знает структуру хранения, два триггера вместо
   одного. SQL-join каноничнее и уже есть прецедент в DAO.
+- Отвергнуто: одна широкая доменная модель для всех потребителей —
+  главный экран получал бы 4 неиспользуемых поля, правка затрагивала бы
+  ~20 файлов и 13 тестовых фейков; типовая точность дешевле SQL-дубля,
+  а дубль устраняется проекциями вниз без потери моделей.
 
 Схема БД не меняется: проекция — не `@Entity`, `version = 3` остаётся,
 модификация Room-схемы и JSON-экспорт не требуются. Фейк-репозитории в
@@ -152,6 +164,28 @@ Enums `StatsPeriod`, `RecordsMode`, `ActivityPeriod` живут рядом с
 Подпись `overview_streak_record` показывается только когда текущая серия
 меньше рекордной (в непрерывной серии current = record — подпись избыточна).
 
+**Пост-релизная доработка: три состояния карточки.**
+`StreakResult` получил `workedOutToday: Boolean` (`today in daySet` —
+множество дат уже построено, вычисление бесплатное). Режим отображения —
+UI-понятие, поэтому enum `StreakCardState` (Active / Pending / Lost) живёт
+в `ui/state/StreakCardState.kt`, а не в домене; маппинг в
+`OverviewViewModel`: `currentStreak == 0` → Lost; `workedOutToday` →
+Active; иначе → Pending. Отрисовка в `ActivityScreen`:
+
+- Active — карточка без изменений (оранжевый градиент, огонёк);
+- Pending — «сохраняем теплоту» серии: бледный градиент (альфа
+  оригинального оранжевого), огонёк приглушён, текст —
+  `onSurface`/`onSurfaceVariant` (белый на бледном фоне не читается);
+- Lost — карточки нет: при рекорде > 1 — `StreakRecordRow` («Рекорд серии:
+  N дней», `top = 8.dp`, чтобы строка не прилипала к верхнему краю контента;
+  общий `Spacer(16.dp)` снизу сохраняет вертикальный ритм экрана); при
+  рекорде ≤ 1 место остаётся пустым — единственная «запись о рекорде»
+  смысла не несёт, хитмап подтягивается ближе к верху.
+
+Формулировка счётчика уточнена: plurals
+`overview_streak_days_in_a_row` («N дней подряд») для серии больше одного
+дня, прежний `overview_streak_days` — для единственного дня («1 день»).
+
 ### Decision 6: Уровни хитмапа — фиксированные пороги по числу записей
 
 `0/1/2/3–4/≥5 записей → 0/1/2/3/4`. Пороги — один список
@@ -218,6 +252,13 @@ Enums `StatsPeriod`, `RecordsMode`, `ActivityPeriod` живут рядом с
   три на каждую эмиссию, дифинг Compose отсечёт лишние рекомпозиции).
 - `StatsUiState`/`DrillEntry` — из драфта, но `DrillEntry` получает `id`
   (ключи LazyColumn), `category`-тип — доменный `ExerciseCategory`.
+  **Как реализовано (отступление от буквы, intent сохранён):** отдельный
+  `DrillEntry` в `ui/state` не заводится — drill-down переиспользует
+   доменные `DrillDateGroup` + `EntryWithExercise` (пост-ревью:
+  промежуточный `DrillEntryData` удалён; поле `id` уже есть в
+  `EntryWithExercise`, дублирующий data class field-в-field не нужен).
+  Аналогично `RecordsUiState` хранит
+  `ExerciseRecordData`, `ActivityUiState` — `HeatmapDayData`.
 
 Драфтовый enum `StatsCategory` **удаляется** — дублирует доменный
 `ExerciseCategory` (PUSH/PULL/LEGS/CORE/CARDIO); подписи — существующие
@@ -263,6 +304,15 @@ Enums `StatsPeriod`, `RecordsMode`, `ActivityPeriod` живут рядом с
 `screenForRoute` += `AppScreen.OverviewScreen` / `AppScreen.OverviewSettingsScreen`.
 Нижняя панель скрывается существующим контрактом — правок скрытия нет.
 
+**Как реализовано (отступление):** «отдельного файла нет» не выдержало —
+два новых registration-компоузабла сломали detekt `LongMethod` (75 →
+порог 60) и подняли `RootScreen.kt` до порога `TooManyFunctions` (11).
+Шесть destination-компоузаблов (`MainNavDestination`, `MoreNavDestination`,
+`AppearanceNavDestination`, `AppDataNavDestination`, `OverviewNavDestination`,
+`OverviewSettingsNavDestination`) вынесены в
+`ui/screens/root/NavDestinations.kt` — механический перенос без логики;
+`AppNavHost` в `RootScreen.kt` остаётся графом registrations.
+
 Новые `UserActionType` (именование по консистентности с
 `TOGGLE_ENTRY_FIELD_VISIBILITY` / `SELECT_THEME`):
 
@@ -295,6 +345,12 @@ ScreenView летит централизованно из `RootScreen` — но�
 «Меньше … Больше» переносятся из драфта: в HTML-макетах их нет, решение
 владельца — сохранить, они критичны для чтения сетки. Подписи месяцев
 по-прежнему вне скоупа (их нет и в драфте).
+*Пост-ревью уточнение: вместо ресурсов `activity_weekday_*`
+(7 × 2 локали) подписи даёт платформа —
+`DayOfWeek.getDisplayName(TextStyle.SHORT, locale)`; локаль берётся из
+`LocalConfiguration` (per-app language совпадает с локалью ресурсов).
+Для ru сокращения совпадают с прежними ресурсами «пн»…«вс» байт-в-байт,
+для прочих локалей платформа даёт свои (en — «Mon»…). Ресурсы удалены.*
 
 Безопасные зоны: каждый экран — собственный `Scaffold` с дефолтными
 `contentWindowInsets` (образец `EntrySettingsScreen` для нетабовых
@@ -315,8 +371,12 @@ ScreenView летит централизованно из `RootScreen` — но�
   `records_empty` (6.6).
 - Активность: `overview_period_month` / `_quarter` / `_halfyear` /
   `_year`, plurals `overview_streak_days` (день/дня/дней),
-  `overview_streak_record`, `activity_weekday_*` (подписи «пн»…«вс»,
-  7 шт.), `activity_less`, `activity_more` (6.7).
+  plurals `overview_streak_days_in_a_row` (день/дня/дней подряд — 10.1),
+  `overview_streak_record`, `activity_less`, `activity_more` (6.7);
+  plurals `a11y_activity_heatmap` (a11y-аудит 8.2) читаются только через
+  `getQuantityString` — `getString` на plurals падает
+  («complex map type», поймано ручной проверкой на эмуляторе);
+  `activity_weekday_*` удалены пост-ревью — подписи дней теперь ICU.
 - Настройки: `overview_settings_subtitle` (заголовок — общий ресурс с
   EntrySettings) (6.8).
 

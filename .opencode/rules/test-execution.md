@@ -63,8 +63,9 @@ python3 scripts/test_report.py app/build/outputs/androidTest-results/connected/d
 ./gradlew testDebugUnitTest --tests "*ArchivedExercises*"                                              # wildcard
 ./gradlew testDebugUnitTest --tests "com.myworkouts.ui.viewmodel.ArchivedExercisesViewModelTest.unarchive_calls_setArchived_with_false"
 # androidTest: `--tests` с connectedDebugAndroidTest НЕ работает (Unknown
-# command-line option). Только через runner-arguments:
-./gradlew :app:connectedDebugAndroidTest --console=plain \
+# command-line option). Только через runner-arguments. Задача — с флейвором
+# (github — дефолт, rustore → connectedRustoreDebugAndroidTest):
+./gradlew :app:connectedGithubDebugAndroidTest --console=plain \
   -Pandroid.testInstrumentationRunnerArguments.class='com.myworkouts.ui.screens.exercises.ArchivedExercisesScreenTest'
 # метод — через # : …class='com.myworkouts.…ScreenTest#row_long_press_when_standard_then_no_context_menu'
 ```

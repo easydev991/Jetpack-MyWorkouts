@@ -6,6 +6,7 @@ import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.ui.state.MainUiState
@@ -54,6 +55,8 @@ private class MainViewModelFakeRepository(
     override fun exercises(query: String): Flow<List<Exercise>> = catalog
 
     override fun entries(): Flow<List<EntryListItem>> = entriesFlow
+
+    override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 
     override suspend fun addEntry(entry: ExerciseEntry): Result<Long> = Result.success(1L)
 

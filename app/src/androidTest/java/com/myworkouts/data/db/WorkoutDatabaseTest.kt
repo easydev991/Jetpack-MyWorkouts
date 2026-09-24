@@ -259,6 +259,60 @@ class WorkoutDatabaseTest {
             assertFalse(second.any { it.isCustom })
         }
 
+    /**
+     * Проекция `observeEntriesWithExercise` (overview-screen, tasks 7.1,
+     * design Decision 1): запись JOIN-ится с каталогом — в строке есть
+     * `exercise_id`, категория и тип измерения упражнения, а также
+     * комментарий упражнения (`exerciseComment`) рядом с комментарием
+     * самой записи.
+     */
+    @Test
+    fun observeEntriesWithExercise_whenEntryInserted_thenJoinsCategoryAndMeasuredBy() =
+        runBlocking {
+            // Given — упражнение PULL/REPS с комментарием и запись на него
+            val exerciseId =
+                database.exerciseDao().insert(
+                    ExerciseEntity(
+                        name = "Тестовые подтягивания",
+                        category = ExerciseCategory.PULL.name,
+                        isCustom = true,
+                        comment = "широкий хват",
+                        createdAt = 1L
+                    )
+                )
+            database.exerciseEntryDao().insert(
+                ExerciseEntryEntity(
+                    exerciseId = exerciseId,
+                    workoutId = null,
+                    date = 1_700_000_000_000L,
+                    sets = 4,
+                    reps = 10,
+                    weightKg = null,
+                    durationSec = null,
+                    comment = "до сна",
+                    createdAt = 1L,
+                    modifiedAt = 1L
+                )
+            )
+
+            // When
+            val rows = database.exerciseEntryDao().observeEntryRows().first()
+
+            // Then — проекция содержит JOIN-колонки из каталога
+            assertEquals(1, rows.size)
+            val row = rows.first()
+            assertEquals(exerciseId, row.exerciseId)
+            assertEquals("Тестовые подтягивания", row.exerciseName)
+            assertEquals(ExerciseCategory.PULL.name, row.category)
+            assertEquals(ExerciseMeasuredBy.REPS.name, row.measuredBy)
+            assertEquals("широкий хват", row.exerciseComment)
+
+            // Then — поля самой записи на месте
+            assertEquals(4, row.sets)
+            assertEquals(10, row.reps)
+            assertEquals("до сна", row.comment)
+        }
+
     @Test
     fun destructiveMigration_whenUserVersionDowngraded_thenReseedsThirteenStandardExercises() {
         val ctx = ruContext()

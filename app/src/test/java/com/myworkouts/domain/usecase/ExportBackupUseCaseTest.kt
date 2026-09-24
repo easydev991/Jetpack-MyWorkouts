@@ -3,15 +3,19 @@ package com.myworkouts.domain.usecase
 import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
+import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.model.BackupSettings
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.domain.model.OverviewTab
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -84,10 +88,12 @@ class ExportBackupUseCaseTest {
         // When
         val json = JSONObject(buildBackupJson(exercises, entries))
 
-        // Then
-        assertEquals(1, json.getInt("version"), "Версия формата — всегда 1")
+        // Then — формат v2: настройки вкладок обзора пишутся всегда (design D8)
+        assertEquals(2, json.getInt("version"), "Версия формата — 2")
         assertEquals(2, json.getJSONArray("exercises").length(), "Все упражнения каталога в файле")
         assertEquals(2, json.getJSONArray("entries").length(), "Все записи в файле")
+        val settingsJson = checkNotNull(json.optJSONObject("settings")) { "Блок settings присутствует" }
+        assertEquals("STATS", settingsJson.optString("lastOverviewTab"), "Дефолтная последняя вкладка")
     }
 
     @Test
@@ -212,7 +218,7 @@ class ExportBackupUseCaseTest {
 
         // Then
         assertTrue(
-            raw.contains("\n  \"version\": 1"),
+            raw.contains("\n  \"version\": 2"),
             "Файл человекочитаем: отступ 2 (JSONObject.toString(2))"
         )
     }
@@ -272,7 +278,7 @@ class ExportBackupUseCaseTest {
         val json = JSONObject(buildBackupJson(exercises, entries))
 
         // Then
-        assertEquals(1, json.getInt("version"), "Пустой экспорт — тоже версия 1")
+        assertEquals(2, json.getInt("version"), "Пустой экспорт — тоже версия 2")
         assertEquals(0, json.getJSONArray("exercises").length(), "Пустой каталог — пустой массив")
         assertEquals(0, json.getJSONArray("entries").length(), "Нет записей — пустой массив")
     }
@@ -289,7 +295,7 @@ class ExportBackupUseCaseTest {
             val context = mockk<Context>(relaxed = true)
             every { context.contentResolver } returns contentResolver
             val uri = mockk<Uri>()
-            val useCase = ExportBackupUseCase(repository, context)
+            val useCase = ExportBackupUseCase(repository, mockk(relaxed = true), context)
 
             // When
             val result = useCase(uri)
@@ -311,16 +317,69 @@ class ExportBackupUseCaseTest {
             val repository = mockk<WorkoutDataRepository>(relaxed = true)
             coEvery { repository.getAllExercises() } returns Result.success(listOf(pullUps))
             coEvery { repository.getAllEntries() } returns Result.success(listOf(repsEntry))
+            val dataStore = mockk<AppSettingsDataStore>()
+            every { dataStore.overviewTabVisibility } returns
+                flowOf(OverviewTab.entries.associateWith { true })
+            every { dataStore.lastOverviewTab } returns flowOf(OverviewTab.STATS)
             val contentResolver = mockk<ContentResolver>(relaxed = true)
             val context = mockk<Context>(relaxed = true)
             every { context.contentResolver } returns contentResolver
             every { contentResolver.openOutputStream(any()) } throws
                 CancellationException("Операция отменена")
             val uri = mockk<Uri>()
-            val useCase = ExportBackupUseCase(repository, context)
+            val useCase = ExportBackupUseCase(repository, dataStore, context)
 
             // When / Then — CancellationException прокидывается дальше,
             // не превращаясь в Result.failure
             assertThrows<CancellationException> { useCase(uri) }
         }
+
+    // ---------- overview-screen: настройки вкладок в бэкапе (design D8) ----------
+
+    @Test
+    fun buildBackupJson_when_settings_present_then_version2_with_settings_block() {
+        // Given — RECORDS скрыта, последняя вкладка ACTIVITY
+        val settings =
+            BackupSettings(
+                tabVisibility = OverviewTab.entries.associateWith { it != OverviewTab.RECORDS },
+                lastOverviewTab = OverviewTab.ACTIVITY
+            )
+
+        // When
+        val json = JSONObject(buildBackupJson(listOf(pullUps), listOf(repsEntry), settings))
+
+        // Then
+        assertEquals(2, json.getInt("version"), "Настройки вкладок поднимают версию формата до 2")
+        val settingsJson =
+            checkNotNull(json.optJSONObject("settings")) { "Блок settings присутствует" }
+        val visibility =
+            checkNotNull(settingsJson.optJSONObject("overviewTabVisibility")) { "Карта видимости" }
+        assertEquals(false, visibility.optBoolean("RECORDS"), "Скрытая вкладка — false")
+        assertEquals(true, visibility.optBoolean("STATS"), "Видимая вкладка — true")
+        assertEquals("ACTIVITY", settingsJson.optString("lastOverviewTab"), "Последняя вкладка")
+    }
+
+    @Test
+    fun buildBackupJson_when_default_settings_then_all_visible_and_stats() {
+        // Given — настройки по умолчанию (все вкладки видимы, STATS активна)
+
+        // When
+        val json = JSONObject(buildBackupJson(emptyList(), emptyList(), BackupSettings.defaults()))
+
+        // Then
+        assertEquals(2, json.getInt("version"))
+        val visibility =
+            checkNotNull(
+                json.optJSONObject("settings")?.optJSONObject("overviewTabVisibility")
+            ) { "Карта видимости" }
+        assertEquals(
+            OverviewTab.entries.associateWith { true },
+            OverviewTab.entries.associateWith { visibility.optBoolean(it.name) },
+            "Все вкладки сериализованы как видимые"
+        )
+        assertEquals(
+            "STATS",
+            checkNotNull(json.optJSONObject("settings")) { "Блок settings" }.optString("lastOverviewTab")
+        )
+    }
 }

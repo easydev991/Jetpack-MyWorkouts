@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DonutLarge
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -30,6 +31,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -85,13 +87,17 @@ import java.time.format.DateTimeFormatter
  * @param modifier внешний модификатор
  */
 @OptIn(ExperimentalMaterial3Api::class)
+// Публичный composable с опциональными навигационными колбэками —
+// параметр на переход (паттерн ExercisesScreen)
+@Suppress("LongParameterList")
 @Composable
 fun MainScreen(
     viewModel: MainViewModel,
     onAddEntryClick: () -> Unit,
     analyticsProvider: AnalyticsProvider,
     modifier: Modifier = Modifier,
-    onEditEntryClick: (Long) -> Unit = {}
+    onEditEntryClick: (Long) -> Unit = {},
+    onOverviewClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     // Транзитное состояние меню: какая запись выбрана + где на экране.
@@ -117,6 +123,12 @@ fun MainScreen(
                         AnalyticsEvent.UserAction(UserActionType.OPEN_ENTRY_CREATE)
                     )
                     onAddEntryClick()
+                },
+                onOverviewClick = {
+                    analyticsProvider.log(
+                        AnalyticsEvent.UserAction(UserActionType.OPEN_OVERVIEW)
+                    )
+                    onOverviewClick()
                 },
                 onContextMenuItemChange = { newState -> contextMenu = newState },
                 onEntryTap = { item ->
@@ -182,6 +194,7 @@ internal data class MainScreenState(
     val contextMenu: ContextMenuState? = null,
     val detailsEntryId: Long? = null,
     val onAddEntryClick: () -> Unit = {},
+    val onOverviewClick: () -> Unit = {},
     val onContextMenuItemChange: (ContextMenuState?) -> Unit = {},
     val onEntryTap: (EntryListItem) -> Unit = {},
     val onEntryOpenDetails: (EntryListItem) -> Unit = {},
@@ -217,7 +230,23 @@ internal fun MainScreenContent(
             // здесь оставляем только горизонтальные insets (displayCutout и т.п.).
             contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
             topBar = {
-                TopAppBar(title = { Text(stringResource(R.string.workouts_title)) })
+                // Кнопка обзора видима, пока есть записи (спека:
+                // исчезает при удалении последней записи)
+                val overviewVisible =
+                    (state.uiState as? MainUiState.Success)?.entries?.isNotEmpty() == true
+                TopAppBar(
+                    title = { Text(stringResource(R.string.workouts_title)) },
+                    actions = {
+                        if (overviewVisible) {
+                            IconButton(onClick = state.onOverviewClick) {
+                                Icon(
+                                    Icons.Filled.DonutLarge,
+                                    contentDescription = stringResource(R.string.a11y_open_overview)
+                                )
+                            }
+                        }
+                    }
+                )
             },
             floatingActionButton = {
                 FloatingActionButton(onClick = state.onAddEntryClick) {

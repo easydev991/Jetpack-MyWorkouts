@@ -14,7 +14,9 @@ enum class AppScreen {
     ArchivedExercisesScreen,
     EntryCreateScreen,
     EntrySettingsScreen,
-    ExerciseCreateScreen
+    ExerciseCreateScreen,
+    OverviewScreen,
+    OverviewSettingsScreen
 }
 
 /**
@@ -33,11 +35,19 @@ enum class UserActionType {
     DELETE_ALL_DATA,
     OPEN_ENTRY_CREATE,
     OPEN_EXERCISE_CREATE,
+    OPEN_OVERVIEW,
     SELECT_THEME,
     TOGGLE_DYNAMIC_COLORS,
     TOGGLE_EXERCISES_TAB,
     TOGGLE_ENTRY_FIELD_VISIBILITY,
     ENABLE_ALL_ENTRY_FIELDS,
+    SELECT_OVERVIEW_TAB,
+    SELECT_STATS_PERIOD,
+    SELECT_STATS_CATEGORY,
+    SELECT_RECORDS_MODE,
+    SELECT_ACTIVITY_PERIOD,
+    TOGGLE_OVERVIEW_TAB_VISIBILITY,
+    ENABLE_ALL_OVERVIEW_TABS,
     SEND_FEEDBACK
 }
 

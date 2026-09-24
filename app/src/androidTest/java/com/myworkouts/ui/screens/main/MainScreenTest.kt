@@ -19,8 +19,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -153,6 +155,68 @@ class MainScreenTest {
         composeTestRule
             .onAllNodesWithText(context.getString(R.string.entry_list_empty))
             .assertCountEquals(0)
+    }
+
+    /**
+     * Кнопка обзора (overview-screen, tasks 7.2): при непустом списке
+     * иконка `DonutLarge` видна в TopAppBar.
+     */
+    @Test
+    fun content_when_entries_then_overview_button_displayed() {
+        // Given — список с одной записью
+        setContent(success(listOf(repsItem)))
+
+        // Then — кнопка обзора отображена (onNodeWithContentDescription
+        // сам падает, если совпадение не ровно одно)
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.a11y_open_overview))
+            .assertIsDisplayed()
+    }
+
+    /** Пустой список — кнопка обзора не рендерится (spec). */
+    @Test
+    fun content_when_empty_then_overview_button_not_rendered() {
+        // Given — пустой список
+        setContent(success(emptyList()))
+
+        // Then — кнопки обзора нет
+        composeTestRule
+            .onAllNodesWithContentDescription(context.getString(R.string.a11y_open_overview))
+            .assertCountEquals(0)
+    }
+
+    /** Тап по кнопке обзора вызывает [MainScreenState.onOverviewClick]. */
+    @Test
+    fun content_when_overview_button_clicked_then_calls_on_overview_click() {
+        // Given — счётчик переходов в колбэке
+        var overviewClicks = 0
+        composeTestRule.setContent {
+            MainScreenContent(
+                state =
+                    MainScreenState(
+                        uiState = success(listOf(repsItem)),
+                        onAddEntryClick = {},
+                        onRequestDelete = {},
+                        onContextMenuItemChange = {},
+                        onConfirmDelete = {},
+                        onCancelDelete = {},
+                        onOverviewClick = { overviewClicks++ }
+                    )
+            )
+        }
+
+        // When — тап по кнопке обзора
+        composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.a11y_open_overview))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — колбэк вызван ровно один раз
+        assertEquals(
+            "Тап по кнопке обзора вызывает onOverviewClick ровно один раз",
+            1,
+            overviewClicks
+        )
     }
 
     /**

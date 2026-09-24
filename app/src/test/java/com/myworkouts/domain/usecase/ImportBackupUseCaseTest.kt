@@ -3,18 +3,21 @@ package com.myworkouts.domain.usecase
 import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
+import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.domain.model.OverviewTab
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
+import org.json.JSONObject
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
@@ -121,7 +124,8 @@ class ImportBackupUseCaseTest {
 
     private fun useCase(
         repository: WorkoutDataRepository,
-        fileContent: String
+        fileContent: String,
+        dataStore: AppSettingsDataStore = mockk(relaxed = true)
     ): ImportBackupUseCase {
         val contentResolver = mockk<ContentResolver>()
         every { contentResolver.openInputStream(any()) } answers {
@@ -129,7 +133,7 @@ class ImportBackupUseCaseTest {
         }
         val context = mockk<Context>(relaxed = true)
         every { context.contentResolver } returns contentResolver
-        return ImportBackupUseCase(repository, context)
+        return ImportBackupUseCase(repository, dataStore, context)
     }
 
     @Test
@@ -669,7 +673,7 @@ class ImportBackupUseCaseTest {
                 CancellationException("Операция отменена")
             val context = mockk<Context>(relaxed = true)
             every { context.contentResolver } returns contentResolver
-            val useCase = ImportBackupUseCase(repository, context)
+            val useCase = ImportBackupUseCase(repository, mockk(relaxed = true), context)
 
             // When / Then — CancellationException прокидывается дальше,
             // не превращаясь в Result.failure
@@ -742,8 +746,8 @@ class ImportBackupUseCaseTest {
                 Arguments.of(Named.of("нет entries", """{"version": 1, "exercises": []}""")),
                 Arguments.of(
                     Named.of(
-                        "version не 1",
-                        """{"version": 2, "exercises": [], "entries": []}"""
+                        "version не 1 и не 2",
+                        """{"version": 3, "exercises": [], "entries": []}"""
                     )
                 ),
                 Arguments.of(
@@ -801,4 +805,152 @@ class ImportBackupUseCaseTest {
                 )
             )
     }
+
+    // ---------- overview-screen: настройки вкладок в бэкапе (design D8) ----------
+
+    /** Файл бэкапа с пустыми данными и переданным блоком settings. */
+    private fun settingsFile(
+        version: Int,
+        settingsJson: String
+    ): String =
+        """
+        {
+          "version": $version,
+          "exercises": [],
+          "entries": [],
+          "settings": $settingsJson
+        }
+        """.trimIndent()
+
+    @Test
+    fun parseBackupSettings_when_settings_present_then_parsed() {
+        // Given — v2 со скрытой RECORDS и последней вкладкой ACTIVITY
+        val raw =
+            settingsFile(
+                version = 2,
+                settingsJson =
+                    """{"overviewTabVisibility": {"RECORDS": false}, """ +
+                        """"lastOverviewTab": "ACTIVITY"}"""
+            )
+
+        // When
+        val settings =
+            checkNotNull(parseBackupSettings(JSONObject(raw))) { "Блок settings распознан" }
+
+        // Then
+        assertEquals(mapOf(OverviewTab.RECORDS to false), settings.tabVisibility, "Скрытая вкладка")
+        assertEquals(OverviewTab.ACTIVITY, settings.lastOverviewTab, "Последняя вкладка")
+    }
+
+    @Test
+    fun parseBackupSettings_when_block_absent_then_null() {
+        // Given — v1 без блока settings
+
+        // When
+        val settings = parseBackupSettings(JSONObject(plankFile))
+
+        // Then — обратная совместимость: settings нет
+        assertEquals(null, settings, "Файл версии 1 не содержит настроек")
+    }
+
+    @Test
+    fun parseBackupSettings_when_garbage_last_tab_then_fallback_stats() {
+        // Given — мусорное имя вкладки
+        val raw =
+            settingsFile(
+                version = 2,
+                settingsJson = """{"overviewTabVisibility": {}, "lastOverviewTab": "GARBAGE"}"""
+            )
+
+        // When
+        val settings =
+            checkNotNull(parseBackupSettings(JSONObject(raw))) { "Блок settings распознан" }
+
+        // Then — fallback на STATS, паттерн DataStore-Flow
+        assertEquals(OverviewTab.STATS, settings.lastOverviewTab)
+    }
+
+    @Test
+    fun parseBackupSettings_when_unknown_tab_then_ignored() {
+        // Given — неизвестное имя вкладки в карте видимости
+        val raw =
+            settingsFile(
+                version = 2,
+                settingsJson =
+                    """{"overviewTabVisibility": {"RECORDS": true, "FUTURE_TAB": false}, """ +
+                        """"lastOverviewTab": "STATS"}"""
+            )
+
+        // When
+        val settings =
+            checkNotNull(parseBackupSettings(JSONObject(raw))) { "Блок settings распознан" }
+
+        // Then — неизвестные имена игнорируются, известные читаются
+        assertEquals(mapOf(OverviewTab.RECORDS to true), settings.tabVisibility)
+    }
+
+    @Test
+    fun invoke_when_settings_present_then_applied_to_datastore() =
+        runTest {
+            // Given — v2 со скрытой ACTIVITY и последней вкладкой RECORDS
+            val repository = repository()
+            val dataStore = mockk<AppSettingsDataStore>(relaxed = true)
+            val raw =
+                settingsFile(
+                    version = 2,
+                    settingsJson =
+                        """{"overviewTabVisibility": {"ACTIVITY": false}, """ +
+                            """"lastOverviewTab": "RECORDS"}"""
+                )
+            val useCase = useCase(repository, raw, dataStore)
+
+            // When
+            val result = useCase(uri)
+
+            // Then — настройки применены после восстановления записей
+            assertTrue(result.isSuccess, "Импорт успешен")
+            coVerify(exactly = 1) { dataStore.setOverviewTabVisible(OverviewTab.ACTIVITY, false) }
+            coVerify(exactly = 1) { dataStore.setLastOverviewTab(OverviewTab.RECORDS) }
+        }
+
+    @Test
+    fun invoke_when_version1_then_datastore_not_changed() =
+        runTest {
+            // Given — файл версии 1 без блока settings
+            val repository = repository()
+            val dataStore = mockk<AppSettingsDataStore>(relaxed = true)
+            val useCase = useCase(repository, plankFile, dataStore)
+
+            // When
+            val result = useCase(uri)
+
+            // Then — импорт успешен, DataStore настроек не касается
+            assertTrue(result.isSuccess, "Бэкап v1 валиден")
+            coVerify(exactly = 0) { dataStore.setOverviewTabVisible(any(), any()) }
+            coVerify(exactly = 0) { dataStore.setLastOverviewTab(any()) }
+        }
+
+    @Test
+    fun invoke_when_import_fails_then_settings_not_applied() =
+        runTest {
+            // Given — вставка в БД проваливается
+            val repository = repository()
+            coEvery { repository.importData(any(), any()) } returns
+                Result.failure(RuntimeException("Сбой базы"))
+            val dataStore = mockk<AppSettingsDataStore>(relaxed = true)
+            val raw =
+                settingsFile(
+                    version = 2,
+                    settingsJson = """{"overviewTabVisibility": {"STATS": false}}"""
+                )
+            val useCase = useCase(repository, raw, dataStore)
+
+            // When
+            val result = useCase(uri)
+
+            // Then — при сбое восстановления настройки не применяются
+            assertTrue(result.isFailure, "Ошибка БД — Result.failure")
+            coVerify(exactly = 0) { dataStore.setOverviewTabVisible(any(), any()) }
+            coVerify(exactly = 0) { dataStore.setLastOverviewTab(any()) }
+        }
 }

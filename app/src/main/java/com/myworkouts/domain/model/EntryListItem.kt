@@ -7,7 +7,7 @@ package com.myworkouts.domain.model
  * из значений (повторы или длительность), дополнительный вес,
  * комментарий к записи и дату/время. Без `createdAt` — строке списка
  * он не нужен (design Decision 2 change workout-entries-list). Маппинг
- * из [com.myworkouts.data.db.EntryListItemEntity] — `toListItem()`.
+ * из [com.myworkouts.data.db.EntryListItemWithExerciseEntity] — `toListItem()`.
  *
  * @property id Идентификатор записи
  * @property exerciseName Название упражнения каталога

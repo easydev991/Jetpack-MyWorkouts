@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.myworkouts.domain.model.AppTheme
 import com.myworkouts.domain.model.EntryField
+import com.myworkouts.domain.model.OverviewTab
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -23,6 +24,9 @@ private val SHOW_EXERCISES_TAB_KEY = booleanPreferencesKey("show_exercises_tab")
 
 /** DataStore-ключ для глобального opt-out диалога подтверждения архивации. */
 private val DONT_SHOW_ARCHIVE_DIALOG_KEY = booleanPreferencesKey("dont_show_archive_dialog")
+
+/** DataStore-ключ последней выбранной вкладки обзора (overview-screen, design D8). */
+private val LAST_OVERVIEW_TAB_KEY = stringPreferencesKey("last_overview_tab")
 
 /**
  * Реализация DataStore для настроек оформления приложения.
@@ -177,6 +181,69 @@ class AppSettingsDataStore(
         }
     }
 
+    /**
+     * Сохраняет видимость вкладки обзора (overview-screen, design D8).
+     *
+     * @param tab Вкладка обзора ([OverviewTab])
+     * @param visible Показывать ли вкладку на экране обзора
+     */
+    suspend fun setOverviewTabVisible(
+        tab: OverviewTab,
+        visible: Boolean
+    ) {
+        dataStore.edit { preferences ->
+            preferences[overviewTabKey(tab)] = visible
+        }
+    }
+
+    /**
+     * Включает все вкладки обзора одной записью: один `edit` — одна
+     * перезапись файла и одно emission [overviewTabVisibility] (образец
+     * [setAllFieldsVisible], ревью `enableAll`).
+     */
+    suspend fun setAllOverviewTabsVisible() {
+        dataStore.edit { preferences ->
+            OverviewTab.entries.forEach { tab ->
+                preferences[overviewTabKey(tab)] = true
+            }
+        }
+    }
+
+    /**
+     * Flow карты видимости вкладок обзора: одно чтение `data` для всех
+     * ключей (как [entryFieldVisibility]). Отсутствие ключа = вкладка
+     * отображается (дефолт `true`), миграция не нужна.
+     */
+    val overviewTabVisibility: Flow<Map<OverviewTab, Boolean>> =
+        dataStore.data
+            .map { preferences ->
+                OverviewTab.entries.associateWith { tab -> preferences[overviewTabKey(tab)] ?: true }
+            }
+
+    /**
+     * Сохраняет последнюю выбранную вкладку обзора (спека «Сохранение
+     * выбранной вкладки»: восстановление в т.ч. после пересоздания
+     * процесса).
+     */
+    suspend fun setLastOverviewTab(tab: OverviewTab) {
+        dataStore.edit { preferences ->
+            preferences[LAST_OVERVIEW_TAB_KEY] = tab.name
+        }
+    }
+
+    /**
+     * Flow последней выбранной вкладки обзора. Дефолт — STATS; мусорное
+     * значение в файле — fallback на STATS (тот же контракт, что у
+     * парсера `lastOverviewTab` в бэкапе).
+     */
+    val lastOverviewTab: Flow<OverviewTab> =
+        dataStore.data
+            .map { preferences ->
+                preferences[LAST_OVERVIEW_TAB_KEY]
+                    ?.let { name -> OverviewTab.entries.firstOrNull { it.name == name } }
+                    ?: OverviewTab.STATS
+            }
+
     companion object {
         /**
          * DataStore-ключ видимости поля: деривируется из имени enum-константы
@@ -185,6 +252,14 @@ class AppSettingsDataStore(
          */
         private fun fieldKey(field: EntryField): Preferences.Key<Boolean> =
             booleanPreferencesKey("show_${field.name.lowercase()}_field")
+
+        /**
+         * DataStore-ключ видимости вкладки обзора: деривируется из имени
+         * enum-константы (`STATS` → `show_overview_stats_tab`) —
+         * overview-screen, design D8.
+         */
+        private fun overviewTabKey(tab: OverviewTab): Preferences.Key<Boolean> =
+            booleanPreferencesKey("show_overview_${tab.name.lowercase()}_tab")
 
         /**
          * Singleton-per-file [DataStore] в файле `appearance_prefs` —

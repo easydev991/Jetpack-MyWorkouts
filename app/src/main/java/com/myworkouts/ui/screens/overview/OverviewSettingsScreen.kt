@@ -7,8 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -22,58 +21,79 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.myworkouts.R
+import com.myworkouts.domain.model.OverviewTab
+import com.myworkouts.ui.state.OverviewSettingsUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
-
-/*
- * DRAFT экрана настроек «Обзора» по макету `progress-drafts/iter4_v1.html`
- * (panel-settings): тогглы видимости вкладок «Статистика»/«Рекорды»/
- * «Активность». Верстка — по образцу EntrySettingsScreen: Scaffold с
- * TopAppBar («назад»), скроллящийся список строк, кнопка «Включить все»,
- * пока выключена хотя бы одна вкладка.
- *
- * Черновик в одном файле: экран и демо-состояния. При переносе в фичу:
- * - [OverviewSettingsScreenContent] → `OverviewSettingsScreen.kt`
- *   (+ UiState/VM, состояние в DataStore),
- * - тексты → strings.xml,
- * - запрет выключения последней включённой вкладки (логика макета:
- *   тоггл откатывается) — логика состояния, в VM по TDD (сначала тест).
- */
+import com.myworkouts.ui.viewmodel.OverviewSettingsViewModel
 
 /**
- * Содержимое экрана настроек «Обзора»: TopAppBar с кнопкой «назад»,
- * подзаголовок, строки тогглов видимости вкладок [OverviewTab] и кнопка
- * «Включить все», пока выключена хотя бы одна вкладка — как в
- * EntrySettingsScreen. UI не владеет состоянием: запрет выключения
- * последней вкладки обеспечивает VM через [onTabToggle].
+ * Экран настроек обзора: видимость вкладок (overview-screen). Образец —
+ * `EntrySettingsScreen`: Scaffold с TopAppBar («назад»), скроллящийся
+ * список строк, кнопка «Включить все», пока выключена хотя бы одна
+ * вкладка.
+ *
+ * VM-обёртка: подписка на [OverviewSettingsViewModel.uiState]; guard
+ * последней включённой вкладки — внутри VM.
+ *
+ * @param viewModel ViewModel настроек
+ * @param onBackClick Обработчик нажатия на кнопку «Назад» в TopAppBar
+ * @param modifier Модификатор корневого контейнера
+ */
+@Composable
+fun OverviewSettingsScreen(
+    viewModel: OverviewSettingsViewModel,
+    onBackClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val state by viewModel.uiState.collectAsState()
+    OverviewSettingsScreenBody(
+        state = state,
+        onTabToggle = viewModel::setTabVisible,
+        onEnableAll = viewModel::enableAll,
+        onBackClick = onBackClick,
+        modifier = modifier
+    )
+}
+
+/**
+ * Вёрстка настроек обзора: UI не владеет состоянием — запрет выключения
+ * последней вкладки обеспечивает VM (тоггл игнорируется, спека).
+ *
+ * @param state Состояние ([OverviewSettingsUiState])
+ * @param onTabToggle Переключение видимости вкладки
+ * @param onEnableAll Включить все вкладки
+ * @param onBackClick Нажатие «назад»
+ * @param modifier Модификатор корневого контейнера
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun OverviewSettingsScreenContent(
-    enabledTabs: Set<OverviewTab>,
+internal fun OverviewSettingsScreenBody(
+    state: OverviewSettingsUiState,
     onTabToggle: (OverviewTab, Boolean) -> Unit,
     onEnableAll: () -> Unit,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
+        modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = {
-                    // DRAFT: как в EntrySettingsScreen («Настроить экран»),
-                    // при переносе — тот же строковый ресурс
-                    Text(text = "Настроить экран")
-                },
+                title = { Text(text = stringResource(R.string.entry_settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            // DRAFT: описание захардкожено, при переносе — ресурс
-                            contentDescription = "Назад"
+                            contentDescription = stringResource(R.string.back)
                         )
                     }
                 }
@@ -82,15 +102,13 @@ internal fun OverviewSettingsScreenContent(
     ) { paddingValues ->
         Column(
             modifier =
-                modifier
+                Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
                     .padding(paddingValues)
                     .padding(horizontal = 16.dp)
         ) {
             Text(
-                // DRAFT: строка захардкожена, при переносе — строковый ресурс
-                text = "Выберите разделы, которые показывать на экране обзора",
+                text = stringResource(R.string.overview_settings_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 8.dp)
@@ -98,11 +116,11 @@ internal fun OverviewSettingsScreenContent(
             OverviewTab.entries.forEach { tab ->
                 TabToggleRow(
                     tab = tab,
-                    enabled = tab in enabledTabs,
+                    enabled = state.visibility[tab] ?: true,
                     onToggle = { checked -> onTabToggle(tab, checked) }
                 )
             }
-            if (enabledTabs.size < OverviewTab.entries.size) {
+            if (state.hasAnyDisabled) {
                 EnableAllButton(onEnableAll = onEnableAll)
             }
         }
@@ -116,23 +134,32 @@ private fun TabToggleRow(
     enabled: Boolean,
     onToggle: (Boolean) -> Unit
 ) {
+    // toggleable на строке целиком: TalkBack анонсирует название
+    // вкладки вместе с состоянием, сам Switch — только индикатор
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .toggleable(
+                    value = enabled,
+                    role = Role.Switch,
+                    onValueChange = onToggle
+                ).padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = tab.label,
+            text = stringResource(id = tab.labelResId),
             modifier = Modifier.weight(1f)
         )
-        Switch(checked = enabled, onCheckedChange = onToggle)
+        Switch(checked = enabled, onCheckedChange = null)
     }
 }
 
-/** Кнопка «Включить все» — последний элемент скроллящегося списка. */
+/**
+ * Кнопка «Включить все» (общий ресурс с EntrySettings) — последний
+ * элемент скроллящегося списка.
+ */
 @Composable
 private fun EnableAllButton(onEnableAll: () -> Unit) {
     TextButton(
@@ -142,38 +169,43 @@ private fun EnableAllButton(onEnableAll: () -> Unit) {
                 .fillMaxWidth()
                 .padding(vertical = 8.dp)
     ) {
-        // DRAFT: строка захардкожена, при переносе — строковый ресурс
         Text(
-            text = "Включить все",
+            text = stringResource(R.string.entry_visibility_enable_all),
             textAlign = TextAlign.Center
         )
     }
 }
 
-// ===== Превью (конвенция: светлая + тёмная темы, showBackground, locale = "ru") =====
+// ===== Превью (обе темы, showBackground, locale = "ru") =====
 // Ключевые состояния: все вкладки включены и часть выключена (видна
 // кнопка «Включить все»).
 
 @Preview(showBackground = true, locale = "ru")
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
 @Composable
-internal fun OverviewSettingsAllEnabledPreview() {
-    OverviewSettingsPreview(enabledTabs = OverviewTab.entries.toSet())
+internal fun SettingsAllEnabledPreview() {
+    OverviewSettingsPreview(state = OverviewSettingsUiState())
 }
 
 @Preview(showBackground = true, locale = "ru")
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
 @Composable
-internal fun OverviewSettingsPartiallyDisabledPreview() {
-    OverviewSettingsPreview(enabledTabs = setOf(OverviewTab.STATS, OverviewTab.RECORDS))
+internal fun SettingsPartiallyDisabledPreview() {
+    OverviewSettingsPreview(
+        state =
+            OverviewSettingsUiState(
+                visibility =
+                    OverviewTab.entries.associateWith { it != OverviewTab.ACTIVITY }
+            )
+    )
 }
 
 @Composable
-private fun OverviewSettingsPreview(enabledTabs: Set<OverviewTab>) {
+private fun OverviewSettingsPreview(state: OverviewSettingsUiState) {
     JetpackMyWorkoutsTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
-            OverviewSettingsScreenContent(
-                enabledTabs = enabledTabs,
+            OverviewSettingsScreenBody(
+                state = state,
                 onTabToggle = { _, _ -> },
                 onEnableAll = {},
                 onBackClick = {}

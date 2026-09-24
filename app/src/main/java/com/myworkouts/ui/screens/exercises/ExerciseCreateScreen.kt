@@ -1,7 +1,6 @@
 package com.myworkouts.ui.screens.exercises
 
 import androidx.activity.compose.BackHandler
-import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -310,7 +309,7 @@ internal fun CategoryDropdownField(
         OutlinedTextField(
             value =
                 selectedCategory
-                    ?.let { stringResource(it.labelResId()) }
+                    ?.let { stringResource(it.labelResId) }
                     .orEmpty(),
             onValueChange = {},
             readOnly = true,
@@ -331,7 +330,7 @@ internal fun CategoryDropdownField(
         ) {
             ExerciseCategory.entries.forEach { category ->
                 DropdownMenuItem(
-                    text = { Text(stringResource(category.labelResId())) },
+                    text = { Text(stringResource(category.labelResId)) },
                     onClick = {
                         onCategoryChange(category)
                         expanded = false
@@ -386,20 +385,6 @@ internal fun ExerciseCreateSaveBottomBar(state: ExerciseCreateScreenState) {
         }
     }
 }
-
-/**
- * Локализованный лейбл категории для UI (в БД — сам enum, не строка).
- * Единственное место маппинга `ExerciseCategory` → строковый ресурс.
- */
-@StringRes
-private fun ExerciseCategory.labelResId(): Int =
-    when (this) {
-        ExerciseCategory.PUSH -> R.string.exercise_category_push
-        ExerciseCategory.PULL -> R.string.exercise_category_pull
-        ExerciseCategory.LEGS -> R.string.exercise_category_legs
-        ExerciseCategory.CORE -> R.string.exercise_category_core
-        ExerciseCategory.CARDIO -> R.string.exercise_category_cardio
-    }
 
 /**
  * Экран создания/редактирования доступен только для пользовательских

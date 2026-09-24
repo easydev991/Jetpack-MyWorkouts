@@ -8,13 +8,16 @@ package com.myworkouts.domain.usecase
 import android.content.Context
 import android.net.Uri
 import com.myworkouts.crash.CrashlyticsHelper
+import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.EntryValidator
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.BackupSettings
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.domain.model.OverviewTab
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONException
@@ -28,17 +31,22 @@ import java.util.concurrent.CancellationException
  * Читает файл через `context.contentResolver.openInputStream(uri)` на
  * [Dispatchers.IO], целиком парсит и валидирует его до любой записи в БД
  * (битый файл не может изменить данные частично), мержит с текущими
- * данными (ничего не перезаписывается, добавляется только недостающее)
- * и вставляет подготовленное одной транзакцией
- * [WorkoutDataRepository.importData].
+ * данными (ничего не перезаписывается, добавляется только недостающее),
+ * вставляет подготовленное одной транзакцией
+ * [WorkoutDataRepository.importData] и применяет блок настроек вкладок
+ * обзора из бэкапов версии 2 (overview-screen, design D8) — после
+ * успешного восстановления.
  *
  * @property repository доступ к данным приложения
+ * @property dataStore хранилище настроек: блок `settings` бэкапа v2
+ *   применяется сюда после merge записей (design D8)
  * @property context контекст приложения; поток открывается через
  *   `contentResolver` (в [com.myworkouts.ui.viewmodel.AppDataViewModel]
  *   передаётся `context.applicationContext`)
  */
 class ImportBackupUseCase(
     private val repository: WorkoutDataRepository,
+    private val dataStore: AppSettingsDataStore,
     private val context: Context
 ) {
     /**
@@ -80,7 +88,7 @@ class ImportBackupUseCase(
                     )
                 )
             }
-        val (fileExercises, fileEntries) =
+        val fileContent =
             try {
                 parseBackupJson(raw)
             } catch (e: BackupException) {
@@ -96,7 +104,7 @@ class ImportBackupUseCase(
                 return Result.failure(error)
             }
         val (exercisesToInsert, entriesToInsert, idsToArchive) =
-            mergeBackup(existingExercises, existingEntries, fileExercises, fileEntries)
+            mergeBackup(existingExercises, existingEntries, fileContent.exercises, fileContent.entries)
         val importResult = repository.importData(exercisesToInsert, entriesToInsert)
         importResult.getOrElse { error ->
             return Result.failure(error)
@@ -110,8 +118,27 @@ class ImportBackupUseCase(
                 return Result.failure(error)
             }
         }
+        // Настройки вкладок применяются после восстановления (design D8):
+        // бэкапы v1 не содержат блока — DataStore не меняется.
+        applyBackupSettings(dataStore, fileContent.settings)
         return importResult
     }
+}
+
+/**
+ * Применяет блок настроек вкладок бэкапа к [AppSettingsDataStore] после
+ * успешного восстановления (design D8); `null` (бэкап v1) — не трогает.
+ * Вынесено из [ImportBackupUseCase.invoke] — detekt `LongMethod`.
+ */
+private suspend fun applyBackupSettings(
+    dataStore: AppSettingsDataStore,
+    settings: BackupSettings?
+) {
+    settings ?: return
+    settings.tabVisibility.forEach { (tab, visible) ->
+        dataStore.setOverviewTabVisible(tab, visible)
+    }
+    dataStore.setLastOverviewTab(settings.lastOverviewTab)
 }
 
 /**
@@ -234,7 +261,7 @@ private fun ExerciseEntry.contentKey(name: String): EntryContentKey =
  * в диагностику), правило не распознаёт доступ через свойство.
  */
 @Suppress("ThrowsCount", "SwallowedException")
-internal fun parseBackupJson(raw: String): Pair<List<Exercise>, List<BackupEntry>> {
+internal fun parseBackupJson(raw: String): BackupFileContent {
     val root =
         try {
             JSONObject(raw)
@@ -242,7 +269,7 @@ internal fun parseBackupJson(raw: String): Pair<List<Exercise>, List<BackupEntry
             throw invalidFile("Файл не является корректным JSON: ${e.message}")
         }
     val version = root.opt("version")
-    if (version !is Int || version != 1) {
+    if (version !is Int || (version != 1 && version != 2)) {
         throw invalidFile("Поле version отсутствует, не целое или не поддерживается: $version")
     }
     val exercisesArray =
@@ -259,8 +286,19 @@ internal fun parseBackupJson(raw: String): Pair<List<Exercise>, List<BackupEntry
         (0 until entriesArray.length()).map { index ->
             parseEntry(entriesArray.optJSONObject(index) ?: throw invalidFile("Элемент entries не объект"))
         }
-    return exercises to entries
+    return BackupFileContent(
+        exercises = exercises,
+        entries = entries,
+        settings = parseBackupSettings(root)
+    )
 }
+
+/** Результат разбора файла бэкапа: каталог, записи и блок настроек. */
+internal data class BackupFileContent(
+    val exercises: List<Exercise>,
+    val entries: List<BackupEntry>,
+    val settings: BackupSettings?
+)
 
 private fun parseExercise(obj: JSONObject): Exercise =
     Exercise(
@@ -290,6 +328,36 @@ private fun parseEntry(obj: JSONObject): BackupEntry =
     )
 
 private fun invalidFile(message: String): BackupException = BackupException(message, BackupError.INVALID_FILE)
+
+/**
+ * Парсинг блока настроек вкладок обзора (overview-screen, design D8):
+ * вызывается из [parseBackupJson] — `root` уже провалидирован. Блок
+ * отсутствует (бэкап версии 1) → `null`, DataStore не меняется.
+ * Неизвестные имена вкладок и некорректные типы значений в карте
+ * видимости игнорируются (принцип «неизвестные поля игнорируются»
+ * Decision 5); мусорное `lastOverviewTab` — fallback на STATS (тот же
+ * контракт, что у Flow [AppSettingsDataStore.lastOverviewTab]).
+ */
+internal fun parseBackupSettings(root: JSONObject): BackupSettings? {
+    val settingsJson = root.optJSONObject("settings") ?: return null
+    val visibilityJson = settingsJson.optJSONObject("overviewTabVisibility")
+    val tabVisibility =
+        if (visibilityJson == null) {
+            emptyMap()
+        } else {
+            buildMap {
+                OverviewTab.entries.forEach { tab ->
+                    val value = visibilityJson.opt(tab.name)
+                    if (value is Boolean) {
+                        put(tab, value)
+                    }
+                }
+            }
+        }
+    val lastRaw = settingsJson.opt("lastOverviewTab")
+    val lastOverviewTab = OverviewTab.entries.firstOrNull { it.name == lastRaw } ?: OverviewTab.STATS
+    return BackupSettings(tabVisibility = tabVisibility, lastOverviewTab = lastOverviewTab)
+}
 
 private fun JSONObject.requiredString(key: String): String {
     val value = opt(key)

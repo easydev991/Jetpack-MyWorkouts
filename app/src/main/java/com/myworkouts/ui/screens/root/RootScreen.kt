@@ -11,9 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
@@ -32,24 +30,16 @@ import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.navigation.BottomTab
 import com.myworkouts.navigation.Screen
 import com.myworkouts.navigation.visibleTabs
-import com.myworkouts.ui.screens.appdata.AppDataScreen
-import com.myworkouts.ui.screens.appearance.AppearanceScreen
 import com.myworkouts.ui.screens.entry.EntryCreateScreen
 import com.myworkouts.ui.screens.entry.EntrySettingsScreen
 import com.myworkouts.ui.screens.exercises.ArchivedExercisesScreen
 import com.myworkouts.ui.screens.exercises.ExerciseCreateScreen
 import com.myworkouts.ui.screens.exercises.ExercisesScreen
-import com.myworkouts.ui.screens.main.MainScreen
-import com.myworkouts.ui.screens.more.MoreScreen
-import com.myworkouts.ui.viewmodel.AppDataViewModel
-import com.myworkouts.ui.viewmodel.AppearanceViewModel
 import com.myworkouts.ui.viewmodel.ArchivedExercisesViewModel
 import com.myworkouts.ui.viewmodel.EntryCreateViewModel
 import com.myworkouts.ui.viewmodel.EntrySettingsViewModel
 import com.myworkouts.ui.viewmodel.ExerciseCreateViewModel
 import com.myworkouts.ui.viewmodel.ExercisesViewModel
-import com.myworkouts.ui.viewmodel.MainViewModel
-import kotlinx.coroutines.launch
 
 /**
  * Корневой экран с нижней навигацией и вложенными маршрутами.
@@ -140,9 +130,9 @@ fun RootScreen(
 }
 
 /**
- * Граф навигации всех destination. Настройку тоггла получает параметром
- * (единая подписка в [RootScreen]); её запись (`scope.launch`) живёт
- * здесь — рядом с местом передачи.
+ * Граф навигации всех destination. Запись тоггла «Упражнения»
+ * (`scope.launch`) живёт в [MoreNavDestination] — рядом с местом передачи
+ * (файл `NavDestinations.kt`).
  *
  * Destination exercises регистрируется ВСЕГДА (exercises-tab, design
  * Decision 7): скрытие настройкой убирает только `NavigationBarItem`,
@@ -158,47 +148,31 @@ private fun AppNavHost(
     analyticsProvider: AnalyticsProvider,
     modifier: Modifier = Modifier
 ) {
-    val scope = rememberCoroutineScope()
     NavHost(
         navController = navController,
         startDestination = Screen.Main.route,
         modifier = modifier
     ) {
         composable(Screen.Main.route) {
-            MainScreen(
-                viewModel = viewModel(factory = MainViewModel.factory(repository, analyticsProvider)),
-                onAddEntryClick = { navController.navigate(Screen.EntryCreate.createRoute()) },
-                onEditEntryClick = { entryId ->
-                    navController.navigate(Screen.EntryCreate.createRoute(entryId))
-                },
-                analyticsProvider = analyticsProvider
-            )
+            MainNavDestination(repository, analyticsProvider, navController)
         }
         composable(Screen.Exercises.route) {
             ExercisesNavDestination(repository, dataStore, analyticsProvider, navController)
         }
         composable(Screen.More.route) {
-            MoreScreen(
-                navController = navController,
-                showExercisesTab = showExercisesTab,
-                onShowExercisesTabChange = { show ->
-                    scope.launch { dataStore.setShowExercisesTab(show) }
-                },
-                analyticsProvider = analyticsProvider
-            )
+            MoreNavDestination(dataStore, showExercisesTab, analyticsProvider, navController)
         }
         composable(Screen.Appearance.route) {
-            AppearanceScreen(
-                viewModel = viewModel(factory = AppearanceViewModel.factory(dataStore, analyticsProvider)),
-                onBackClick = { navController.popBackStack() }
-            )
+            AppearanceNavDestination(dataStore, analyticsProvider, navController)
         }
         composable(Screen.AppData.route) {
-            val context = LocalContext.current
-            AppDataScreen(
-                viewModel = viewModel(factory = AppDataViewModel.factory(repository, context, analyticsProvider)),
-                onBackClick = { navController.popBackStack() }
-            )
+            AppDataNavDestination(repository, dataStore, analyticsProvider, navController)
+        }
+        composable(Screen.Overview.route) {
+            OverviewNavDestination(repository, dataStore, analyticsProvider, navController)
+        }
+        composable(Screen.OverviewSettings.route) {
+            OverviewSettingsNavDestination(dataStore, analyticsProvider, navController)
         }
         composable(Screen.EntrySettings.route) {
             EntrySettingsNavDestination(navController, dataStore, analyticsProvider)
@@ -247,6 +221,8 @@ private fun screenForRoute(route: String?): AppScreen? =
         Screen.EntryCreate.route -> AppScreen.EntryCreateScreen
         Screen.EntrySettings.route -> AppScreen.EntrySettingsScreen
         Screen.ExerciseCreate.route -> AppScreen.ExerciseCreateScreen
+        Screen.Overview.route -> AppScreen.OverviewScreen
+        Screen.OverviewSettings.route -> AppScreen.OverviewSettingsScreen
         else -> null
     }
 

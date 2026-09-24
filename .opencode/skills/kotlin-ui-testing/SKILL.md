@@ -132,7 +132,10 @@ description: >
 ## Запуск тестов
 
 - **Все androidTest**: `make android-test` — запуск
-  `./gradlew connectedDebugAndroidTest --console=plain` + человекочитаемый
+  `./gradlew connectedGithubDebugAndroidTest --console=plain` (задача
+  флейвор-квалифицированная: github — дефолт, rustore —
+  `connectedRustoreDebugAndroidTest`; голый `connectedDebugAndroidTest`
+  не существует — Gradle ответит «ambiguous») + человекочитаемый
   отчёт через `scripts/test_report.py` (тот же скрипт, что и для
   `make test`, — XML из `app/build/outputs/androidTest-results/connected/debug/`).
 - **Unit + интеграционные раздельно**: `make test` (JVM),
@@ -204,6 +207,7 @@ description: >
 | Данные вставил, а UI их не видит | После `runBlocking { ... }` в Compose-тесте вызови `composeTestRule.waitForIdle()` |
 | `onAllNodesWithContentDescription` без проверки количества | Добавь `.assertCountEquals(n)` — иначе тест проходит при 0 нод |
 | `assertIsDisplayed()` падает, хотя нода есть вне экрана | Проверяй позицию через `fetchSemanticsNode().boundsInRoot` или проскролль до ноды (`performScrollToNode(hasText(...))`) |
+| `task 'connectedDebugAndroidTest' is ambiguous` | В проекте флейворы (github/rustore) — задача всегда с флейвором: `connectedGithubDebugAndroidTest` (дефолт) / `connectedRustoreDebugAndroidTest`; `make android-test` подставляет сам |
 | Тест Room падает «cannot access database on the main thread» | `.allowMainThreadQueries()` при создании in-memory базы |
 | `navController.navigate(...)` бросает `IllegalArgumentException: destination not found` | Оберни экран в `NavHost`-harness с заглушкой destination (см. `ExercisesScreenTest.ExercisesScreenWithNavHost`) |
 | `navController` нужен снаружи `setContent` | `lateinit var navController; composeTestRule.setContent { rememberNavController().also { navController = it } }` |

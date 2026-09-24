@@ -9,14 +9,18 @@
 make android-test    # все androidTest на подключённом устройстве/эмуляторе
 ```
 
-Под капотом:
+Под капотом (Makefile, дефолт `FLAVOR=github`):
 
 ```makefile
-./gradlew connectedDebugAndroidTest --console=plain
+./gradlew connectedGithubDebugAndroidTest --console=plain
 python3 scripts/test_report.py app/build/outputs/androidTest-results/connected/debug
 ```
 
-- `connectedDebugAndroidTest` — инструментированные тесты в debug-сборке
+- Задача всегда флейвор-квалифицированная:
+  `connected$(FLAVOR_TITLE)DebugAndroidTest` — `connectedGithubDebugAndroidTest`
+  (дефолт) или `connectedRustoreDebugAndroidTest` (`FLAVOR=rustore`).
+  Голого `connectedDebugAndroidTest` в проекте нет — Gradle ответит
+  «task is ambiguous».
 - Требуется подключённое устройство или запущенный эмулятор
 
 ## Отчёт
@@ -79,7 +83,7 @@ make android-test   # androidTest на подключённом устройст
 ## Один класс
 
 Фильтрация отдельных androidTest-классов через `--tests` **НЕ работает**
-с `connectedDebugAndroidTest` — Gradle/AGP ограничение: задача не
+с `connected*DebugAndroidTest` — Gradle/AGP ограничение: задача не
 принимает этот параметр (`Unknown command-line option '--tests'`).
 Варианты:
 
@@ -92,19 +96,21 @@ make android-test   # androidTest на подключённом устройст
 
   ```bash
   # Один тестовый метод
-  ./gradlew :app:connectedDebugAndroidTest --console=plain \
+  ./gradlew :app:connectedGithubDebugAndroidTest --console=plain \
     -Pandroid.testInstrumentationRunnerArguments.class='com.myworkouts.ui.screens.exercises.ExercisesScreenTest#row_long_press_when_standard_then_no_context_menu'
 
   # Весь класс
-  ./gradlew :app:connectedDebugAndroidTest --console=plain \
+  ./gradlew :app:connectedGithubDebugAndroidTest --console=plain \
     -Pandroid.testInstrumentationRunnerArguments.class='com.myworkouts.ui.screens.exercises.ExercisesScreenTest'
   ```
 
   Кавычки вокруг значения обязательны (в `class#method` решётка — не
   комментарий оболочки, а разделитель имени класса и метода для
   `AndroidJUnitRunner`). Прогон только нужного метода обычно
-  завершается за 5–10 секунд вместо полного набора. Способ применим
-  и к `connectedAndroidTest` (без `Debug`) и к `connectedReleaseAndroidTest`.
+  завершается за 5–10 секунд вместо полного набора. Имя задачи —
+  с флейвором: `connectedRustoreDebugAndroidTest` для
+  `FLAVOR=rustore`; способ применим и к `connectedAndroidTest`
+  (без `Debug`) и к `connectedReleaseAndroidTest`.
 
 Для unit-тестов фильтрация `--tests` работает стандартно
 (`./gradlew test --tests "com.myworkouts.ExampleUnitTest"`).

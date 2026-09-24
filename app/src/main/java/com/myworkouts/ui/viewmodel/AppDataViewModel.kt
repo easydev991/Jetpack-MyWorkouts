@@ -13,6 +13,7 @@ import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.AppErrorOperation
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.crash.CrashlyticsHelper
+import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.usecase.BackupError
 import com.myworkouts.domain.usecase.BackupException
@@ -61,6 +62,8 @@ class AppDataViewModel(
          * design Decision 3.
          *
          * @param repository репозиторий данных тренировок
+         * @param dataStore хранилище настроек: настройки вкладок обзора
+         *   входят в резервную копию (overview-screen, design D8)
          * @param context контекст для SAF-потоков (замыкается
          *   `applicationContext` — Activity-контекст в ViewModel нельзя)
          * @param analyticsProvider провайдер аналитики
@@ -68,6 +71,7 @@ class AppDataViewModel(
          */
         fun factory(
             repository: WorkoutDataRepository,
+            dataStore: AppSettingsDataStore,
             context: Context,
             analyticsProvider: AnalyticsProvider
         ): ViewModelProvider.Factory =
@@ -76,8 +80,8 @@ class AppDataViewModel(
                     val appContext = context.applicationContext
                     AppDataViewModel(
                         repository,
-                        ExportBackupUseCase(repository, appContext),
-                        ImportBackupUseCase(repository, appContext),
+                        ExportBackupUseCase(repository, dataStore, appContext),
+                        ImportBackupUseCase(repository, dataStore, appContext),
                         analyticsProvider
                     )
                 }

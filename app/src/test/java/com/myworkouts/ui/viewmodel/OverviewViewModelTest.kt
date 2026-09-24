@@ -1,0 +1,426 @@
+package com.myworkouts.ui.viewmodel
+
+import com.myworkouts.analytics.AnalyticsEvent
+import com.myworkouts.analytics.FakeAnalyticsProvider
+import com.myworkouts.analytics.UserActionType
+import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.model.EntryWithExercise
+import com.myworkouts.domain.model.ExerciseCategory
+import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.domain.model.OverviewTab
+import com.myworkouts.domain.usecase.ActivityPeriod
+import com.myworkouts.domain.usecase.RecordsMode
+import com.myworkouts.domain.usecase.StatsPeriod
+import com.myworkouts.ui.state.StreakCardState
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import java.time.LocalDate
+import java.time.ZoneId
+
+/**
+ * Unit-тесты для [OverviewViewModel] (overview-screen, §4.3):
+ * восстановление вкладки, fallback при скрытой сохранённой, запись
+ * пользовательских состояний и пересчёт при новой эмиссии записей.
+ *
+ * Репозиторий и DataStore — `mockk` + stub Flow на `MutableStateFlow`
+ * (паттерн [EntrySettingsViewModelTest]); аналитика —
+ * [FakeAnalyticsProvider].
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class OverviewViewModelTest {
+    private lateinit var mockRepository: WorkoutDataRepository
+    private lateinit var mockDataStore: AppSettingsDataStore
+    private val fakeAnalytics = FakeAnalyticsProvider()
+    private lateinit var testDispatcher: TestDispatcher
+
+    /** Stub Flow записей с данными упражнений, управляемый тестом. */
+    private lateinit var entriesFlow: MutableStateFlow<List<EntryWithExercise>>
+
+    /** Stub Flow видимости вкладок. */
+    private lateinit var visibilityFlow: MutableStateFlow<Map<OverviewTab, Boolean>>
+
+    /** Stub Flow последней вкладки. */
+    private lateinit var lastTabFlow: MutableStateFlow<OverviewTab>
+
+    @BeforeEach
+    fun setUp() {
+        mockRepository = mockk(relaxed = true)
+        mockDataStore = mockk(relaxed = true)
+        entriesFlow = MutableStateFlow(emptyList())
+        visibilityFlow = MutableStateFlow(OverviewTab.entries.associateWith { true })
+        lastTabFlow = MutableStateFlow(OverviewTab.STATS)
+        every { mockRepository.entriesWithExercise() } returns entriesFlow
+        every { mockDataStore.overviewTabVisibility } returns visibilityFlow
+        every { mockDataStore.lastOverviewTab } returns lastTabFlow
+        testDispatcher = StandardTestDispatcher()
+        Dispatchers.setMain(testDispatcher)
+    }
+
+    @AfterEach
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    /** VM с подпиской на uiState через backgroundScope (запускает WhileSubscribed). */
+    private fun createViewModel(): OverviewViewModel = OverviewViewModel(mockRepository, mockDataStore, fakeAnalytics)
+
+    @Test
+    fun ui_state_when_default_tab_then_stats() =
+        runTest(testDispatcher) {
+            // Given/When
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                OverviewTab.STATS,
+                viewModel.uiState.value.selectedTab,
+                "Дефолт (нет сохранённой вкладки) — «Статистика»"
+            )
+            assertEquals(
+                OverviewTab.entries.toList(),
+                viewModel.uiState.value.visibleTabs,
+                "По умолчанию видны все вкладки"
+            )
+        }
+
+    @Test
+    fun ui_state_when_saved_tab_records_then_restored() =
+        runTest(testDispatcher) {
+            // Given — сохранённая вкладка «Рекорды»
+            lastTabFlow.value = OverviewTab.RECORDS
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                OverviewTab.RECORDS,
+                viewModel.uiState.value.selectedTab,
+                "Сохранённая вкладка восстанавливается из preferences"
+            )
+        }
+
+    @Test
+    fun ui_state_when_saved_tab_hidden_then_fallback_first_visible() =
+        runTest(testDispatcher) {
+            // Given — сохранена «Активность», но она скрыта настройками
+            // (spec «Сохранённая вкладка скрыта настройками»)
+            lastTabFlow.value = OverviewTab.ACTIVITY
+            visibilityFlow.value =
+                OverviewTab.entries.associateWith { true } +
+                mapOf(OverviewTab.ACTIVITY to false)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then — первая видимая (в порядке enum)
+            assertEquals(
+                OverviewTab.STATS,
+                viewModel.uiState.value.selectedTab,
+                "Скрытая сохранённая вкладка — fallback на первую видимую"
+            )
+        }
+
+    @Test
+    fun selectTab_then_writes_datastore_and_logs() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.selectTab(OverviewTab.RECORDS)
+            advanceUntilIdle()
+
+            // Then
+            coVerify(exactly = 1) { mockDataStore.setLastOverviewTab(OverviewTab.RECORDS) }
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.SELECT_OVERVIEW_TAB, "records")),
+                fakeAnalytics.events,
+                "selectTab логирует UserAction(SELECT_OVERVIEW_TAB, records)"
+            )
+        }
+
+    @Test
+    fun selectStatsPeriod_then_resets_drilldown_and_logs() =
+        runTest(testDispatcher) {
+            // Given — выбрана категория drill-down
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.selectStatsCategory(ExerciseCategory.PUSH)
+            advanceUntilIdle()
+
+            // When
+            viewModel.selectStatsPeriod(StatsPeriod.MONTH)
+            advanceUntilIdle()
+
+            // Then — drill-down сброшен, период сменён, событие залогировано
+            val stats = viewModel.uiState.value.stats
+            assertEquals(StatsPeriod.MONTH, stats.period, "Период сменён")
+            assertEquals(null, stats.selected, "Смена периода сбрасывает drill-down")
+            assertEquals(
+                listOf(
+                    AnalyticsEvent.UserAction(UserActionType.SELECT_STATS_CATEGORY, "push"),
+                    AnalyticsEvent.UserAction(UserActionType.SELECT_STATS_PERIOD, "month")
+                ),
+                fakeAnalytics.events,
+                "Смена периода логирует UserAction(SELECT_STATS_PERIOD, month)"
+            )
+        }
+
+    @Test
+    fun selectStatsCategory_then_back_logs_category_name_and_back() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.selectStatsCategory(ExerciseCategory.LEGS)
+            advanceUntilIdle()
+
+            // Then — выбранная категория в состоянии статистики
+            assertEquals(
+                ExerciseCategory.LEGS,
+                viewModel.uiState.value.stats.selected,
+                "Выбранная категория в состоянии статистики"
+            )
+
+            // When — выход из drill-down
+            viewModel.selectStatsCategory(null)
+            advanceUntilIdle()
+
+            // Then — события по порядку: имя категории, затем back
+            assertEquals(
+                listOf(
+                    AnalyticsEvent.UserAction(UserActionType.SELECT_STATS_CATEGORY, "legs"),
+                    AnalyticsEvent.UserAction(UserActionType.SELECT_STATS_CATEGORY, "back")
+                ),
+                fakeAnalytics.events,
+                "Выбор категории логирует имя, выход — back"
+            )
+            assertEquals(
+                null,
+                viewModel.uiState.value.stats.selected,
+                "Выход из drill-down сбрасывает категорию"
+            )
+        }
+
+    @Test
+    fun selectRecordsMode_then_logs() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.selectRecordsMode(RecordsMode.PER_DAY)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.SELECT_RECORDS_MODE, "per_day")),
+                fakeAnalytics.events,
+                "Смена режима логирует UserAction(SELECT_RECORDS_MODE, per_day)"
+            )
+            assertEquals(
+                RecordsMode.PER_DAY,
+                viewModel.uiState.value.records.mode,
+                "Режим рекордов в состоянии"
+            )
+        }
+
+    @Test
+    fun selectActivityPeriod_then_logs() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.selectActivityPeriod(ActivityPeriod.YEAR)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.SELECT_ACTIVITY_PERIOD, "year")),
+                fakeAnalytics.events,
+                "Смена периода логирует UserAction(SELECT_ACTIVITY_PERIOD, year)"
+            )
+            assertEquals(
+                ActivityPeriod.YEAR,
+                viewModel.uiState.value.activity.period,
+                "Период хитмапа в состоянии"
+            )
+        }
+
+    @Test
+    fun ui_state_when_entries_emitted_then_all_tabs_recalculated() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — запись подтягиваний (REPS) сегодня
+            entriesFlow.value = listOf(pullUpsEntry(daysAgo = 0, sets = 3, reps = 10))
+            advanceUntilIdle()
+
+            // Then — все три вкладки пересчитаны
+            val state = viewModel.uiState.value
+            val stats = state.stats
+            assertEquals(
+                listOf(ExerciseCategory.PULL to 30),
+                stats.categoryTotals.map { it.category to it.totalReps },
+                "Донат: подтягивания, объём 3x10 = 30"
+            )
+            assertEquals(false, stats.isEmpty, "Есть данные — пустое состояние снято")
+            assertEquals(
+                1,
+                state.records.records.size,
+                "Рекорды: одна строка по упражнению"
+            )
+            assertEquals(
+                1,
+                state.activity.streakDays,
+                "Серия: запись сегодня — 1 день"
+            )
+            assertEquals(
+                1,
+                state.activity.heatmap
+                    .last()
+                    .count,
+                "Хитмап: последняя ячейка (сегодня) — 1 запись"
+            )
+        }
+
+    @Test
+    fun ui_state_when_period_day_then_yesterday_entry_out_of_stats() =
+        runTest(testDispatcher) {
+            // Given — запись вчера
+            entriesFlow.value = listOf(pullUpsEntry(daysAgo = 1, sets = 2, reps = 8))
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.selectStatsPeriod(StatsPeriod.DAY)
+            advanceUntilIdle()
+
+            // Then — окно «День» не содержит вчерашнюю запись
+            val stats = viewModel.uiState.value.stats
+            assertEquals(true, stats.isEmpty, "Вчерашняя запись вне периода «День»")
+            assertEquals(
+                emptyList<ExerciseCategory>(),
+                stats.categoryTotals.map { it.category },
+                "Донат пуст за сегодня"
+            )
+        }
+
+    @Test
+    fun ui_state_when_entry_today_then_streak_state_active() =
+        runTest(testDispatcher) {
+            // Given — запись сегодня
+            entriesFlow.value = listOf(pullUpsEntry(daysAgo = 0, sets = 3, reps = 10))
+
+            // When
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                StreakCardState.Active,
+                viewModel.uiState.value.activity.streakState,
+                "Тренировка сегодня — карточка Active"
+            )
+        }
+
+    @Test
+    fun ui_state_when_entry_yesterday_then_streak_state_pending() =
+        runTest(testDispatcher) {
+            // Given — последняя запись вчера, сегодня записей нет
+            entriesFlow.value = listOf(pullUpsEntry(daysAgo = 1, sets = 3, reps = 10))
+
+            // When
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then — серия жива, но сегодня ещё не тренировались
+            assertEquals(
+                StreakCardState.Pending,
+                viewModel.uiState.value.activity.streakState,
+                "Серия жива без сегодняшней записи — карточка Pending"
+            )
+        }
+
+    @Test
+    fun ui_state_when_entry_two_days_ago_then_streak_state_lost() =
+        runTest(testDispatcher) {
+            // Given — последняя запись позавчера, серия прервана
+            entriesFlow.value = listOf(pullUpsEntry(daysAgo = 2, sets = 3, reps = 10))
+
+            // When
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                StreakCardState.Lost,
+                viewModel.uiState.value.activity.streakState,
+                "Пропуск вчерашнего дня — карточка Lost"
+            )
+        }
+
+    /** Запись подтягиваний (PULL, REPS) [daysAgo] дней назад в 18:30. */
+    private fun pullUpsEntry(
+        daysAgo: Long,
+        sets: Int,
+        reps: Int
+    ): EntryWithExercise {
+        val date =
+            LocalDate
+                .now()
+                .minusDays(daysAgo)
+                .atTime(18, 30)
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli()
+        return EntryWithExercise(
+            id = 1L,
+            exerciseId = 2L,
+            exerciseName = "Подтягивания",
+            category = ExerciseCategory.PULL,
+            measuredBy = ExerciseMeasuredBy.REPS,
+            sets = sets,
+            reps = reps,
+            durationSec = null,
+            date = date
+        )
+    }
+}

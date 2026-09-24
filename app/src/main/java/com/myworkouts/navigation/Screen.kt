@@ -30,6 +30,19 @@ sealed class Screen(
     /** Экран «Ещё» — точка входа в дополнительные настройки (нижняя навигация). */
     object More : Screen(route = "more")
 
+    /**
+     * Экран «Обзор» — статистика, рекорды и активность (overview-screen,
+     * design D11; не в нижней навигации). Точка входа — кнопка на [Main];
+     * нижний бар скрыт контрактом `currentRoute in tabs.map { it.route }`.
+     */
+    object Overview : Screen(route = "overview")
+
+    /**
+     * Экран настроек обзора — видимость вкладок обзора (overview-screen,
+     * design D11; не в нижней навигации). Паттерн — [Appearance].
+     */
+    object OverviewSettings : Screen(route = "overview_settings")
+
     /** Экран «Оформление приложения» — выбор темы и динамических цветов (не в нижней навигации). */
     object Appearance : Screen(route = "appearance")
 

@@ -9,9 +9,11 @@ import com.myworkouts.data.db.StandardExercise
 import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.data.db.toDomain
 import com.myworkouts.data.db.toEntity
+import com.myworkouts.data.db.toEntryWithExercise
 import com.myworkouts.data.db.toListItem
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import kotlinx.coroutines.flow.Flow
@@ -186,13 +188,25 @@ class RoomWorkoutDataRepository(
     /**
      * Реактивный список записей с JOIN-проекцией на название упражнения.
      * Сортировка — в SQL (`ORDER BY date DESC`), маппинг — extension
-     * `EntryListItemEntity.toListItem()` (workout-entries-list, design
-     * Decision 2).
+     * `EntryListItemWithExerciseEntity.toListItem()` (workout-entries-list,
+     * design Decision 2); источник — единый широкий запрос
+     * [ExerciseEntryDao.observeEntryRows].
      */
     override fun entries(): Flow<List<EntryListItem>> =
         exerciseEntryDao
-            .observeEntries()
-            .map { projections -> projections.map { it.toListItem() } }
+            .observeEntryRows()
+            .map { rows -> rows.map { it.toListItem() } }
+
+    /**
+     * Реактивный список записей для расчётов обзора (overview-screen,
+     * design Decision 1): тот же широкий JOIN-запрос
+     * [ExerciseEntryDao.observeEntryRows], маппинг — extension
+     * `EntryListItemWithExerciseEntity.toEntryWithExercise()`.
+     */
+    override fun entriesWithExercise(): Flow<List<EntryWithExercise>> =
+        exerciseEntryDao
+            .observeEntryRows()
+            .map { rows -> rows.map { it.toEntryWithExercise() } }
 
     /**
      * Удаляет запись о выполнении по идентификатору. Отсутствующий id —

@@ -2,6 +2,7 @@ package com.myworkouts.data.repository
 
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import kotlinx.coroutines.flow.Flow
@@ -113,6 +114,14 @@ interface WorkoutDataRepository {
      * таблицы записей.
      */
     fun entries(): Flow<List<EntryListItem>>
+
+    /**
+     * Реактивный список записей с данными упражнений каталога
+     * (overview-screen, design Decision 1): единый вход расчётов трёх
+     * вкладок обзора (статистика, рекорды, активность). JOIN и сортировка
+     * по дате убыванием — на стороне SQL, как в [entries].
+     */
+    fun entriesWithExercise(): Flow<List<EntryWithExercise>>
 
     /**
      * Разовый снимок всего каталога упражнений — стандартных и

@@ -112,6 +112,7 @@
     <string name="entry_list_empty">Add your first entry</string>
     <string name="entry_list_weight_label">Extra weight</string>
     <string name="entry_list_weight_value">%1$s kg</string>
+    <string name="entry_section_today">Today</string>
     <string name="entry_section_yesterday">Yesterday</string>
     <string name="entry_details_weight_suffix">(+ %1$s kg)</string>
 
@@ -169,4 +170,41 @@
     <string name="entry_visibility_time_label">Time</string>
     <string name="entry_visibility_time_hint">Defaults to the current time</string>
     <string name="entry_visibility_comment_label">Comment</string>
+
+    <!-- Overview screen (overview tabs) -->
+    <string name="overview_tab_stats">Stats</string>
+    <string name="overview_tab_records">Records</string>
+    <string name="overview_tab_activity">Activity</string>
+    <string name="overview_title">Overview</string>
+    <string name="overview_settings_subtitle">Choose the sections to show on the overview screen</string>
+    <string name="a11y_overview_settings">Settings</string>
+    <string name="a11y_open_overview">Open overview</string>
+    <plurals name="a11y_activity_heatmap">
+        <item quantity="one">Workout heatmap: %1$d active day</item>
+        <item quantity="other">Workout heatmap: %1$d active days</item>
+    </plurals>
+    <string name="overview_period_day">Day</string>
+    <string name="overview_period_week">Week</string>
+    <string name="overview_period_month">Month</string>
+    <string name="overview_period_quarter">Quarter</string>
+    <string name="overview_period_halfyear">Half a year</string>
+    <string name="overview_period_year">Year</string>
+    <string name="overview_stats_empty">No workouts for the selected period</string>
+    <string name="overview_unit_reps">%1$d reps</string>
+    <string name="overview_back_to_categories">Categories</string>
+    <string name="records_mode_per_set">Per set</string>
+    <string name="records_mode_per_day">Per day</string>
+    <string name="records_empty">No workouts</string>
+    <string name="overview_streak_record">Record streak:</string>
+    <string name="activity_less">Less</string>
+    <string name="activity_more">More</string>
+
+    <plurals name="overview_streak_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <plurals name="overview_streak_days_in_a_row">
+        <item quantity="one">%1$d day in a row</item>
+        <item quantity="other">%1$d days in a row</item>
+    </plurals>
 </resources>

@@ -1,5 +1,8 @@
 package com.myworkouts.domain.model
 
+import androidx.annotation.StringRes
+import com.myworkouts.R
+
 /**
  * Категория упражнения в каталоге тренировок.
  *
@@ -9,19 +12,21 @@ package com.myworkouts.domain.model
  * (см. `ExerciseCategoryTest`), это же множество используется в prepopulate
  * БД (`StandardExercises`).
  */
-enum class ExerciseCategory {
+enum class ExerciseCategory(
+    @StringRes val labelResId: Int
+) {
     /** Толкающие: отжимания, отжимания на брусьях и т.п. */
-    PUSH,
+    PUSH(R.string.exercise_category_push),
 
     /** Тянущие: подтягивания, австралийские подтягивания. */
-    PULL,
+    PULL(R.string.exercise_category_pull),
 
     /** Ноги: приседания, выпады, пистолетик. */
-    LEGS,
+    LEGS(R.string.exercise_category_legs),
 
     /** Кор: планка, скручивания, подъёмы ног. */
-    CORE,
+    CORE(R.string.exercise_category_core),
 
     /** Кардио: бег, скакалка. */
-    CARDIO
+    CARDIO(R.string.exercise_category_cardio)
 }

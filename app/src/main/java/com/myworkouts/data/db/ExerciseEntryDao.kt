@@ -32,18 +32,24 @@ interface ExerciseEntryDao {
     suspend fun getById(id: Long): ExerciseEntryEntity?
 
     /**
-     * Реактивный список записей с JOIN на каталог упражнений.
-     * Название упражнения (`exerciseName`) и номер иконки
-     * (`iconNumber`, exercise-icon-display) подтягиваются из `exercises`,
-     * сортировка — по `date DESC` (новые первыми, design Decision 1).
-     * Проекция [EntryListItemEntity] — не `@Entity`, схема БД не меняется.
-     * Комментарий записи (`comment`) включён в проекцию
-     * (mainscreen-itemrow-comment).
+     * Единственный реактивный JOIN-запрос записей на каталог упражнений
+     * (design Decision 1): широкая проекция
+     * [EntryListItemWithExerciseEntity] — 9 колонок строки списка плюс
+     * `exercise_id`, категория, тип измерения и комментарий упражнения
+     * для расчётов обзора. Сортировка — по `date DESC` (новые первыми).
+     * `created_at` в проекцию не включается. Сужение до нужного домену
+     * вида — в репозитории: [EntryListItemWithExerciseEntity.toListItem]
+     * и [EntryListItemWithExerciseEntity.toEntryWithExercise], единая
+     * копия SQL не дрейфует при эволюции схемы.
      */
     @Query(
         "SELECT e.id AS id, " +
+            "e.exercise_id AS exerciseId, " +
             "x.name AS exerciseName, " +
             "x.icon_number AS iconNumber, " +
+            "x.category AS category, " +
+            "x.measured_by AS measuredBy, " +
+            "x.comment AS exerciseComment, " +
             "e.sets AS sets, " +
             "e.reps AS reps, " +
             "e.duration_sec AS durationSec, " +
@@ -54,7 +60,7 @@ interface ExerciseEntryDao {
             "JOIN exercises x ON x.id = e.exercise_id " +
             "ORDER BY e.date DESC"
     )
-    fun observeEntries(): Flow<List<EntryListItemEntity>>
+    fun observeEntryRows(): Flow<List<EntryListItemWithExerciseEntity>>
 
     /** Удаляет запись по идентификатору. Отсутствующий id — успех без эффекта. */
     @Query("DELETE FROM exercise_entries WHERE id = :id")

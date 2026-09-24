@@ -22,6 +22,7 @@ import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
@@ -336,6 +337,8 @@ class ArchivedExercisesScreenTest {
         override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
 
         override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(emptyList())
+
+        override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 
         override suspend fun getAllExercises(): Result<List<Exercise>> = Result.success(emptyList())
 

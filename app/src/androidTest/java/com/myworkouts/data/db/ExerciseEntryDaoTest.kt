@@ -123,12 +123,12 @@ class ExerciseEntryDaoTest {
         }
 
     @Test
-    fun observeEntries_whenNoEntries_emitsEmptyList() =
+    fun observeEntryRows_whenNoEntries_emitsEmptyList() =
         runBlocking {
             // Given — пустая БД (только одно упражнение из setUp, без записей)
 
             // When
-            val items = entryDao.observeEntries().first()
+            val items = entryDao.observeEntryRows().first()
 
             // Then
             assertTrue(
@@ -138,7 +138,7 @@ class ExerciseEntryDaoTest {
         }
 
     @Test
-    fun observeEntries_returnsProjectionWithExerciseName_andOrderedByDateDesc() =
+    fun observeEntryRows_returnsProjectionWithExerciseName_andOrderedByDateDesc() =
         runBlocking {
             // Given — две записи с разными датами (старая и новая)
             val olderDate = 1_700_000_000_000L
@@ -151,7 +151,7 @@ class ExerciseEntryDaoTest {
             )
 
             // When
-            val items = entryDao.observeEntries().first()
+            val items = entryDao.observeEntryRows().first()
 
             // Then — обе записи в проекции с названием упражнения, новые первыми
             assertEquals(2, items.size)
@@ -167,13 +167,13 @@ class ExerciseEntryDaoTest {
         }
 
     @Test
-    fun observeEntries_whenInsertAndDelete_emitsUpdatedListsToSubscriber() =
+    fun observeEntryRows_whenInsertAndDelete_emitsUpdatedListsToSubscriber() =
         runBlocking {
             // Given — подписка ДО мутаций; первая эмиссия — пустой список
-            val emissions = Channel<List<EntryListItemEntity>>(Channel.UNLIMITED)
+            val emissions = Channel<List<EntryListItemWithExerciseEntity>>(Channel.UNLIMITED)
             val collectJob =
                 launch {
-                    entryDao.observeEntries().collect { emissions.send(it) }
+                    entryDao.observeEntryRows().collect { emissions.send(it) }
                 }
             assertTrue(
                 "Первая эмиссия подписчика — пустой список",
@@ -202,13 +202,13 @@ class ExerciseEntryDaoTest {
 
     /**
      * Спецификация «Комментарий в строке записи» (mainscreen-itemrow-comment):
-     * проекция observeEntries доносит `comment` из таблицы записей —
+     * проекция observeEntryRows доносит `comment` из таблицы записей —
      * непустой переносится, `null` остаётся `null`. Соответствие id →
      * комментарий проверяем по id: ORDER BY date DESC при равных датах
      * не гарантирует стабильный порядок строк.
      */
     @Test
-    fun observeEntries_whenEntriesWithAndWithoutComment_thenProjectionCarriesComment() =
+    fun observeEntryRows_whenEntriesWithAndWithoutComment_thenProjectionCarriesComment() =
         runBlocking {
             // Given — запись с комментарием и запись без
             val idWithComment =
@@ -219,7 +219,7 @@ class ExerciseEntryDaoTest {
                 entryDao.insert(sampleEntry(existingExerciseId).copy(comment = null))
 
             // When
-            val items = entryDao.observeEntries().first()
+            val items = entryDao.observeEntryRows().first()
 
             // Then — обе записи в проекции, комментарий у своего id
             assertEquals(2, items.size)

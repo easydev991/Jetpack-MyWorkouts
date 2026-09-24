@@ -114,6 +114,7 @@
     <string name="entry_list_empty">Добавьте первую запись</string>
     <string name="entry_list_weight_label">Дополнительный вес</string>
     <string name="entry_list_weight_value">%1$s кг</string>
+    <string name="entry_section_today">Сегодня</string>
     <string name="entry_section_yesterday">Вчера</string>
 
     <!-- Детали записи (черновик дизайна, выбор варианта) -->
@@ -173,4 +174,47 @@
     <string name="entry_visibility_time_label">Время</string>
     <string name="entry_visibility_time_hint">По умолчанию время открытия экрана</string>
     <string name="entry_visibility_comment_label">Комментарий</string>
+
+    <!-- Overview screen (экран обзора): вкладки (overview-screen, tasks 1.2) -->
+    <string name="overview_tab_stats">Статистика</string>
+    <string name="overview_tab_records">Рекорды</string>
+    <string name="overview_tab_activity">Активность</string>
+    <string name="overview_title">Обзор</string>
+    <string name="overview_settings_subtitle">Выберите разделы, которые показывать на экране обзора</string>
+    <string name="a11y_overview_settings">Настройки</string>
+    <string name="a11y_open_overview">Открыть обзор</string>
+    <plurals name="a11y_activity_heatmap">
+        <item quantity="one">Тепловая карта тренировок: %1$d активный день</item>
+        <item quantity="few">Тепловая карта тренировок: %1$d активных дня</item>
+        <item quantity="many">Тепловая карта тренировок: %1$d активных дней</item>
+        <item quantity="other">Тепловая карта тренировок: %1$d активного дня</item>
+    </plurals>
+    <string name="overview_period_day">День</string>
+    <string name="overview_period_week">Неделя</string>
+    <string name="overview_period_month">Месяц</string>
+    <string name="overview_period_quarter">Квартал</string>
+    <string name="overview_period_halfyear">Полгода</string>
+    <string name="overview_period_year">Год</string>
+    <string name="overview_stats_empty">Нет тренировок за выбранный период</string>
+    <string name="overview_unit_reps">%1$d повт.</string>
+    <string name="overview_back_to_categories">Категории</string>
+    <string name="records_mode_per_set">За подход</string>
+    <string name="records_mode_per_day">За день</string>
+    <string name="records_empty">Нет тренировок</string>
+    <string name="overview_streak_record">Рекорд серии:</string>
+    <string name="activity_less">Меньше</string>
+    <string name="activity_more">Больше</string>
+
+    <plurals name="overview_streak_days">
+        <item quantity="one">%1$d день</item>
+        <item quantity="few">%1$d дня</item>
+        <item quantity="many">%1$d дней</item>
+        <item quantity="other">%1$d дня</item>
+    </plurals>
+    <plurals name="overview_streak_days_in_a_row">
+        <item quantity="one">%1$d день подряд</item>
+        <item quantity="few">%1$d дня подряд</item>
+        <item quantity="many">%1$d дней подряд</item>
+        <item quantity="other">%1$d дня подряд</item>
+    </plurals>
 </resources>
