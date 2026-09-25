@@ -69,6 +69,7 @@ import com.myworkouts.ui.state.StatsUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.theme.color
 import com.myworkouts.ui.util.formatDurationResource
+import com.myworkouts.ui.util.legendValueTextResource
 import com.myworkouts.ui.util.sectionDateLabelResource
 import java.time.LocalDate
 
@@ -288,14 +289,15 @@ private fun EmptyPeriodHint(modifier: Modifier = Modifier) {
 /**
  * Секторы доната: обзор — по категориям (цвет [ExerciseCategory.color]),
  * drill-down — по упражнениям (оттенки цвета категории, [shadeDelta]).
+ * Доля — по сумме подходов (overview-stats-time-support Decision 1).
  */
 private fun donutSlices(state: StatsUiState): List<Pair<Color, Int>> {
     val selected = state.selected
     return if (selected == null) {
-        state.categoryTotals.map { it.category.color to it.totalReps }
+        state.categoryTotals.map { it.category.color to it.totalSets }
     } else {
         state.exerciseTotals[selected].orEmpty().mapIndexed { index, total ->
-            shade(selected.color, shadeDelta(index)) to total.totalReps
+            shade(selected.color, shadeDelta(index)) to total.totalSets
         }
     }
 }
@@ -308,7 +310,7 @@ private fun legendItems(state: StatsUiState): List<StatsLegendRow> {
         state.categoryTotals.map { total ->
             StatsLegendRow(
                 label = stringResource(total.category.labelResId),
-                value = total.totalReps,
+                valueText = legendValueTextResource(total.totalReps, total.totalDurationSec),
                 color = total.category.color,
                 category = total.category
             )
@@ -317,7 +319,7 @@ private fun legendItems(state: StatsUiState): List<StatsLegendRow> {
         state.exerciseTotals[selected].orEmpty().mapIndexed { index, total ->
             StatsLegendRow(
                 label = total.exerciseName,
-                value = total.totalReps,
+                valueText = legendValueTextResource(total.totalReps, total.totalDurationSec),
                 color = shade(selected.color, shadeDelta(index)),
                 category = null
             )
@@ -325,10 +327,10 @@ private fun legendItems(state: StatsUiState): List<StatsLegendRow> {
     }
 }
 
-/** Строка легенды: значение резолвится в текст в [LegendItemContent]. */
+/** Строка легенды: значение уже готовым текстом ([legendValueTextResource]). */
 private data class StatsLegendRow(
     val label: String,
-    val value: Int,
+    val valueText: String,
     val color: Color,
     /** Категория для drill-down; `null` у строк упражнений (некликабельны). */
     val category: ExerciseCategory?
@@ -498,7 +500,7 @@ private fun LegendItemContent(item: StatsLegendRow) {
             modifier = Modifier.weight(1f)
         )
         Text(
-            text = stringResource(R.string.overview_unit_reps, item.value),
+            text = item.valueText,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -681,25 +683,52 @@ private const val PREVIEW_DAY_MILLIS = 86_400_000L
 /** Миллисекунды «вчера» для демо-записи в группе вчерашнего дня. */
 private val previewYesterdayMillis = (LocalDate.now().toEpochDay() - 1) * PREVIEW_DAY_MILLIS
 
-/** Демо-легенда: три категории, объёмы убывают. */
+/**
+ * Демо-легенда: доли по подходам убывание; CORE — смешанная категория
+ * (повторы + длительность), CARDIO — только TIME (макет
+ * overview-stats-time-support Decision 4).
+ */
 internal val demoCategoryTotals =
     listOf(
-        CategoryTotal(category = ExerciseCategory.PUSH, totalReps = 45),
-        CategoryTotal(category = ExerciseCategory.PULL, totalReps = 36),
-        CategoryTotal(category = ExerciseCategory.CORE, totalReps = 18)
+        CategoryTotal(
+            category = ExerciseCategory.PUSH,
+            totalSets = 6,
+            totalReps = 45
+        ),
+        CategoryTotal(
+            category = ExerciseCategory.CORE,
+            totalSets = 5,
+            totalReps = 18,
+            totalDurationSec = 180
+        ),
+        CategoryTotal(
+            category = ExerciseCategory.PULL,
+            totalSets = 4,
+            totalReps = 36
+        ),
+        CategoryTotal(
+            category = ExerciseCategory.CARDIO,
+            totalSets = 2,
+            totalDurationSec = 3600
+        )
     )
 
 private val demoExerciseTotals =
     mapOf(
         ExerciseCategory.PUSH to
             listOf(
-                ExerciseTotal(exerciseName = "Отжимания", totalReps = 30),
-                ExerciseTotal(exerciseName = "Отжимания на брусьях", totalReps = 15)
+                ExerciseTotal(exerciseName = "Отжимания", totalSets = 3, totalReps = 30),
+                ExerciseTotal(exerciseName = "Отжимания на брусьях", totalSets = 3, totalReps = 15)
+            ),
+        ExerciseCategory.CORE to
+            listOf(
+                ExerciseTotal(exerciseName = "Скручивания", totalSets = 3, totalReps = 18),
+                ExerciseTotal(exerciseName = "Планка", totalSets = 2, totalDurationSec = 180)
             ),
         ExerciseCategory.PULL to
-            listOf(ExerciseTotal(exerciseName = "Подтягивания", totalReps = 36)),
-        ExerciseCategory.CORE to
-            listOf(ExerciseTotal(exerciseName = "Скручивания", totalReps = 18))
+            listOf(ExerciseTotal(exerciseName = "Подтягивания", totalSets = 4, totalReps = 36)),
+        ExerciseCategory.CARDIO to
+            listOf(ExerciseTotal(exerciseName = "Бег", totalSets = 2, totalDurationSec = 3600))
     )
 
 private val demoDrillGroups =
@@ -761,6 +790,29 @@ private val demoDrillGroups =
                                 category = ExerciseCategory.CORE,
                                 sets = 3,
                                 reps = 12
+                            ),
+                            previewEntry(
+                                id = 5L,
+                                name = "Планка",
+                                category = ExerciseCategory.CORE,
+                                sets = 2,
+                                durationSec = 90
+                            )
+                        )
+                )
+            ),
+        ExerciseCategory.CARDIO to
+            listOf(
+                DrillDateGroup(
+                    date = LocalDate.now(),
+                    entries =
+                        listOf(
+                            previewEntry(
+                                id = 6L,
+                                name = "Бег",
+                                category = ExerciseCategory.CARDIO,
+                                sets = 2,
+                                durationSec = 1800
                             )
                         )
                 )
@@ -799,8 +851,9 @@ private fun previewEntry(
 
 /**
  * Демо-состояние «Статистики» для превью (StatsScreen и каркас
- * OverviewScreen): три категории с объёмами, суммы упражнений и записи
- * drill-down — донат, легенда и списки рендерятся как в рантайме.
+ * OverviewScreen): доли категорий по подходам, суммы упражнений и записи
+ * drill-down — донат, легенда и списки рендерятся как в рантайме;
+ * TIME-категория (CARDIO) и смешанная (CORE) видны в легенде.
  * [selected] открывает drill-down выбранной категории.
  */
 internal fun demoStatsState(

@@ -23,7 +23,7 @@ import com.myworkouts.domain.usecase.StatsPeriod
  * @property categoryTotals Категории с REPS-объёмом > 0, убывание
  * @property exerciseTotals Суммы упражнений по категориям (drill-down легенда)
  * @property drillGroups Записи категорий по датам (drill-down списки)
- * @property isEmpty Нет REPS-объёма за период — пустое состояние
+ * @property isEmpty Нет записей за период ни одного типа измерения — пустое состояние
  */
 data class StatsUiState(
     val period: StatsPeriod = StatsPeriod.WEEK,

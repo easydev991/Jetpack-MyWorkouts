@@ -33,4 +33,4 @@
 - `ui/screens/overview/StatsScreen.kt` — донат/легенда по подходам, формат значения легенды (адаптивная длительность), превью-демо с TIME-категорией.
 - `ui/util/DurationFormatter.kt` — компактный одноединицный форматтер длительности (новая функция в существующем файле).
 - Ресурсы: новые строки единиц с точкой (сек./мин./ч./дн.) в `values/` (ru) и `values-en/` (en).
-- Тесты: `ComputeCategoryStatsTest`, `OverviewViewModelTest`, `StatsScreenTest`; `DurationFormatterTest` расширяется тестами компактного форматтера, плюс новый тест-класс хелпера значения легенды.
+- Тесты: `ComputeCategoryStatsTest`, `OverviewViewModelTest`, `StatsScreenTest`; `DurationFormatterTest` расширяется тестами компактного форматтера и хелпера значения легенды (`legendValueText` колокализован в `DurationFormatter.kt`).

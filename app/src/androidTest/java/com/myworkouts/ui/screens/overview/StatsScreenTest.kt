@@ -37,7 +37,9 @@ import java.time.LocalDate
  *
  * Проверяют: пустой период — подсказка без легенды; клик по категории
  * открывает drill-down (строка «Категории» + записи); «Категории»
- * возвращает к легенде; смена периода сбрасывает drill-down.
+ * возвращает к легенде; смена периода сбрасывает drill-down; TIME-категория
+ * видна в легенде со значением-длительностью и открывает drill-down
+ * (overview-stats-time-support tasks 4.2).
  */
 @RunWith(AndroidJUnit4::class)
 class StatsScreenTest {
@@ -48,6 +50,12 @@ class StatsScreenTest {
 
     /** Название категории в легенде (ресурс [ExerciseCategory.PUSH]). */
     private val pushLabel: String = context.getString(R.string.exercise_category_push)
+
+    /** Название TIME-категории в легенде (ресурс [ExerciseCategory.CARDIO]). */
+    private val cardioLabel: String = context.getString(R.string.exercise_category_cardio)
+
+    /** Текст значения легенды: компактная длительность «1 ч.». */
+    private val oneHourText: String = "1 ${context.getString(R.string.stats_duration_unit_hours)}"
 
     /** Непустая «Статистика» недели: PUSH 15 повт., запись сегодня. */
     private fun weekState(selected: ExerciseCategory? = null): StatsUiState {
@@ -79,6 +87,56 @@ class StatsScreenTest {
                                             sets = 1,
                                             reps = 15,
                                             durationSec = null,
+                                            weightKg = null,
+                                            comment = null,
+                                            date = today.toEpochDay() * 86_400_000L
+                                        )
+                                    )
+                            )
+                        )
+                ),
+            isEmpty = false
+        )
+    }
+
+    /** Только-TIME «Статистика» недели: CARDIO (бег), запись сегодня. */
+    private fun timeState(selected: ExerciseCategory? = null): StatsUiState {
+        val today = LocalDate.now()
+        return StatsUiState(
+            period = StatsPeriod.WEEK,
+            selected = selected,
+            categoryTotals =
+                listOf(
+                    CategoryTotal(
+                        category = ExerciseCategory.CARDIO,
+                        totalSets = 2,
+                        totalDurationSec = 3600
+                    )
+                ),
+            exerciseTotals =
+                mapOf(
+                    ExerciseCategory.CARDIO to
+                        listOf(ExerciseTotal("Бег", totalSets = 2, totalDurationSec = 3600))
+                ),
+            drillGroups =
+                mapOf(
+                    ExerciseCategory.CARDIO to
+                        listOf(
+                            DrillDateGroup(
+                                date = today,
+                                entries =
+                                    listOf(
+                                        EntryWithExercise(
+                                            id = 1L,
+                                            exerciseId = 3L,
+                                            exerciseName = "Бег",
+                                            iconNumber = null,
+                                            category = ExerciseCategory.CARDIO,
+                                            measuredBy = ExerciseMeasuredBy.TIME,
+                                            exerciseComment = null,
+                                            sets = 2,
+                                            reps = null,
+                                            durationSec = 1800,
                                             weightKg = null,
                                             comment = null,
                                             date = today.toEpochDay() * 86_400_000L
@@ -231,5 +289,49 @@ class StatsScreenTest {
         composeTestRule
             .onAllNodesWithText(context.getString(R.string.overview_back_to_categories))
             .assertCountEquals(0)
+    }
+
+    @Test
+    fun stats_when_time_category_then_legend_shows_compact_duration() {
+        // Given — только TIME-записи за период (3600 сек = «1 ч.»)
+        setContentWith(timeState())
+
+        // Then — TIME-категория в легенде со значением-длительностью,
+        // подсказка пустого периода не показана
+        composeTestRule
+            .onNodeWithText(cardioLabel)
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(oneHourText)
+            .assertIsDisplayed()
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.overview_stats_empty))
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun stats_when_time_category_clicked_then_drill_down_shows_entries() {
+        // Given — только TIME-записи за период, обзор по категориям
+        setContentWith(timeState())
+
+        // When — тап по TIME-категории «Кардио»
+        composeTestRule
+            .onNodeWithText(cardioLabel)
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — drill-down открыт: строка возврата (скролл — на компактном
+        // AVD она за нижней границей) и запись «Бег» дважды — строка легенды
+        // упражнений и запись drill-down списка
+        scrollTo(context.getString(R.string.overview_back_to_categories))
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.overview_back_to_categories))
+            .assertIsDisplayed()
+        composeTestRule
+            .onAllNodesWithText("Бег")
+            .assertCountEquals(2)
+        composeTestRule
+            .onNodeWithText(oneHourText)
+            .assertIsDisplayed()
     }
 }

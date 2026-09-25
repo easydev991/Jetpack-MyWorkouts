@@ -125,7 +125,7 @@ class OverviewViewModel(
                         categoryTotals = stats.categoryTotals,
                         exerciseTotals = stats.exerciseTotals,
                         drillGroups = stats.drillGroups,
-                        isEmpty = stats.categoryTotals.isEmpty()
+                        isEmpty = stats.drillGroups.isEmpty()
                     ),
                 records =
                     RecordsUiState(

@@ -11,8 +11,9 @@ import java.time.ZoneId
 
 /**
  * Unit-тесты [computeCategoryStats] (overview-screen, tasks 2.1–2.2):
- * фильтрация календарного периода, объёмы только REPS-записей, доли
- * категорий и drill-down данные. Чистая функция, `today` — параметром,
+ * фильтрация календарного периода, доли по сумме подходов для обоих
+ * типов измерения (REPS и TIME), суммы повторов и длительности,
+ * сортировка и drill-down данные. Чистая функция, `today` — параметром,
  * зона системная (как на главном экране).
  */
 class ComputeCategoryStatsTest {
@@ -117,15 +118,17 @@ class ComputeCategoryStatsTest {
     }
 
     @Test
-    fun totals_use_only_reps_entries() {
-        // Given — REPS 3x10 и TIME 3x90 в одном дне
+    fun mixed_category_carries_sets_reps_and_duration() {
+        // Given — PULL: REPS 3x10 и TIME 2x90 в одном периоде
         val entries =
             listOf(
                 entry(id = 1L, date = millis(today)),
                 entry(
                     id = 2L,
+                    exerciseName = "Планка",
                     measuredBy = ExerciseMeasuredBy.TIME,
                     date = millis(today),
+                    sets = 2,
                     reps = null,
                     durationSec = 90
                 )
@@ -134,8 +137,11 @@ class ComputeCategoryStatsTest {
         // When
         val result = computeCategoryStats(entries, StatsPeriod.WEEK, today)
 
-        // Then — в долю входит только REPS-объём (TIME — только drill-down)
-        assertEquals(30, result.categoryTotals.single().totalReps, "Сумма только из REPS-записей")
+        // Then — смешанная категория несёт оба значения, доля по подходам
+        val total = result.categoryTotals.single()
+        assertEquals(5, total.totalSets, "Доля = подходы REPS + TIME записей")
+        assertEquals(30, total.totalReps, "Повторы — сумма подходы x повторы только REPS")
+        assertEquals(180, total.totalDurationSec, "Длительность — сумма подходы x длительность только TIME")
     }
 
     @Test
@@ -155,15 +161,59 @@ class ComputeCategoryStatsTest {
     }
 
     @Test
-    fun category_without_reps_entries_not_in_totals() {
-        // Given — категория CORE только с TIME-записью
+    fun time_category_in_category_and_exercise_totals() {
+        // Given — категория CORE только с TIME-записью: планка 3 подхода по 90 сек
         val entries =
             listOf(
                 entry(
                     id = 1L,
                     category = ExerciseCategory.CORE,
+                    exerciseName = "Планка",
                     measuredBy = ExerciseMeasuredBy.TIME,
                     date = millis(today),
+                    sets = 3,
+                    reps = null,
+                    durationSec = 90
+                )
+            )
+
+        // When
+        val result = computeCategoryStats(entries, StatsPeriod.WEEK, today)
+
+        // Then — TIME-категория видна в донате и легенде drill-down
+        val total = result.categoryTotals.single()
+        assertEquals(ExerciseCategory.CORE, total.category, "TIME-категория в донате")
+        assertEquals(3, total.totalSets, "Доля по подходам")
+        assertEquals(0, total.totalReps, "У TIME-записей нет повторов")
+        assertEquals(270, total.totalDurationSec, "Длительность = подходы x длительность")
+        val exerciseTotal =
+            checkNotNull(result.exerciseTotals[ExerciseCategory.CORE]) { "Легенда drill-down CORE" }
+                .single()
+        assertEquals("Планка", exerciseTotal.exerciseName, "TIME-упражнение в легенде")
+        assertEquals(3, exerciseTotal.totalSets, "Доля упражнения по подходам")
+        assertEquals(270, exerciseTotal.totalDurationSec, "Длительность упражнения")
+    }
+
+    @Test
+    fun totals_sorted_by_sets_not_reps_volume() {
+        // Given — PUSH: 2 подхода по 100 повторов; CORE: 3 подхода по 60 сек
+        val entries =
+            listOf(
+                entry(
+                    id = 1L,
+                    category = ExerciseCategory.PUSH,
+                    exerciseName = "Отжимания",
+                    date = millis(today),
+                    sets = 2,
+                    reps = 100
+                ),
+                entry(
+                    id = 2L,
+                    category = ExerciseCategory.CORE,
+                    exerciseName = "Планка",
+                    measuredBy = ExerciseMeasuredBy.TIME,
+                    date = millis(today),
+                    sets = 3,
                     reps = null,
                     durationSec = 60
                 )
@@ -172,11 +222,11 @@ class ComputeCategoryStatsTest {
         // When
         val result = computeCategoryStats(entries, StatsPeriod.WEEK, today)
 
-        // Then — категория с нулевой REPS-суммой в донат не попадает
-        assertTrue(result.categoryTotals.isEmpty(), "TIME-категория не видна в донате")
-        assertTrue(
-            result.drillGroups.containsKey(ExerciseCategory.CORE),
-            "Но записи TIME-категории видны в drill-down"
+        // Then — сортировка по подходам: CORE (3) выше PUSH (2), хотя REPS-объём меньше
+        assertEquals(
+            listOf(ExerciseCategory.CORE, ExerciseCategory.PUSH),
+            result.categoryTotals.map { it.category },
+            "Доли и сортировка по сумме подходов обоих типов измерения"
         )
     }
 
@@ -207,11 +257,16 @@ class ComputeCategoryStatsTest {
         // When
         val result = computeCategoryStats(entries, StatsPeriod.WEEK, today)
 
-        // Then — убывание суммы: PUSH 40, PULL 30, LEGS 20
+        // Then — убывание суммы: PUSH 40, PULL 30, LEGS 20 (по подходам 4, 3, 2)
         assertEquals(
             listOf(40, 30, 20),
             result.categoryTotals.map { it.totalReps },
             "Категории отсортированы по сумме убыванием"
+        )
+        assertEquals(
+            listOf(4, 3, 2),
+            result.categoryTotals.map { it.totalSets },
+            "Доли категорий — суммы подходов"
         )
     }
 
@@ -246,6 +301,11 @@ class ComputeCategoryStatsTest {
             listOf(30, 20),
             pullTotals.map { it.totalReps },
             "Упражнения категории по сумме убыванием"
+        )
+        assertEquals(
+            listOf(3, 2),
+            pullTotals.map { it.totalSets },
+            "Доли упражнений — суммы подходов"
         )
     }
 

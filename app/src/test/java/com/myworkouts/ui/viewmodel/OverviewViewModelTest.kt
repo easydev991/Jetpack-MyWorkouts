@@ -318,6 +318,45 @@ class OverviewViewModelTest {
         }
 
     @Test
+    fun ui_state_when_only_time_entries_then_not_empty_and_category_in_donut() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — только TIME-записи (планка) за период
+            entriesFlow.value = listOf(plankEntry(daysAgo = 0, sets = 3, durationSec = 90))
+            advanceUntilIdle()
+
+            // Then — пустое состояние снято, категория в донате по подходам
+            val stats = viewModel.uiState.value.stats
+            assertEquals(false, stats.isEmpty, "TIME-записи за период — не пустое состояние")
+            assertEquals(
+                listOf(ExerciseCategory.CORE to 3),
+                stats.categoryTotals.map { it.category to it.totalSets },
+                "TIME-категория в донате, доля по подходам"
+            )
+        }
+
+    @Test
+    fun ui_state_when_no_entries_then_stats_empty() =
+        runTest(testDispatcher) {
+            // Given — нет записей ни одного типа
+            entriesFlow.value = emptyList()
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                true,
+                viewModel.uiState.value.stats.isEmpty,
+                "Нет записей ни с повторами, ни со временем — пустой период"
+            )
+        }
+
+    @Test
     fun ui_state_when_period_day_then_yesterday_entry_out_of_stats() =
         runTest(testDispatcher) {
             // Given — запись вчера
@@ -420,6 +459,33 @@ class OverviewViewModelTest {
             sets = sets,
             reps = reps,
             durationSec = null,
+            date = date
+        )
+    }
+
+    /** TIME-запись планки (CORE) `daysAgo` дней назад. */
+    private fun plankEntry(
+        daysAgo: Long,
+        sets: Int,
+        durationSec: Int
+    ): EntryWithExercise {
+        val date =
+            LocalDate
+                .now()
+                .minusDays(daysAgo)
+                .atTime(18, 30)
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli()
+        return EntryWithExercise(
+            id = 3L,
+            exerciseId = 4L,
+            exerciseName = "Планка",
+            category = ExerciseCategory.CORE,
+            measuredBy = ExerciseMeasuredBy.TIME,
+            sets = sets,
+            reps = null,
+            durationSec = durationSec,
             date = date
         )
     }

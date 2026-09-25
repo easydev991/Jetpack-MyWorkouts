@@ -7,16 +7,29 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-/** Доля категории в донате: суммарный REPS-объём за период. */
+/**
+ * Доля категории в донате: суммы её записей за период — долю даёт
+ * `totalSets` (подходы, overview-stats-time-support design Decision 1),
+ * `totalReps`/`totalDurationSec` — значения легенды в естественных
+ * единицах. Поля с нулевыми дефолтами — демо-данные макета задают
+ * только то, что отображают.
+ */
 data class CategoryTotal(
     val category: ExerciseCategory,
-    val totalReps: Int
+    val totalSets: Int = 0,
+    val totalReps: Int = 0,
+    val totalDurationSec: Int = 0
 )
 
-/** Сумма повторов одного упражнения для легенды drill-down. */
+/**
+ * Суммы одного упражнения для легенды drill-down — те же единицы, что у
+ * [CategoryTotal]; доля и сортировка — по `totalSets`.
+ */
 data class ExerciseTotal(
     val exerciseName: String,
-    val totalReps: Int
+    val totalSets: Int = 0,
+    val totalReps: Int = 0,
+    val totalDurationSec: Int = 0
 )
 
 /** Записи одного дня drill-down. */
@@ -27,12 +40,12 @@ data class DrillDateGroup(
 
 /**
  * Полный расчёт вкладки «Статистика» за период (overview-screen, design
- * Decision 4): доли категорий, суммы упражнений по категориям и записи
- * каждой категории по датам.
+ * Decision 4 + overview-stats-time-support Decision 1–2): доли категорий,
+ * суммы упражнений по категориям и записи каждой категории по датам.
  *
- * @property categoryTotals Категории с REPS-объёмом > 0, убывание суммы
- * @property exerciseTotals REPS-упражнения категории с объёмом > 0, убывание
- * @property drillGroups Все записи категории (включая TIME) по датам, убывание
+ * @property categoryTotals Категории с подходами > 0, убывание подходов
+ * @property exerciseTotals Упражнения категории с подходами > 0, убывание
+ * @property drillGroups Все записи категории (оба типа измерения) по датам, убывание
  */
 data class CategoryStatsResult(
     val categoryTotals: List<CategoryTotal>,
@@ -66,9 +79,8 @@ internal fun entryDay(
 ): LocalDate = Instant.ofEpochMilli(entry.date).atZone(zone).toLocalDate()
 
 /**
- * Объём записи для доната и легенды: подходы x повторы REPS-записи;
- * TIME-запись объёма не даёт (design Decision 4) — суммы демо-данных
- * макета (60/день = 360/неделя) соответствуют объёму.
+ * Сумма повторов записи: подходы x повторы REPS-записи; TIME-запись
+ * повторов не даёт — секунды и повторения не смешиваются.
  */
 private fun EntryWithExercise.repsVolume(): Int =
     if (measuredBy == ExerciseMeasuredBy.REPS) {
@@ -78,11 +90,23 @@ private fun EntryWithExercise.repsVolume(): Int =
     }
 
 /**
- * Рассчитывает вкладку «Статистика» (overview-screen, design Decision 4):
- * чистая функция, `today` — параметром. Донат и легенда — только REPS;
- * TIME-записи входят в drill-down своей категории. Окно периода —
- * `[statsPeriodStart, today]` включительно; будущие записи с кривой датой
- * не рвут логику.
+ * Сумма длительности записи: подходы x длительность TIME-записи;
+ * REPS-запись длительности не даёт.
+ */
+private fun EntryWithExercise.durationVolume(): Int =
+    if (measuredBy == ExerciseMeasuredBy.TIME) {
+        sets * (durationSec ?: 0)
+    } else {
+        0
+    }
+
+/**
+ * Рассчитывает вкладку «Статистика» (overview-screen, design Decision 4
+ * + overview-stats-time-support Decision 1): чистая функция, `today` —
+ * параметром. Доли доната и сортировка — по сумме подходов, TIME- и
+ * REPS-записи наравне; `totalReps`/`totalDurationSec` — значения легенды
+ * в естественных единицах. Окно периода — `[statsPeriodStart, today]`
+ * включительно; будущие записи с кривой датой не рвут логику.
  */
 internal fun computeCategoryStats(
     entries: List<EntryWithExercise>,
@@ -97,24 +121,34 @@ internal fun computeCategoryStats(
             !day.isBefore(start) && !day.isAfter(today)
         }
 
-    val repsEntries = inPeriod.filter { it.measuredBy == ExerciseMeasuredBy.REPS }
     val categoryTotals =
-        repsEntries
+        inPeriod
             .groupBy { it.category }
-            .map { (category, list) -> CategoryTotal(category, list.sumOf { it.repsVolume() }) }
-            .filter { it.totalReps > 0 }
-            .sortedWith(compareByDescending<CategoryTotal> { it.totalReps }.thenBy { it.category.name })
+            .map { (category, list) ->
+                CategoryTotal(
+                    category = category,
+                    totalSets = list.sumOf { it.sets },
+                    totalReps = list.sumOf { it.repsVolume() },
+                    totalDurationSec = list.sumOf { it.durationVolume() }
+                )
+            }.filter { it.totalSets > 0 }
+            .sortedWith(compareByDescending<CategoryTotal> { it.totalSets }.thenBy { it.category.name })
     val exerciseTotals =
-        repsEntries
+        inPeriod
             .groupBy { it.category }
             .mapValues { (_, list) ->
                 list
                     .groupBy { it.exerciseName }
                     .map { (name, perExercise) ->
-                        ExerciseTotal(name, perExercise.sumOf { it.repsVolume() })
-                    }.filter { it.totalReps > 0 }
+                        ExerciseTotal(
+                            exerciseName = name,
+                            totalSets = perExercise.sumOf { it.sets },
+                            totalReps = perExercise.sumOf { it.repsVolume() },
+                            totalDurationSec = perExercise.sumOf { it.durationVolume() }
+                        )
+                    }.filter { it.totalSets > 0 }
                     .sortedWith(
-                        compareByDescending<ExerciseTotal> { it.totalReps }
+                        compareByDescending<ExerciseTotal> { it.totalSets }
                             .thenBy { it.exerciseName }
                     )
             }

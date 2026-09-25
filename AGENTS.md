@@ -140,6 +140,8 @@ detekt-предупреждения исправляются до заверше
   `setCustomKey` для контекста; используется из use-cases и VM)
 - `navigation/Screen.kt` (только `route`) + `BottomTab` + `BottomTabs`
 - `ui/screens/{main,entry,more,root,appearance,appdata,exercises}/`
+- `ui/components/` — переиспользуемые composable-компоненты
+  (`SettingToggleRow` — общий для экранов настроек)
 - `ui/state/` — UiState-класс, по одному на экран
 - `ui/theme/{Color,Theme,Type}.kt` ← `Type`, не `Typography`
 - `ui/util/` — `DurationFormatter.kt` (общий для main и entry экранов)

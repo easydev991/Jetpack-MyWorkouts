@@ -191,6 +191,11 @@
     <string name="overview_period_year">Year</string>
     <string name="overview_stats_empty">No workouts for the selected period</string>
     <string name="overview_unit_reps">%1$d reps</string>
+    <string name="stats_duration_unit_seconds">sec.</string>
+    <string name="stats_duration_unit_minutes">min.</string>
+    <string name="stats_duration_unit_hours">h.</string>
+    <string name="stats_duration_unit_days">d.</string>
+    <string name="stats_value_separator">" · "</string>
     <string name="overview_back_to_categories">Categories</string>
     <string name="records_mode_per_set">Per set</string>
     <string name="records_mode_per_day">Per day</string>

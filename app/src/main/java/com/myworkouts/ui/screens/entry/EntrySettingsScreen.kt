@@ -1,8 +1,6 @@
 package com.myworkouts.ui.screens.entry
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -14,20 +12,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
 import com.myworkouts.domain.model.EntryField
+import com.myworkouts.ui.components.SettingToggleRow
 import com.myworkouts.ui.state.EntrySettingsUiState
 import com.myworkouts.ui.viewmodel.EntrySettingsViewModel
 
@@ -117,10 +114,11 @@ internal fun EntrySettingsScreenContent(state: EntrySettingsScreenState) {
             )
 
             EntryField.entries.forEach { field ->
-                FieldToggleRow(
-                    field = field,
-                    visible = state.visibility[field] ?: true,
-                    onToggle = { state.onToggleField(field, it) }
+                SettingToggleRow(
+                    labelResId = field.labelResId,
+                    checked = state.visibility[field] ?: true,
+                    onToggle = { state.onToggleField(field, it) },
+                    hintResId = field.hintResId
                 )
             }
 
@@ -128,38 +126,6 @@ internal fun EntrySettingsScreenContent(state: EntrySettingsScreenState) {
                 EnableAllButton(onEnableAll = state.onEnableAll)
             }
         }
-    }
-}
-
-/**
- * Строка тоггла одного поля: название (и подсказка, если задана) слева,
- * Switch справа. Видимость поля по умолчанию — включён (см. вызов).
- */
-@Composable
-private fun FieldToggleRow(
-    field: EntryField,
-    visible: Boolean,
-    onToggle: (Boolean) -> Unit
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = stringResource(field.labelResId))
-            field.hintResId?.let { hintResId ->
-                Text(
-                    text = stringResource(hintResId),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Switch(checked = visible, onCheckedChange = onToggle)
     }
 }
 
