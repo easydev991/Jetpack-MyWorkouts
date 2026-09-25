@@ -17,9 +17,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Таймаут подписки StateFlow (5 секунд — стандарт для экранных ViewModel). */
-private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
-
 /**
  * ViewModel для экрана «Оформление приложения». Управляет настройками темы
  * и динамических цветов.
@@ -71,7 +68,7 @@ class AppearanceViewModel(
             )
         }.stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+            started = SharingStarted.WhileSubscribed(defaultSubscriptionTimeoutMs()),
             initialValue = AppearanceUiState()
         )
 

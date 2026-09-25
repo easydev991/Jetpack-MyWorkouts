@@ -24,6 +24,7 @@ import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -47,7 +48,8 @@ import org.junit.runner.RunWith
  * Подготовка — вставка напрямую в файловую БД приложения вторым инстансом
  * (прецедент — образец). Чтобы подготовленная запись стала видна в списке,
  * подписка главного экрана приостанавливается уходом на вкладку «Ещё»
- * больше таймаута `WhileSubscribed(5000)` — пауза относится к ПОДГОТОВКЕ
+ * больше таймаута подписки (в тестах rule понижает его до 100 мс) —
+ * пауза относится к ПОДГОТОВКЕ
  * (симуляция «приложение уже показывает список»), а не к дефектному окну.
  * Дефектное окно — возврат на главный экран ПОСЛЕ сохранения: все шаги
  * правки/создания быстрые, без пауз (design.md Decision 2/3).
@@ -57,6 +59,12 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class EntryListLiveUpdateIntegrationTest {
+    companion object {
+        @JvmField
+        @ClassRule
+        val timeoutRule = SubscriptionTimeoutRule()
+    }
+
     @get:Rule
     val composeTestRule = createAndroidComposeRule<MainActivity>()
 
@@ -80,7 +88,7 @@ class EntryListLiveUpdateIntegrationTest {
         waitRowVisible(editedOldName)
 
         // When — быстрое редактирование: смена упражнения, сохранение,
-        // возврат на главный экран в окне < 5 с
+        // возврат на главный экран в окне < таймаута подписки
         editEntryChangingExercise(from = editedOldName, to = editedNewName)
 
         // Then — строка показывает новое название без перезапуска приложения
@@ -93,7 +101,8 @@ class EntryListLiveUpdateIntegrationTest {
         prepareEditableEntry()
         waitRowVisible(editedOldName)
 
-        // When — правка и сохранение БЕЗ recreate, возврат в окне < 5 с
+        // When — правка и сохранение БЕЗ recreate, возврат в окне
+        // < таймаута подписки
         editEntryChangingExercise(from = editedOldName, to = editedNewName)
 
         // Then — строка показывает новое название
@@ -161,8 +170,8 @@ class EntryListLiveUpdateIntegrationTest {
     }
 
     /**
-     * Уходит с главного экрана (вкладка «Ещё»), ждёт > таймаута подписки
-     * `WhileSubscribed(5000)`, вставляет данные напрямую в файловую БД
+     * Уходит с главного экрана (вкладка «Ещё»), ждёт > таймаута подписки,
+     * вставляет данные напрямую в файловую БД
      * и возвращается системным back — список перезапрашивается и видит
      * подготовленные данные.
      */
@@ -170,7 +179,7 @@ class EntryListLiveUpdateIntegrationTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText(context.getString(R.string.more_title)).performClick()
         composeTestRule.waitForIdle()
-        runBlocking { delay(5_300L) }
+        runBlocking { delay(300L) }
         insertIntoAppDatabase(insert)
         composeTestRule.runOnIdle {
             composeTestRule.activityRule.scenario.onActivity { activity ->
@@ -223,7 +232,8 @@ class EntryListLiveUpdateIntegrationTest {
     /**
      * Long-press по строке [from] → «Изменить» → смена упражнения на [to]
      * в дропдауне → «Сохранить» (возврат на главный экран автоматический).
-     * Все шаги быстрые, `waitForIdle` между ними (design.md Risk: окно <5 с).
+     * Все шаги быстрые, `waitForIdle` между ними (design.md Risk: окно
+     * < таймаута подписки).
      */
     private fun editEntryChangingExercise(
         from: String,
@@ -243,9 +253,8 @@ class EntryListLiveUpdateIntegrationTest {
 
     /**
      * Ассерт быстрого возврата: строка [name] появляется в списке в окне
-     * < 5 с (до перезапуска подписки `WhileSubscribed(5000)`). `waitUntil`
-     * покрывает только асинхронный лаг invalidation Room, не таймаут
-     * подписки.
+     * < таймаута подписки. `waitUntil` покрывает только
+     * асинхронный лаг invalidation Room, не таймаут подписки.
      */
     private fun assertRowShows(name: String) = waitRowVisible(name, timeoutMs = 2_000)
 }

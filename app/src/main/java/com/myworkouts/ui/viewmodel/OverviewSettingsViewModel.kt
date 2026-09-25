@@ -18,9 +18,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Таймаут подписки StateFlow — как в [EntrySettingsViewModel]. */
-private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
-
 /**
  * ViewModel экрана настроек обзора: видимость вкладок обзора
  * (overview-screen, design D9). Копия [EntrySettingsViewModel] с guard:
@@ -61,7 +58,7 @@ class OverviewSettingsViewModel(
             .map { visibility -> OverviewSettingsUiState(visibility = visibility) }
             .stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+                started = SharingStarted.WhileSubscribed(defaultSubscriptionTimeoutMs()),
                 initialValue = OverviewSettingsUiState()
             )
 

@@ -21,9 +21,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Таймаут подписки StateFlow — как в [AppearanceViewModel]. */
-private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
-
 /**
  * ViewModel экрана упражнения: создание (FAB, `exerciseId == -1`) и
  * редактирование существующего упражнения (`exerciseId != -1`,
@@ -88,7 +85,7 @@ class ExerciseCreateViewModel(
         mutableUiState
             .stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+                started = SharingStarted.WhileSubscribed(defaultSubscriptionTimeoutMs()),
                 initialValue = mutableUiState.value
             )
 

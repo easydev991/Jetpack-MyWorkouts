@@ -49,6 +49,13 @@ make test           # JVM (JUnit 5) — XML в app/build/test-results/
 make android-test   # androidTest (JUnit 4) на эмуляторе — XML в app/build/outputs/androidTest-results/connected/debug/
 ```
 
+**Workflow**: в разработке — точечный прогон класса затронутого экрана
+(см. «Один тест-класс / один метод» ниже и шпаргалку в
+`kotlin-ui-testing/references/running-tests.md`); полный
+`make android-test` — перед коммитом задачи и перед релизом.
+Эмулятор после каждого старта — `make emulator-fast` (выключает
+анимации, androidTest идёт заметно быстрее).
+
 **Перечитать отчёт БЕЗ нового прогона** (XML ещё на диске — `make clean` стирает):
 
 ```bash

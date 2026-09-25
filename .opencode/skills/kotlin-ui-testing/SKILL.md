@@ -138,6 +138,10 @@ description: >
   не существует — Gradle ответит «ambiguous») + человекочитаемый
   отчёт через `scripts/test_report.py` (тот же скрипт, что и для
   `make test`, — XML из `app/build/outputs/androidTest-results/connected/debug/`).
+- **Workflow** (точечный прогон в разработке / полный suite перед
+  коммитом / `make emulator-fast`) — канон:
+  `.opencode/rules/test-execution.md`; шпаргалка команд —
+  `references/running-tests.md`.
 - **Unit + интеграционные раздельно**: `make test` (JVM),
   `make android-test` (на устройстве). Объединённой цели нет
   (`make test-all` отсутствует).

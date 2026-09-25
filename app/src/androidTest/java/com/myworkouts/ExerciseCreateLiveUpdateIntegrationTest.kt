@@ -20,6 +20,7 @@ import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -31,9 +32,9 @@ import org.junit.runner.RunWith
  *
  * Сценарий ручной проверки, на которой дефект стабильно воспроизводился:
  * каталог открыт → уход с экрана (FAB на форму создания) → пауза больше
- * таймаута подписки `WhileSubscribed(5000)` → вставка упражнения →
- * возврат на каталог → каталог ОБЯЗАН показать новое упражнение без
- * перезапуска приложения.
+ * таймаута подписки (в тестах rule понижает его до 100 мс) → вставка
+ * упражнения → возврат на каталог → каталог ОБЯЗАН показать новое
+ * упражнение без перезапуска приложения.
  *
  * Вставка идёт напрямую в БД приложения (тест живёт в том же процессе,
  * файл `workout_database` доступен) — форма не заполняется, чтобы
@@ -41,11 +42,17 @@ import org.junit.runner.RunWith
  * системный back с пустой формы (BackHandler отключён — диалога нет).
  *
  * Имя упражнения уникально на прогон — вставки предыдущих прогонов не
- * маскируют замороженный список. Тест занимает ~8 с (реальная пауза 5.3 с
- * — часть сценария, не ожидание UI).
+ * маскируют замороженный список. Тест быстрый: пауза 300 мс —
+ * сценарий сохранён, ожидания нет.
  */
 @RunWith(AndroidJUnit4::class)
 class ExerciseCreateLiveUpdateIntegrationTest {
+    companion object {
+        @JvmField
+        @ClassRule
+        val timeoutRule = SubscriptionTimeoutRule()
+    }
+
     @get:Rule
     val composeTestRule = createAndroidComposeRule<MainActivity>()
 
@@ -76,7 +83,7 @@ class ExerciseCreateLiveUpdateIntegrationTest {
         composeTestRule.waitForIdle()
 
         // When — уходим на форму создания (FAB), ждём больше таймаута
-        // подписки (5 с), вставляем упражнение напрямую в БД, возвращаемся
+        // подписки, вставляем упражнение напрямую в БД, возвращаемся
         // системным back (форма пуста — BackHandler отключён, диалога нет)
         composeTestRule
             .onNodeWithContentDescription(context.getString(R.string.exercises_add_exercise))
@@ -85,7 +92,7 @@ class ExerciseCreateLiveUpdateIntegrationTest {
         composeTestRule
             .onNodeWithText(context.getString(R.string.exercise_create_title))
             .assertIsDisplayed()
-        runBlocking { delay(5_300L) }
+        runBlocking { delay(300L) }
         insertExerciseIntoAppDatabase()
 
         composeTestRule.runOnIdle {

@@ -17,9 +17,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Таймаут подписки StateFlow — как в [AppearanceViewModel]. */
-private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
-
 /**
  * ViewModel экрана «Настроить экран»: видимость опциональных полей
  * формы записи (entry-settings-screen). Читает
@@ -59,7 +56,7 @@ class EntrySettingsViewModel(
             .map { visibility -> EntrySettingsUiState(visibility = visibility) }
             .stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+                started = SharingStarted.WhileSubscribed(defaultSubscriptionTimeoutMs()),
                 initialValue = EntrySettingsUiState()
             )
 

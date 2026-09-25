@@ -17,9 +17,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Таймаут подписки StateFlow для `WhileSubscribed` — 5 секунд. */
-private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
-
 /**
  * ViewModel экрана «Архив упражнений» (exercises-archive,
  * tasks §4).
@@ -42,7 +39,7 @@ class ArchivedExercisesViewModel(
     /**
      * UI State экрана: `Loading` до первой эмиссии репозитория, затем
      * `Success` со списком архивных упражнений. `WhileSubscribed(
-     * SUBSCRIPTION_TIMEOUT_MS)` — прецедент [MainViewModel] /
+     * defaultSubscriptionTimeoutMs())` — прецедент [MainViewModel] /
      * [ExercisesViewModel]: подписка живёт 5 секунд после отписки,
      * повторные открытия экрана не дёргают SQL.
      */
@@ -52,7 +49,7 @@ class ArchivedExercisesViewModel(
             .map { exercises -> ArchivedExercisesUiState.Success(exercises) }
             .stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+                started = SharingStarted.WhileSubscribed(defaultSubscriptionTimeoutMs()),
                 initialValue = ArchivedExercisesUiState.Loading
             )
 

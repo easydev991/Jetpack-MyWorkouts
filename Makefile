@@ -59,6 +59,13 @@ test: _ensure_secrets
 android-test: _ensure_secrets
 	$(call run_tests,connected$(FLAVOR_TITLE)DebugAndroidTest,app/build/outputs/androidTest-results/connected/debug)
 
+## emulator-fast: Выключить анимации на запущенном эмуляторе (ускоряет androidTest). Применять после каждого старта эмулятора
+emulator-fast:
+	@adb shell settings put global window_animation_scale 0
+	@adb shell settings put global transition_animation_scale 0
+	@adb shell settings put global animator_animation_scale 0
+	@printf "$(GREEN)Анимации эмулятора выключены (window/transition/animator = 0)$(RESET)\n"
+
 ## scripts-test: Запуск unit-тестов Python-скриптов
 scripts-test:
 	python3 -m unittest discover -s scripts -p "*_test.py"
@@ -261,4 +268,4 @@ setup_git_hooks:
 ## all: Полная проверка (сборка + тесты + линтер) и установка APK на устройство
 all: check install
 
-.PHONY: help build clean test scripts-test lint format check install all android-test setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets rustore rustore-draft rustore-commit whats-new _rustore_build_aab
+.PHONY: help build clean test scripts-test lint format check install all android-test emulator-fast setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets rustore rustore-draft rustore-commit whats-new _rustore_build_aab

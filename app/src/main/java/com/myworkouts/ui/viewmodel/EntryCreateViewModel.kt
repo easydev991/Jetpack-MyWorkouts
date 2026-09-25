@@ -28,9 +28,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-/** Таймаут подписки StateFlow — как в [AppearanceViewModel]. */
-private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
-
 /** Минут в часе — для сравнения времени суток при клэмпе на момент открытия. */
 private const val MINUTES_PER_HOUR: Int = 60
 
@@ -134,7 +131,7 @@ class EntryCreateViewModel(
             derivedState(state, exercises, visibility)
         }.stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+            started = SharingStarted.WhileSubscribed(defaultSubscriptionTimeoutMs()),
             initialValue = mutableUiState.value
         )
 

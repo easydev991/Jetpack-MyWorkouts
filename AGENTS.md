@@ -49,6 +49,8 @@ detekt-предупреждения исправляются до заверше
 `kotlin-ui-testing` (androidTest, JUnit 4).
 
 `make test` — JVM. `make android-test` — на подключённом устройстве.
+Для ускорения androidTest: `make emulator-fast` — выключает анимации
+эмулятора; применять после каждого старта эмулятора.
 
 **Запуск тестов — один прогон → один отчёт**: `make test` / `make android-test`
 уже вызывают `scripts/test_report.py` (статистика + список упавших).

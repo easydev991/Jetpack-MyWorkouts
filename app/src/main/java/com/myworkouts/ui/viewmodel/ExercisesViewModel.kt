@@ -26,9 +26,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Таймаут подписки StateFlow — как в [MainViewModel] и [AppearanceViewModel]. */
-private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
-
 /** Тег для [Log.e] в failure-ветках [confirmDelete] (design Decision 3). */
 private const val LOG_TAG: String = "ExercisesViewModel"
 
@@ -89,7 +86,7 @@ class ExercisesViewModel(
      * Реактивный счётчик архивных упражнений (exercises-archive design
      * Decision 2): значение попадает в
      * [ExercisesUiState.Success.archivedCount] для условной видимости
-     * кнопки архива в `TopAppBar`. `WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS)`
+     * кнопки архива в `TopAppBar`. `WhileSubscribed(defaultSubscriptionTimeoutMs())`
      * — прецедент `MainViewModel`: подписка живёт 5 секунд после отписки,
      * повторные открытия экрана не дёргают SQL.
      */
@@ -98,7 +95,7 @@ class ExercisesViewModel(
             .archivedCount()
             .stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+                started = SharingStarted.WhileSubscribed(defaultSubscriptionTimeoutMs()),
                 initialValue = 0
             )
 
@@ -155,7 +152,7 @@ class ExercisesViewModel(
             )
         }.stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+            started = SharingStarted.WhileSubscribed(defaultSubscriptionTimeoutMs()),
             initialValue = ExercisesUiState.Loading
         )
 

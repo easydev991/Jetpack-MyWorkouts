@@ -33,9 +33,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-/** Таймаут подписки StateFlow — как в [EntrySettingsViewModel]. */
-private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
-
 /**
  * Пользовательские состояния вкладок обзора (overview-screen, design D9):
  * группировка четырёх `MutableStateFlow` в один data class — transform
@@ -148,7 +145,7 @@ class OverviewViewModel(
             )
         }.stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+            started = SharingStarted.WhileSubscribed(defaultSubscriptionTimeoutMs()),
             initialValue = OverviewUiState()
         )
 

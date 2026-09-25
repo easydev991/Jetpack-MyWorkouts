@@ -14,6 +14,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
+import com.myworkouts.SubscriptionTimeoutRule
 import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.data.db.StandardExercise
 import com.myworkouts.data.db.WorkoutDatabase
@@ -28,6 +29,7 @@ import com.myworkouts.ui.viewmodel.ExercisesViewModel
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
+import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -45,6 +47,12 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class ExercisesLiveUpdateTest {
+    companion object {
+        @JvmField
+        @ClassRule
+        val timeoutRule = SubscriptionTimeoutRule()
+    }
+
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -97,7 +105,7 @@ class ExercisesLiveUpdateTest {
     /**
      * Сценарий продакшена: каталог открыт → уход на другой экран →
      * вставка упражнения → возврат. Список обязан показать новое
-     * упражнение (подписка WhileSubscribed ещё активна — таймаут 5 с
+     * упражнение (подписка WhileSubscribed ещё активна — таймаут
      * не истёк, invalidation доставляется живому upstream).
      */
     @Test
@@ -154,8 +162,8 @@ class ExercisesLiveUpdateTest {
      * продакшена: Exercises открыт как вкладка (`popUpTo(start) {
      * saveState = true }; launchSingleTop; restoreState = true`),
      * затем уход на не-tab экран и возврат `popBackStack()`. Вставка
-     * между уходом и возвратом. Пауза ~5.3 с — таймаут подписки
-     * истёк (медленный тест, пауза — часть сценария).
+     * между уходом и возвратом. Пауза 300 мс — больше таймаута
+     * подписки (в тестах rule понижает его до 100 мс), сценарий сохранён.
      */
     @Test
     fun exercisesScreen_whenTabDestinationReturnedAfterTimeout_afterInsert_thenShowsNewExercise() {
@@ -208,11 +216,11 @@ class ExercisesLiveUpdateTest {
             .onNodeWithText(context.getString(R.string.exercises_title))
             .assertIsDisplayed()
 
-        // When — уход на «форму», пауза больше таймаута подписки, вставка,
-        // возврат popBackStack (как onSaved → popBackStack в продакшене)
+        // When — уход на «форму», пауза больше таймаута подписки,
+        // вставка, возврат popBackStack (как onSaved → popBackStack в продакшене)
         composeTestRule.runOnIdle { navController.navigate("stub") }
         composeTestRule.waitForIdle()
-        runBlocking { kotlinx.coroutines.delay(5_300L) }
+        runBlocking { kotlinx.coroutines.delay(300L) }
         insertCustomExercise()
         composeTestRule.runOnIdle { navController.popBackStack() }
         composeTestRule.waitForIdle()

@@ -115,6 +115,19 @@ make android-test   # androidTest на подключённом устройст
 Для unit-тестов фильтрация `--tests` работает стандартно
 (`./gradlew test --tests "com.myworkouts.ExampleUnitTest"`).
 
+## Шпаргалка: класс затронутого экрана
+
+Точечный прогон — канон-команда в `.opencode/rules/test-execution.md`
+(«Один тест-класс / один метод»): `:app:connectedGithubDebugAndroidTest`
+с `-Pandroid.testInstrumentationRunnerArguments.class='<FQN>#метод'`.
+
+FQN = `com.myworkouts.` + путь файла под `app/src/androidTest/java/`
+без `java/`. Найти класс экрана:
+
+```bash
+grep -rl "@RunWith" app/src/androidTest --include="*.kt"
+```
+
 ## Зависимости androidTest (build.gradle.kts)
 
 ```kotlin

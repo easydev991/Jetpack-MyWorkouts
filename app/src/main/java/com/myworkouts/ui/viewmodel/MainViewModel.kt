@@ -19,9 +19,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Таймаут подписки StateFlow — как в [EntryCreateViewModel] и [AppearanceViewModel]. */
-private const val SUBSCRIPTION_TIMEOUT_MS: Long = 5_000L
-
 /**
  * ViewModel главного экрана (вкладка «Тренировки»).
  *
@@ -64,7 +61,7 @@ class MainViewModel(
             )
         }.stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS),
+            started = SharingStarted.WhileSubscribed(defaultSubscriptionTimeoutMs()),
             initialValue = MainUiState.Loading
         )
 
