@@ -63,7 +63,9 @@ import com.myworkouts.ui.theme.StreakOrangeEnd
 import com.myworkouts.ui.theme.StreakOrangeStart
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.TextStyle
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.sin
@@ -138,16 +140,20 @@ internal fun ActivityScreen(
             // подтягивается ближе к верху.
         }
         Spacer(modifier = Modifier.height(16.dp))
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            ActivityPeriod.entries.forEachIndexed { index, period ->
-                SegmentedButton(
-                    selected = state.period == period,
-                    onClick = { onPeriodChange(period) },
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = ActivityPeriod.entries.size)
-                ) {
-                    Text(text = stringResource(id = period.labelResId))
+        if (state.visiblePeriods.size >= 2) {
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                state.visiblePeriods.forEachIndexed { index, period ->
+                    SegmentedButton(
+                        selected = state.period == period,
+                        onClick = { onPeriodChange(period) },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = state.visiblePeriods.size)
+                    ) {
+                        Text(text = stringResource(id = period.labelResId))
+                    }
                 }
             }
+        } else {
+            MonthsHeader(heatmap = state.heatmap)
         }
         Spacer(modifier = Modifier.height(16.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -158,6 +164,35 @@ internal fun ActivityScreen(
         Spacer(modifier = Modifier.height(8.dp))
         LegendRow()
     }
+}
+
+/**
+ * Жирный заголовок с месяцами данных (вместо пикера, когда виден один
+ * период; overview-periods-and-shares, design D5): уникальные месяцы
+ * записей из [heatmap] (дни с `count > 0`) по возрастанию,
+ * standalone-названия ICU по локали, первая буква каждого — заглавная
+ * (актуально только для ru — у en standalone-форма и так с заглавной),
+ * разделитель — строковый ресурс (одинаков для ru/en).
+ */
+@Composable
+private fun MonthsHeader(heatmap: List<HeatmapDayData>) {
+    val locale: Locale = LocalConfiguration.current.locales[0]
+    val header =
+        heatmap
+            .filter { it.count > 0 }
+            .map { YearMonth.from(it.date) }
+            // heatmap строится по возрастанию дат — distinct() сохраняет порядок
+            .distinct()
+            .joinToString(separator = stringResource(R.string.overview_months_separator)) { month ->
+                month.month
+                    .getDisplayName(TextStyle.FULL_STANDALONE, locale)
+                    .replaceFirstChar { it.uppercase(locale) }
+            }
+    Text(
+        text = header,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold
+    )
 }
 
 /**
@@ -601,7 +636,10 @@ internal fun ActivityStreakEqualsRecordPreview() {
 }
 
 @Composable
-private fun ActivityScreenPreview(period: ActivityPeriod) {
+private fun ActivityScreenPreview(
+    period: ActivityPeriod,
+    visiblePeriods: List<ActivityPeriod> = ActivityPeriod.entries.toList()
+) {
     JetpackMyWorkoutsTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
             ActivityScreen(
@@ -610,12 +648,21 @@ private fun ActivityScreenPreview(period: ActivityPeriod) {
                         streakDays = 14,
                         recordStreakDays = 21,
                         period = period,
-                        heatmap = demoHeatmap(period)
+                        heatmap = demoHeatmap(period),
+                        visiblePeriods = visiblePeriods
                     ),
                 onPeriodChange = {}
             )
         }
     }
+}
+
+/** Один видимый период: вместо пикера — жирный заголовок месяцев данных. */
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun ActivityMonthsHeaderPreview() {
+    ActivityScreenPreview(period = ActivityPeriod.HALFYEAR, visiblePeriods = listOf(ActivityPeriod.HALFYEAR))
 }
 
 /**

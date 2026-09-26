@@ -19,6 +19,9 @@ import com.myworkouts.domain.usecase.computeCategoryStats
 import com.myworkouts.domain.usecase.computeExerciseRecords
 import com.myworkouts.domain.usecase.computeHeatmapLevels
 import com.myworkouts.domain.usecase.computeStreaks
+import com.myworkouts.domain.usecase.entryDay
+import com.myworkouts.domain.usecase.visibleActivityPeriods
+import com.myworkouts.domain.usecase.visibleStatsPeriods
 import com.myworkouts.ui.state.ActivityUiState
 import com.myworkouts.ui.state.OverviewUiState
 import com.myworkouts.ui.state.RecordsUiState
@@ -32,6 +35,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Пользовательские состояния вкладок обзора (overview-screen, design D9):
@@ -89,7 +93,7 @@ class OverviewViewModel(
     /** Пользовательские состояния трёх вкладок (см. [OverviewUserState]). */
     private val userState = MutableStateFlow(OverviewUserState())
 
-    /** Сегодняшний день расчётов (системная зона — внутри калькуляторов). */
+    /** Сегодняшний день расчётов (системная зона — см. [combine]). */
     private val today: LocalDate = LocalDate.now()
 
     /**
@@ -110,14 +114,25 @@ class OverviewViewModel(
                 } else {
                     visibleTabs.firstOrNull() ?: OverviewTab.STATS
                 }
-            val stats = computeCategoryStats(entries, user.statsPeriod, today)
+            // Самая ранняя тренировка — минимальный календарный день записей
+            // (overview-periods-and-shares, design D2); проход minOf по уже
+            // загруженному списку, без новых DAO-запросов.
+            val earliest = entries.minOfOrNull { entryDay(it, ZoneId.systemDefault()) }
+            val visibleStats = visibleStatsPeriods(earliest, today)
+            val visibleActivity = visibleActivityPeriods(earliest, today)
+            val statsPeriod =
+                clampPeriod(user.statsPeriod, visibleStats, earliest != null)
+            val activityPeriod =
+                clampPeriod(user.activityPeriod, visibleActivity, earliest != null)
+            val stats = computeCategoryStats(entries, statsPeriod, today)
             val streaks = computeStreaks(entries, today)
             OverviewUiState(
                 selectedTab = selectedTab,
                 visibleTabs = visibleTabs,
                 stats =
                     StatsUiState(
-                        period = user.statsPeriod,
+                        period = statsPeriod,
+                        visiblePeriods = visibleStats,
                         selected = user.selectedCategory,
                         categoryTotals = stats.categoryTotals,
                         exerciseTotals = stats.exerciseTotals,
@@ -139,8 +154,9 @@ class OverviewViewModel(
                                 streaks.workedOutToday -> StreakCardState.Active
                                 else -> StreakCardState.Pending
                             },
-                        period = user.activityPeriod,
-                        heatmap = computeHeatmapLevels(entries, user.activityPeriod, today)
+                        period = activityPeriod,
+                        visiblePeriods = visibleActivity,
+                        heatmap = computeHeatmapLevels(entries, activityPeriod, today)
                     )
             )
         }.stateIn(
@@ -202,3 +218,10 @@ class OverviewViewModel(
         userState.update { it.copy(activityPeriod = period) }
     }
 }
+
+/** Выбранный период скрылся — самый длинный видимый, иначе выбор без изменений. */
+private fun <T> clampPeriod(
+    selected: T,
+    visible: List<T>,
+    hasData: Boolean
+): T = if (!hasData || selected in visible) selected else visible.last()

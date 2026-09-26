@@ -9,12 +9,16 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.domain.usecase.ActivityPeriod
+import com.myworkouts.domain.usecase.HeatmapDayData
 import com.myworkouts.ui.state.ActivityUiState
 import com.myworkouts.ui.state.StreakCardState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 
 /**
  * Компонентные UI-тесты состояний секции серии [ActivityScreen] без
@@ -24,7 +28,10 @@ import org.junit.runner.RunWith
  * Проверяют: Active — карточка со счётчиком; Pending — карточка с
  * «N дней подряд» и подписью рекорда; Pending + серия 1 — «1 день»;
  * Lost + рекорд > 1 — строка «Рекорд серии: …» вместо карточки;
- * Lost + рекорд <= 1 — секция серии отсутствует.
+ * Lost + рекорд <= 1 — секция серии отсутствует; один видимый период —
+ * заголовок месяцев вместо пикера (записи в одном месяце — заголовок
+ * одного месяца, в двух — join разделителем); два видимых —
+ * только их сегменты (overview-periods-and-shares tasks 5.3).
  */
 @RunWith(AndroidJUnit4::class)
 class ActivityScreenTest {
@@ -137,5 +144,151 @@ class ActivityScreenTest {
         composeTestRule
             .onAllNodesWithText(daysText(0))
             .assertCountEquals(0)
+    }
+
+    @Test
+    fun activity_when_single_visible_period_then_months_header_replaces_picker() {
+        // Given — один видимый период (после clamp), хитмап полугода
+        val heatmap = demoHeatmap(ActivityPeriod.HALFYEAR)
+        composeTestRule.setContent {
+            JetpackMyWorkoutsTheme {
+                ActivityScreen(
+                    state =
+                        ActivityUiState(
+                            streakDays = 3,
+                            recordStreakDays = 3,
+                            streakState = StreakCardState.Active,
+                            period = ActivityPeriod.HALFYEAR,
+                            heatmap = heatmap,
+                            visiblePeriods = listOf(ActivityPeriod.HALFYEAR)
+                        ),
+                    onPeriodChange = {}
+                )
+            }
+        }
+
+        // Then — сегментов пикера нет, вместо него заголовок месяцев
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.overview_period_month))
+            .assertCountEquals(0)
+        composeTestRule
+            .onNodeWithText(monthsHeaderText(heatmap))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun activity_when_two_visible_periods_then_only_visible_segments_shown() {
+        // Given — видимые периоды: Месяц и Квартал
+        composeTestRule.setContent {
+            JetpackMyWorkoutsTheme {
+                ActivityScreen(
+                    state =
+                        ActivityUiState(
+                            streakDays = 3,
+                            recordStreakDays = 3,
+                            streakState = StreakCardState.Active,
+                            period = ActivityPeriod.MONTH,
+                            heatmap = demoHeatmap(ActivityPeriod.MONTH),
+                            visiblePeriods = listOf(ActivityPeriod.MONTH, ActivityPeriod.QUARTER)
+                        ),
+                    onPeriodChange = {}
+                )
+            }
+        }
+
+        // Then — ровно два сегмента, скрытый «Год» не рендерится
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.overview_period_month))
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.overview_period_quarter))
+            .assertIsDisplayed()
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.overview_period_year))
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun activity_when_entries_in_one_month_then_header_shows_single_month() {
+        // Given — записи только в текущем месяце, виден один период
+        val today = LocalDate.now()
+        val heatmap = heatmapOf((0 until today.dayOfMonth).map { today.minusDays(it.toLong()) })
+        setContentMonthsHeader(heatmap = heatmap)
+
+        // Then — заголовок одного месяца (без разделителя), пикера нет
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.overview_period_month))
+            .assertCountEquals(0)
+        composeTestRule
+            .onNodeWithText(monthsHeaderText(heatmap))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun activity_when_entries_in_two_months_then_header_joins_with_separator() {
+        // Given — записи в текущем и в предыдущем месяце (ровно два месяца)
+        val today = LocalDate.now()
+        val heatmap =
+            heatmapOf(
+                (0 until today.dayOfMonth).map { today.minusDays(it.toLong()) } +
+                    (0..5).map { today.withDayOfMonth(1).minusDays(it.toLong()) }
+            )
+        setContentMonthsHeader(heatmap = heatmap)
+
+        // Then — «Предыдущий – Текущий», разделитель из строкового ресурса
+        composeTestRule
+            .onNodeWithText(monthsHeaderText(heatmap))
+            .assertIsDisplayed()
+    }
+
+    /**
+     * Содержимое экрана с одним видимым периодом «Месяц»: вместо пикера —
+     * заголовок месяцев из [heatmap].
+     */
+    private fun setContentMonthsHeader(heatmap: List<HeatmapDayData>) {
+        composeTestRule.setContent {
+            JetpackMyWorkoutsTheme {
+                ActivityScreen(
+                    state =
+                        ActivityUiState(
+                            streakDays = 3,
+                            recordStreakDays = 3,
+                            streakState = StreakCardState.Active,
+                            period = ActivityPeriod.MONTH,
+                            heatmap = heatmap,
+                            visiblePeriods = listOf(ActivityPeriod.MONTH)
+                        ),
+                    onPeriodChange = {}
+                )
+            }
+        }
+    }
+
+    /** Хитмап из дат с ненулевым счётом; даты — по возрастанию (контракт). */
+    private fun heatmapOf(dates: List<LocalDate>): List<HeatmapDayData> =
+        dates
+            .distinct()
+            .sorted()
+            .map { date -> HeatmapDayData(date = date, count = 1, level = 1) }
+
+    /**
+     * Ожидаемый заголовок месяцев — тем же ICU-путём, что и
+     * [ActivityScreen] (standalone-названия по локали, первая буква
+     * заглавная, разделитель из ресурса).
+     */
+    private fun monthsHeaderText(heatmap: List<HeatmapDayData>): String {
+        val locale = context.resources.configuration.locales[0]
+        val monthFormat = DateTimeFormatter.ofPattern("LLLL", locale)
+        return heatmap
+            .asSequence()
+            .filter { it.count > 0 }
+            .map { YearMonth.from(it.date) }
+            .distinct()
+            .sorted()
+            .joinToString(separator = context.getString(R.string.overview_months_separator)) { month ->
+                monthFormat
+                    .format(month)
+                    .replaceFirstChar { it.uppercase(locale) }
+            }
     }
 }

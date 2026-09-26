@@ -190,5 +190,5 @@ val BottomTabs: List<BottomTab> =
  * @param showExercisesTab Показывать вкладку «Упражнения»
  * @return [BottomTabs] без Exercises при выключенной настройке
  */
-fun visibleTabs(showExercisesTab: Boolean): List<BottomTab> =
+internal fun visibleTabs(showExercisesTab: Boolean): List<BottomTab> =
     BottomTabs.filterNot { !showExercisesTab && it.route == Screen.Exercises.route }

@@ -17,11 +17,11 @@ class PreviewDemoDataTest {
         // When
         val state = demoStatsState(period = StatsPeriod.WEEK)
 
-        // Then — донат имеет ненулевой объём, легенда и drill-down заполнены
+        // Then — донат имеет ненулевую долю (подходы), легенда и drill-down заполнены
         assertTrue(state.categoryTotals.isNotEmpty(), "Категории легенды не должны быть пусты")
         assertTrue(
-            state.categoryTotals.sumOf { it.totalReps } > 0,
-            "Суммарный REPS-объём должен быть положительным"
+            state.categoryTotals.sumOf { it.totalSets } > 0,
+            "Суммарное число подходов должно быть положительным"
         )
         assertTrue(state.exerciseTotals.isNotEmpty(), "Суммы упражнений не должны быть пусты")
         state.exerciseTotals.forEach { (category, totals) ->

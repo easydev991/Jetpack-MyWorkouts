@@ -293,9 +293,9 @@ class OverviewViewModelTest {
             val state = viewModel.uiState.value
             val stats = state.stats
             assertEquals(
-                listOf(ExerciseCategory.PULL to 30),
-                stats.categoryTotals.map { it.category to it.totalReps },
-                "Донат: подтягивания, объём 3x10 = 30"
+                listOf(ExerciseCategory.PULL to 3),
+                stats.categoryTotals.map { it.category to it.totalSets },
+                "Донат: подтягивания, 3 подхода"
             )
             assertEquals(false, stats.isEmpty, "Есть данные — пустое состояние снято")
             assertEquals(
@@ -435,6 +435,200 @@ class OverviewViewModelTest {
                 "Пропуск вчерашнего дня — карточка Lost"
             )
         }
+
+    @Test
+    fun ui_state_when_entries_spanning_ten_days_then_visible_periods_from_earliest() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — записи сегодня и 10 дней назад; минимальный день — «минус 10»
+            entriesFlow.value =
+                listOf(
+                    workoutEntry(id = 11L, daysAgo = 0),
+                    workoutEntry(id = 12L, daysAgo = 10)
+                )
+            advanceUntilIdle()
+
+            // Then — видимость по самой ранней (минимальной) дате, а не по первой записи
+            // (spec-сценарий «Видимость периодов по глубине истории»)
+            assertEquals(
+                listOf(StatsPeriod.DAY, StatsPeriod.WEEK, StatsPeriod.MONTH),
+                viewModel.uiState.value.stats.visiblePeriods,
+                "Минус 10 дней — «День», «Неделя», «Месяц»; «Год» скрыт"
+            )
+            assertEquals(
+                listOf(ActivityPeriod.MONTH),
+                viewModel.uiState.value.activity.visiblePeriods,
+                "Минус 10 дней — у хитмапа виден только «Месяц»"
+            )
+        }
+
+    @Test
+    fun ui_state_when_no_entries_then_visible_periods_degrade_to_base() =
+        runTest(testDispatcher) {
+            // Given — пустой список (защитный случай, вкладка обзора недостижима)
+            entriesFlow.value = emptyList()
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then — только базовые периоды (spec «защитный случай»)
+            assertEquals(
+                listOf(StatsPeriod.DAY),
+                viewModel.uiState.value.stats.visiblePeriods,
+                "Нет записей — у статистики виден только «День»"
+            )
+            assertEquals(
+                listOf(ActivityPeriod.MONTH),
+                viewModel.uiState.value.activity.visiblePeriods,
+                "Нет записей — у хитмапа виден только «Месяц»"
+            )
+        }
+
+    @Test
+    fun ui_state_when_default_week_and_first_workout_today_then_clamped_to_day() =
+        runTest(testDispatcher) {
+            // Given — первая тренировка сегодня, дефолтный период «Неделя»
+            entriesFlow.value = listOf(workoutEntry(id = 21L, daysAgo = 0))
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then — «Неделя» скрыта, выбран самый длинный видимый «День»
+            // (spec «Только сегодняшняя история — пикер скрыт»); подмена без
+            // явного выбора пользователя аналитики не отправляет
+            val stats = viewModel.uiState.value.stats
+            assertEquals(
+                listOf(StatsPeriod.DAY),
+                stats.visiblePeriods,
+                "Только сегодняшняя история — виден только «День»"
+            )
+            assertEquals(
+                StatsPeriod.DAY,
+                stats.period,
+                "Дефолтная «Неделя» подменена самым длинным видимым «Днём»"
+            )
+            assertEquals(
+                true,
+                fakeAnalytics.events.isEmpty(),
+                "Clamp дефолта — без событий SELECT_STATS_PERIOD"
+            )
+        }
+
+    @Test
+    fun selectStatsPeriod_when_year_hidden_after_deletion_then_clamped_to_month() =
+        runTest(testDispatcher) {
+            // Given — история глубиной 100 дней, явно выбран «Год»
+            entriesFlow.value =
+                listOf(
+                    workoutEntry(id = 31L, daysAgo = 40),
+                    workoutEntry(id = 32L, daysAgo = 100)
+                )
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.selectStatsPeriod(StatsPeriod.YEAR)
+            advanceUntilIdle()
+            assertEquals(
+                StatsPeriod.YEAR,
+                viewModel.uiState.value.stats.period,
+                "Год виден — явный выбор применён"
+            )
+
+            // When — удаление старых записей: самая ранняя осталась «минус 15 дней»
+            entriesFlow.value = listOf(workoutEntry(id = 33L, daysAgo = 15))
+            advanceUntilIdle()
+
+            // Then — «Год» скрыт, подмена самым длинным видимым
+            // (spec-сценарий «Clamp выбранного периода»); аналитика —
+            // только явный выбор пользователя
+            val stats = viewModel.uiState.value.stats
+            assertEquals(
+                listOf(StatsPeriod.DAY, StatsPeriod.WEEK, StatsPeriod.MONTH),
+                stats.visiblePeriods,
+                "Минус 15 дней — «Год» скрыт без перезапуска приложения"
+            )
+            assertEquals(
+                StatsPeriod.MONTH,
+                stats.period,
+                "Выбранный «Год» подменён самым длинным видимым «Месяцем»"
+            )
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.SELECT_STATS_PERIOD, "year")),
+                fakeAnalytics.events,
+                "Подмена не отправляет SELECT_STATS_PERIOD"
+            )
+        }
+
+    @Test
+    fun selectActivityPeriod_when_year_hidden_after_deletion_then_clamped_to_halfyear() =
+        runTest(testDispatcher) {
+            // Given — история глубиной 200 дней, явно выбран «Год» хитмапа
+            entriesFlow.value = listOf(workoutEntry(id = 41L, daysAgo = 200))
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.selectActivityPeriod(ActivityPeriod.YEAR)
+            advanceUntilIdle()
+            assertEquals(
+                ActivityPeriod.YEAR,
+                viewModel.uiState.value.activity.period,
+                "Год виден — явный выбор применён"
+            )
+
+            // When — удаление записей старше 182 дней: осталась «минус 100 дней»
+            entriesFlow.value = listOf(workoutEntry(id = 42L, daysAgo = 100))
+            advanceUntilIdle()
+
+            // Then — видны «Месяц», «Квартал», «Полгода», выбранным становится
+            // «Полгода» (spec-сценарий «Clamp выбранного периода хитмапа»);
+            // аналитика — только явный выбор пользователя
+            val activity = viewModel.uiState.value.activity
+            assertEquals(
+                listOf(ActivityPeriod.MONTH, ActivityPeriod.QUARTER, ActivityPeriod.HALFYEAR),
+                activity.visiblePeriods,
+                "Минус 100 дней — «Год» хитмапа скрыт"
+            )
+            assertEquals(
+                ActivityPeriod.HALFYEAR,
+                activity.period,
+                "Выбранный «Год» подменён самым длинным видимым «Полугодом»"
+            )
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.SELECT_ACTIVITY_PERIOD, "year")),
+                fakeAnalytics.events,
+                "Подмена не отправляет SELECT_ACTIVITY_PERIOD"
+            )
+        }
+
+    /** Запись подтягиваний (PULL, REPS, 3x10) `daysAgo` дней назад в 18:30. */
+    private fun workoutEntry(
+        id: Long,
+        daysAgo: Long
+    ): EntryWithExercise {
+        val date =
+            LocalDate
+                .now()
+                .minusDays(daysAgo)
+                .atTime(18, 30)
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli()
+        return EntryWithExercise(
+            id = id,
+            exerciseId = 2L,
+            exerciseName = "Подтягивания",
+            category = ExerciseCategory.PULL,
+            measuredBy = ExerciseMeasuredBy.REPS,
+            sets = 3,
+            reps = 10,
+            durationSec = null,
+            date = date
+        )
+    }
 
     /** Запись подтягиваний (PULL, REPS) [daysAgo] дней назад в 18:30. */
     private fun pullUpsEntry(

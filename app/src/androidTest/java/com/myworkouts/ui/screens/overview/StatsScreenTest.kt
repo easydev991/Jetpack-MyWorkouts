@@ -38,8 +38,9 @@ import java.time.LocalDate
  * Проверяют: пустой период — подсказка без легенды; клик по категории
  * открывает drill-down (строка «Категории» + записи); «Категории»
  * возвращает к легенде; смена периода сбрасывает drill-down; TIME-категория
- * видна в легенде со значением-длительностью и открывает drill-down
- * (overview-stats-time-support tasks 4.2).
+ * видна в легенде с процентом и открывает drill-down; значения легенды —
+ * проценты от подходов (overview-stats-time-support tasks 4.2,
+ * overview-periods-and-shares tasks 5.2).
  */
 @RunWith(AndroidJUnit4::class)
 class StatsScreenTest {
@@ -54,19 +55,26 @@ class StatsScreenTest {
     /** Название TIME-категории в легенде (ресурс [ExerciseCategory.CARDIO]). */
     private val cardioLabel: String = context.getString(R.string.exercise_category_cardio)
 
-    /** Текст значения легенды: компактная длительность «1 ч.». */
-    private val oneHourText: String = "1 ${context.getString(R.string.stats_duration_unit_hours)}"
+    /** Текст значения легенды: единственная строка уровня — «100 %». */
+    private val hundredPercentText: String = context.getString(R.string.overview_legend_percent, 100)
 
-    /** Непустая «Статистика» недели: PUSH 15 повт., запись сегодня. */
+    /** Непустая «Статистика» недели: PUSH 3 подхода, запись сегодня. */
     private fun weekState(selected: ExerciseCategory? = null): StatsUiState {
         val today = LocalDate.now()
         return StatsUiState(
             period = StatsPeriod.WEEK,
             selected = selected,
-            categoryTotals = listOf(CategoryTotal(ExerciseCategory.PUSH, totalReps = 15)),
+            categoryTotals =
+                listOf(
+                    CategoryTotal(
+                        category = ExerciseCategory.PUSH,
+                        totalSets = 3
+                    )
+                ),
             exerciseTotals =
                 mapOf(
-                    ExerciseCategory.PUSH to listOf(ExerciseTotal("Отжимания", totalReps = 15))
+                    ExerciseCategory.PUSH to
+                        listOf(ExerciseTotal("Отжимания", totalSets = 3))
                 ),
             drillGroups =
                 mapOf(
@@ -109,14 +117,13 @@ class StatsScreenTest {
                 listOf(
                     CategoryTotal(
                         category = ExerciseCategory.CARDIO,
-                        totalSets = 2,
-                        totalDurationSec = 3600
+                        totalSets = 2
                     )
                 ),
             exerciseTotals =
                 mapOf(
                     ExerciseCategory.CARDIO to
-                        listOf(ExerciseTotal("Бег", totalSets = 2, totalDurationSec = 3600))
+                        listOf(ExerciseTotal("Бег", totalSets = 2))
                 ),
             drillGroups =
                 mapOf(
@@ -225,12 +232,12 @@ class StatsScreenTest {
             .assertIsDisplayed()
 
         // Then — «Отжимания» дважды: строка легенды упражнений и запись
-        // drill-down списка
+        // drill-down списка; строка легенды — процент единственной строки
         composeTestRule
             .onAllNodesWithText("Отжимания")
             .assertCountEquals(2)
         composeTestRule
-            .onNodeWithText(context.getString(R.string.overview_unit_reps, 15))
+            .onNodeWithText(hundredPercentText)
             .assertIsDisplayed()
     }
 
@@ -292,17 +299,18 @@ class StatsScreenTest {
     }
 
     @Test
-    fun stats_when_time_category_then_legend_shows_compact_duration() {
-        // Given — только TIME-записи за период (3600 сек = «1 ч.»)
+    fun stats_when_time_category_then_legend_shows_percent() {
+        // Given — только TIME-записи за период (2 подхода, единственная
+        // строка уровня)
         setContentWith(timeState())
 
-        // Then — TIME-категория в легенде со значением-длительностью,
+        // Then — TIME-категория в легенде с процентом «100 %»,
         // подсказка пустого периода не показана
         composeTestRule
             .onNodeWithText(cardioLabel)
             .assertIsDisplayed()
         composeTestRule
-            .onNodeWithText(oneHourText)
+            .onNodeWithText(hundredPercentText)
             .assertIsDisplayed()
         composeTestRule
             .onAllNodesWithText(context.getString(R.string.overview_stats_empty))
@@ -322,7 +330,7 @@ class StatsScreenTest {
 
         // Then — drill-down открыт: строка возврата (скролл — на компактном
         // AVD она за нижней границей) и запись «Бег» дважды — строка легенды
-        // упражнений и запись drill-down списка
+        // упражнений и запись drill-down списка; легенда — процент «100 %»
         scrollTo(context.getString(R.string.overview_back_to_categories))
         composeTestRule
             .onNodeWithText(context.getString(R.string.overview_back_to_categories))
@@ -331,7 +339,41 @@ class StatsScreenTest {
             .onAllNodesWithText("Бег")
             .assertCountEquals(2)
         composeTestRule
-            .onNodeWithText(oneHourText)
+            .onNodeWithText(hundredPercentText)
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun stats_when_single_visible_period_then_picker_hidden_and_content_rises() {
+        // Given — один видимый период (overview-periods-and-shares)
+        setContentWith(weekState().copy(visiblePeriods = listOf(StatsPeriod.WEEK)))
+
+        // Then — сегментов пикера нет (за окно этого состояния выходят
+        // только они), контент поднят на место пикера
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.overview_period_month))
+            .assertCountEquals(0)
+        composeTestRule
+            .onNodeWithText(pushLabel)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun stats_when_two_visible_periods_then_only_visible_segments_shown() {
+        // Given — видимые периоды: День и Неделя
+        setContentWith(
+            weekState().copy(visiblePeriods = listOf(StatsPeriod.DAY, StatsPeriod.WEEK))
+        )
+
+        // Then — в пикере ровно два сегмента, скрытый «Год» не рендерится
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.overview_period_day))
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.overview_period_week))
+            .assertIsDisplayed()
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.overview_period_year))
+            .assertCountEquals(0)
     }
 }

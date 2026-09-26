@@ -19,6 +19,9 @@ import com.myworkouts.domain.usecase.StatsPeriod
  * [ExerciseCategory] (драфтовый `StatsCategory` удалён).
  *
  * @property period Календарный период доната и легенды
+ * @property visiblePeriods Видимые периоды пикера по дате самой ранней
+ *  тренировки (overview-periods-and-shares, design D3); дефолт — все
+ *  периоды, боевые значения приходят из [com.myworkouts.ui.viewmodel.OverviewViewModel]
  * @property selected Выбранная категория drill-down; `null` — обзор по категориям
  * @property categoryTotals Категории с REPS-объёмом > 0, убывание
  * @property exerciseTotals Суммы упражнений по категориям (drill-down легенда)
@@ -27,6 +30,7 @@ import com.myworkouts.domain.usecase.StatsPeriod
  */
 data class StatsUiState(
     val period: StatsPeriod = StatsPeriod.WEEK,
+    val visiblePeriods: List<StatsPeriod> = StatsPeriod.entries.toList(),
     val selected: ExerciseCategory? = null,
     val categoryTotals: List<CategoryTotal> = emptyList(),
     val exerciseTotals: Map<ExerciseCategory, List<ExerciseTotal>> = emptyMap(),
@@ -54,6 +58,9 @@ data class RecordsUiState(
  * @property streakState Режим отображения карточки серии
  *  (Active / Pending / Lost — см. [StreakCardState])
  * @property period Окно хитмапа
+ * @property visiblePeriods Видимые периоды пикера по дате самой ранней
+ *  тренировки (overview-periods-and-shares, design D3); дефолт — все
+ *  периоды, боевые значения приходят из [com.myworkouts.ui.viewmodel.OverviewViewModel]
  * @property heatmap Ячейки хитмапа (уровни 0..4), старт на понедельнике
  */
 data class ActivityUiState(
@@ -61,6 +68,7 @@ data class ActivityUiState(
     val recordStreakDays: Int = 0,
     val streakState: StreakCardState = StreakCardState.Active,
     val period: ActivityPeriod = ActivityPeriod.MONTH,
+    val visiblePeriods: List<ActivityPeriod> = ActivityPeriod.entries.toList(),
     val heatmap: List<HeatmapDayData> = emptyList()
 )
 

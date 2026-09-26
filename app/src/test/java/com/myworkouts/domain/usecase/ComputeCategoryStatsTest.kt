@@ -11,9 +11,9 @@ import java.time.ZoneId
 
 /**
  * Unit-тесты [computeCategoryStats] (overview-screen, tasks 2.1–2.2):
- * фильтрация календарного периода, доли по сумме подходов для обоих
- * типов измерения (REPS и TIME), суммы повторов и длительности,
- * сортировка и drill-down данные. Чистая функция, `today` — параметром,
+ * фильтрация календарного периода, доли по сумме подходов (totalSets)
+ * для обоих типов измерения (REPS и TIME), сортировка и drill-down
+ * данные. Чистая функция, `today` — параметром,
  * зона системная (как на главном экране).
  */
 class ComputeCategoryStatsTest {
@@ -82,7 +82,7 @@ class ComputeCategoryStatsTest {
         // Then — окно [пн 14.09, today]; воскресенье и «завтра» не входят
         val totals = result.categoryTotals
         assertEquals(1, totals.size, "Только запись сегодняшнего дня в неделе")
-        assertEquals(30, totals.first().totalReps, "Объём = 3 x 10")
+        assertEquals(3, totals.first().totalSets, "Подходы = 3")
     }
 
     @Test
@@ -137,27 +137,9 @@ class ComputeCategoryStatsTest {
         // When
         val result = computeCategoryStats(entries, StatsPeriod.WEEK, today)
 
-        // Then — смешанная категория несёт оба значения, доля по подходам
+        // Then — смешанная категория: доля по подходам обоих типов записей
         val total = result.categoryTotals.single()
         assertEquals(5, total.totalSets, "Доля = подходы REPS + TIME записей")
-        assertEquals(30, total.totalReps, "Повторы — сумма подходы x повторы только REPS")
-        assertEquals(180, total.totalDurationSec, "Длительность — сумма подходы x длительность только TIME")
-    }
-
-    @Test
-    fun total_reps_is_sets_times_reps_volume() {
-        // Given — 3x10 и 2x12 одного дня
-        val entries =
-            listOf(
-                entry(id = 1L, date = millis(today), sets = 3, reps = 10),
-                entry(id = 1L, date = millis(today), sets = 2, reps = 12)
-            )
-
-        // When
-        val result = computeCategoryStats(entries, StatsPeriod.WEEK, today)
-
-        // Then — объём = подходы x повторы (демо-данные макета: 60/день = 360/неделя)
-        assertEquals(54, result.categoryTotals.single().totalReps, "Сумма объёмов записей")
     }
 
     @Test
@@ -184,14 +166,11 @@ class ComputeCategoryStatsTest {
         val total = result.categoryTotals.single()
         assertEquals(ExerciseCategory.CORE, total.category, "TIME-категория в донате")
         assertEquals(3, total.totalSets, "Доля по подходам")
-        assertEquals(0, total.totalReps, "У TIME-записей нет повторов")
-        assertEquals(270, total.totalDurationSec, "Длительность = подходы x длительность")
         val exerciseTotal =
             checkNotNull(result.exerciseTotals[ExerciseCategory.CORE]) { "Легенда drill-down CORE" }
                 .single()
         assertEquals("Планка", exerciseTotal.exerciseName, "TIME-упражнение в легенде")
         assertEquals(3, exerciseTotal.totalSets, "Доля упражнения по подходам")
-        assertEquals(270, exerciseTotal.totalDurationSec, "Длительность упражнения")
     }
 
     @Test
@@ -259,11 +238,6 @@ class ComputeCategoryStatsTest {
 
         // Then — убывание суммы: PUSH 40, PULL 30, LEGS 20 (по подходам 4, 3, 2)
         assertEquals(
-            listOf(40, 30, 20),
-            result.categoryTotals.map { it.totalReps },
-            "Категории отсортированы по сумме убыванием"
-        )
-        assertEquals(
             listOf(4, 3, 2),
             result.categoryTotals.map { it.totalSets },
             "Доли категорий — суммы подходов"
@@ -297,11 +271,6 @@ class ComputeCategoryStatsTest {
         // Then — упражнения внутри категории, убывание суммы
         val pullTotals =
             checkNotNull(result.exerciseTotals[ExerciseCategory.PULL]) { "PULL-легенда drill-down" }
-        assertEquals(
-            listOf(30, 20),
-            pullTotals.map { it.totalReps },
-            "Упражнения категории по сумме убыванием"
-        )
         assertEquals(
             listOf(3, 2),
             pullTotals.map { it.totalSets },
@@ -364,5 +333,57 @@ class ComputeCategoryStatsTest {
         assertEquals("Планка", drillEntry.exerciseName)
         assertEquals(null, drillEntry.reps, "У TIME-записи нет повторов")
         assertEquals(90, drillEntry.durationSec, "Длительность drill-записи")
+    }
+
+    @Test
+    fun percent_when_time_two_of_five_then_forty() {
+        // Given/When — TIME-строка с 2 подходами из 5 подходов всех строк
+        // уровня (spec «Легенда TIME-категории…»; база — сумма totalSets
+        // отображаемых строк: общая у категорий, своя у категории в drill-down)
+        val percent = percentOf(totalSets = 2, baseSets = 5)
+
+        // Then
+        assertEquals(40, percent, "2 из 5 — 40 %")
+    }
+
+    @Test
+    fun percent_when_thirds_then_rounded_and_sum_ne_100() {
+        // Given — три строки по 1 подходу из 3 (spec «Проценты легенды
+        // округляются до целого»: строки с 1 и 2 подходами из 3)
+        val single = percentOf(totalSets = 1, baseSets = 3)
+        val double = percentOf(totalSets = 2, baseSets = 3)
+
+        // Then — округление до ближайшего целого; сумма может давать ≠ 100 %
+        assertEquals(33, single, "1 из 3 — 33 %")
+        assertEquals(67, double, "2 из 3 — 67 %")
+        assertEquals(99, single * 3, "Три строки по 1: 33+33+33 = 99 ≠ 100 — допустимо")
+    }
+
+    @Test
+    fun percent_when_full_base_then_hundred() {
+        // Given/When — единственная строка уровня (spec «Доля категории по
+        // подходам обоих типов измерения»: одна категория → «100 %»)
+        val percent = percentOf(totalSets = 5, baseSets = 5)
+
+        // Then
+        assertEquals(100, percent, "5 из 5 — 100 %")
+    }
+
+    @Test
+    fun percent_when_exact_half_tie_then_rounds_up() {
+        // Given/When — граница округления: 1 из 8 = 12.5
+        val percent = percentOf(totalSets = 1, baseSets = 8)
+
+        // Then — «до ближайшего целого»: половина — вверх
+        assertEquals(13, percent, "1 из 8 = 12.5 → 13")
+    }
+
+    @Test
+    fun percent_when_zero_base_then_zero() {
+        // Given/When — вырожденная база: строки уровня не показываются
+        val percent = percentOf(totalSets = 1, baseSets = 0)
+
+        // Then — защита от деления на ноль
+        assertEquals(0, percent, "Нулевая база — 0 %")
     }
 }

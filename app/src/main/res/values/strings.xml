@@ -197,11 +197,8 @@
     <string name="overview_period_year">Год</string>
     <string name="overview_stats_empty">Нет тренировок за выбранный период</string>
     <string name="overview_unit_reps">%1$d повт.</string>
-    <string name="stats_duration_unit_seconds">сек.</string>
-    <string name="stats_duration_unit_minutes">мин.</string>
-    <string name="stats_duration_unit_hours">ч.</string>
-    <string name="stats_duration_unit_days">дн.</string>
-    <string name="stats_value_separator">" · "</string>
+    <string name="overview_legend_percent">%1$d %%</string>
+    <string name="overview_months_separator">" – "</string>
     <string name="overview_back_to_categories">Категории</string>
     <string name="records_mode_per_set">За подход</string>
     <string name="records_mode_per_day">За день</string>

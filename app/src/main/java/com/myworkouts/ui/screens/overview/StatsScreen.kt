@@ -42,6 +42,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
@@ -62,6 +64,7 @@ import com.myworkouts.domain.usecase.CategoryTotal
 import com.myworkouts.domain.usecase.DrillDateGroup
 import com.myworkouts.domain.usecase.ExerciseTotal
 import com.myworkouts.domain.usecase.StatsPeriod
+import com.myworkouts.domain.usecase.percentOf
 import com.myworkouts.ui.screens.main.SectionHeader
 import com.myworkouts.ui.screens.main.formatEntryValue
 import com.myworkouts.ui.screens.main.formatWeightKg
@@ -69,7 +72,6 @@ import com.myworkouts.ui.state.StatsUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.theme.color
 import com.myworkouts.ui.util.formatDurationResource
-import com.myworkouts.ui.util.legendValueTextResource
 import com.myworkouts.ui.util.sectionDateLabelResource
 import java.time.LocalDate
 
@@ -165,11 +167,14 @@ private fun StatsScreenPortraitBody(
                         Modifier
                     }
             ) {
-                StatsPeriodPicker(
-                    selected = state.period,
-                    onPeriodChange = onPeriodChange
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+                if (state.visiblePeriods.size >= 2) {
+                    StatsPeriodPicker(
+                        selected = state.period,
+                        onPeriodChange = onPeriodChange,
+                        visiblePeriods = state.visiblePeriods
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
                 if (state.isEmpty) {
                     EmptyPeriodHint()
                 } else {
@@ -216,11 +221,14 @@ private fun StatsScreenLandscapeBody(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
     ) {
-        StatsPeriodPicker(
-            selected = state.period,
-            onPeriodChange = onPeriodChange
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+        if (state.visiblePeriods.size >= 2) {
+            StatsPeriodPicker(
+                selected = state.period,
+                onPeriodChange = onPeriodChange,
+                visiblePeriods = state.visiblePeriods
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
         if (state.isEmpty) {
             Box(
                 modifier = Modifier.fillMaxWidth().weight(1f),
@@ -302,24 +310,33 @@ private fun donutSlices(state: StatsUiState): List<Pair<Color, Int>> {
     }
 }
 
-/** Строки легенды: категории (кликабельны) или упражнения drill-down. */
+/**
+ * Строки легенды: категории (кликабельны) или упражнения drill-down.
+ * Значение — процент от суммы подходов отображаемых строк уровня
+ * (overview-periods-and-shares, design D6): база у уровня категорий —
+ * общая, в drill-down — своя у каждой категории; расчёт — [percentOf],
+ * формат — ресурсом по локали (ru «N %», en «N%»).
+ */
 @Composable
 private fun legendItems(state: StatsUiState): List<StatsLegendRow> {
     val selected = state.selected
     return if (selected == null) {
+        val base = state.categoryTotals.sumOf { it.totalSets }
         state.categoryTotals.map { total ->
             StatsLegendRow(
                 label = stringResource(total.category.labelResId),
-                valueText = legendValueTextResource(total.totalReps, total.totalDurationSec),
+                valueText = stringResource(R.string.overview_legend_percent, percentOf(total.totalSets, base)),
                 color = total.category.color,
                 category = total.category
             )
         }
     } else {
-        state.exerciseTotals[selected].orEmpty().mapIndexed { index, total ->
+        val totals = state.exerciseTotals[selected].orEmpty()
+        val base = totals.sumOf { it.totalSets }
+        totals.mapIndexed { index, total ->
             StatsLegendRow(
                 label = total.exerciseName,
-                valueText = legendValueTextResource(total.totalReps, total.totalDurationSec),
+                valueText = stringResource(R.string.overview_legend_percent, percentOf(total.totalSets, base)),
                 color = shade(selected.color, shadeDelta(index)),
                 category = null
             )
@@ -327,7 +344,7 @@ private fun legendItems(state: StatsUiState): List<StatsLegendRow> {
     }
 }
 
-/** Строка легенды: значение уже готовым текстом ([legendValueTextResource]). */
+/** Строка легенды: значение уже готовым текстом (собирается в [legendItems]). */
 private data class StatsLegendRow(
     val label: String,
     val valueText: String,
@@ -429,21 +446,27 @@ private fun OverviewLegendGrid(
     }
 }
 
-/** Пикер периода: День / Неделя / Месяц / Год. */
+/**
+ * Пикер периода: День / Неделя / Месяц / Год — сегменты только из
+ * видимых периодов (overview-periods-and-shares). Показ решает
+ * вызывающий ([StatsScreenPortraitBody]/[StatsScreenLandscapeBody]
+ * рендерят его только при двух и более видимых периодах).
+ */
 @Composable
 private fun StatsPeriodPicker(
     selected: StatsPeriod,
-    onPeriodChange: (StatsPeriod) -> Unit
+    onPeriodChange: (StatsPeriod) -> Unit,
+    visiblePeriods: List<StatsPeriod>
 ) {
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        StatsPeriod.entries.forEachIndexed { index, period ->
+        visiblePeriods.forEachIndexed { index, period ->
             SegmentedButton(
                 selected = selected == period,
                 onClick = { onPeriodChange(period) },
                 shape =
                     SegmentedButtonDefaults.itemShape(
                         index = index,
-                        count = StatsPeriod.entries.size
+                        count = visiblePeriods.size
                     )
             ) {
                 Text(text = stringResource(id = period.labelResId))
@@ -461,6 +484,14 @@ private fun DonutChart(
     Canvas(modifier = Modifier.size(size)) {
         val total = slices.sumOf { it.second }.coerceAtLeast(1)
         val stroke = Stroke(width = DONUT_STROKE_DP.dp.toPx())
+        // Stroke центрируется на дуге: без инсета внешняя половина штриха
+        // выходит за границы Canvas и срезается клипом
+        val arcSize =
+            Size(
+                width = this.size.width - stroke.width,
+                height = this.size.height - stroke.width
+            )
+        val topLeft = Offset(stroke.width / 2, stroke.width / 2)
         var startAngle = DONUT_START_ANGLE_DEGREES
         slices.forEach { (color, value) ->
             val sweep = value.toFloat() / total * DONUT_FULL_SWEEP_DEGREES
@@ -469,6 +500,8 @@ private fun DonutChart(
                 startAngle = startAngle,
                 sweepAngle = sweep,
                 useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
                 style = stroke
             )
             startAngle += sweep
@@ -683,52 +716,31 @@ private const val PREVIEW_DAY_MILLIS = 86_400_000L
 /** Миллисекунды «вчера» для демо-записи в группе вчерашнего дня. */
 private val previewYesterdayMillis = (LocalDate.now().toEpochDay() - 1) * PREVIEW_DAY_MILLIS
 
-/**
- * Демо-легенда: доли по подходам убывание; CORE — смешанная категория
- * (повторы + длительность), CARDIO — только TIME (макет
- * overview-stats-time-support Decision 4).
- */
+/** Демо-легенда: доли по подходам убывание (уровень категорий). */
 internal val demoCategoryTotals =
     listOf(
-        CategoryTotal(
-            category = ExerciseCategory.PUSH,
-            totalSets = 6,
-            totalReps = 45
-        ),
-        CategoryTotal(
-            category = ExerciseCategory.CORE,
-            totalSets = 5,
-            totalReps = 18,
-            totalDurationSec = 180
-        ),
-        CategoryTotal(
-            category = ExerciseCategory.PULL,
-            totalSets = 4,
-            totalReps = 36
-        ),
-        CategoryTotal(
-            category = ExerciseCategory.CARDIO,
-            totalSets = 2,
-            totalDurationSec = 3600
-        )
+        CategoryTotal(category = ExerciseCategory.PUSH, totalSets = 6),
+        CategoryTotal(category = ExerciseCategory.CORE, totalSets = 5),
+        CategoryTotal(category = ExerciseCategory.PULL, totalSets = 4),
+        CategoryTotal(category = ExerciseCategory.CARDIO, totalSets = 2)
     )
 
 private val demoExerciseTotals =
     mapOf(
         ExerciseCategory.PUSH to
             listOf(
-                ExerciseTotal(exerciseName = "Отжимания", totalSets = 3, totalReps = 30),
-                ExerciseTotal(exerciseName = "Отжимания на брусьях", totalSets = 3, totalReps = 15)
+                ExerciseTotal(exerciseName = "Отжимания", totalSets = 3),
+                ExerciseTotal(exerciseName = "Отжимания на брусьях", totalSets = 3)
             ),
         ExerciseCategory.CORE to
             listOf(
-                ExerciseTotal(exerciseName = "Скручивания", totalSets = 3, totalReps = 18),
-                ExerciseTotal(exerciseName = "Планка", totalSets = 2, totalDurationSec = 180)
+                ExerciseTotal(exerciseName = "Скручивания", totalSets = 3),
+                ExerciseTotal(exerciseName = "Планка", totalSets = 2)
             ),
         ExerciseCategory.PULL to
-            listOf(ExerciseTotal(exerciseName = "Подтягивания", totalSets = 4, totalReps = 36)),
+            listOf(ExerciseTotal(exerciseName = "Подтягивания", totalSets = 4)),
         ExerciseCategory.CARDIO to
-            listOf(ExerciseTotal(exerciseName = "Бег", totalSets = 2, totalDurationSec = 3600))
+            listOf(ExerciseTotal(exerciseName = "Бег", totalSets = 2))
     )
 
 private val demoDrillGroups =
@@ -858,7 +870,8 @@ private fun previewEntry(
  */
 internal fun demoStatsState(
     period: StatsPeriod,
-    selected: ExerciseCategory? = null
+    selected: ExerciseCategory? = null,
+    visiblePeriods: List<StatsPeriod> = StatsPeriod.entries.toList()
 ): StatsUiState =
     StatsUiState(
         period = period,
@@ -866,7 +879,8 @@ internal fun demoStatsState(
         categoryTotals = demoCategoryTotals,
         exerciseTotals = demoExerciseTotals,
         drillGroups = demoDrillGroups,
-        isEmpty = false
+        isEmpty = false,
+        visiblePeriods = visiblePeriods
     )
 
 // ===== Превью (обе темы, showBackground, locale = "ru") =====
@@ -892,6 +906,14 @@ internal fun StatsDrillDownPreview() {
     StatsScreenPreview(period = StatsPeriod.WEEK, selected = ExerciseCategory.PUSH)
 }
 
+/** Пикер скрыт: один видимый период, контент поднят на его место. */
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun StatsPeriodHiddenPreview() {
+    StatsScreenPreview(period = StatsPeriod.MONTH, visiblePeriods = listOf(StatsPeriod.MONTH))
+}
+
 // Ландшафт (макет iter5_v1.html): размер превью шире высоты —
 // LocalConfiguration даёт ORIENTATION_LANDSCAPE.
 
@@ -909,20 +931,29 @@ internal fun StatsLandscapeDrillDownPreview() {
     StatsScreenPreview(period = StatsPeriod.WEEK, selected = ExerciseCategory.PUSH)
 }
 
+/** Ландшафт: пикер скрыт при одном видимом периоде. */
+@Preview(widthDp = 891, heightDp = 411, showBackground = true, locale = "ru")
+@Preview(widthDp = 891, heightDp = 411, uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun StatsLandscapePeriodHiddenPreview() {
+    StatsScreenPreview(period = StatsPeriod.MONTH, visiblePeriods = listOf(StatsPeriod.MONTH))
+}
+
 @Composable
 private fun StatsScreenPreview(
     period: StatsPeriod,
     selected: ExerciseCategory? = null,
-    isEmpty: Boolean = false
+    isEmpty: Boolean = false,
+    visiblePeriods: List<StatsPeriod> = StatsPeriod.entries.toList()
 ) {
     JetpackMyWorkoutsTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
             StatsScreen(
                 state =
                     if (isEmpty) {
-                        StatsUiState(period = period)
+                        StatsUiState(period = period, visiblePeriods = visiblePeriods)
                     } else {
-                        demoStatsState(period = period, selected = selected)
+                        demoStatsState(period = period, selected = selected, visiblePeriods = visiblePeriods)
                     },
                 onPeriodChange = {},
                 onCategoryClick = {}

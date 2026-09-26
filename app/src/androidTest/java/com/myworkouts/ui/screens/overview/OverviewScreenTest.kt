@@ -24,8 +24,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.domain.model.OverviewTab
+import com.myworkouts.domain.usecase.StatsPeriod
 import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.state.OverviewUiState
+import com.myworkouts.ui.state.StatsUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -40,7 +42,9 @@ import org.junit.runner.RunWith
  *
  * Проверяют: переключение вкладок меняет контент, при единственной
  * видимой вкладке `SecondaryTabRow` скрыт и подзаголовок показывает её
- * название, навигация в настройки и обратно (NavHost-harness).
+ * название, навигация в настройки и обратно (NavHost-harness); один
+ * видимый период статистики — пикер скрыт (overview-periods-and-shares
+ * tasks 5.4).
  */
 @RunWith(AndroidJUnit4::class)
 class OverviewScreenTest {
@@ -136,6 +140,39 @@ class OverviewScreenTest {
         composeTestRule
             .onAllNodesWithText(context.getString(R.string.overview_tab_activity))
             .assertCountEquals(0)
+    }
+
+    /**
+     * Один видимый период статистики: сегментов пикера нет и на уровне
+     * композиции обзора (content «Статистики» рендерит [StatsScreen]).
+     */
+    @Test
+    fun overview_when_stats_single_visible_period_then_picker_hidden() {
+        // Given — обзор с одним видимым периодом статистики
+        composeTestRule.setContent {
+            JetpackMyWorkoutsTheme {
+                OverviewScreenBody(
+                    state =
+                        OverviewUiState(
+                            stats =
+                                StatsUiState(
+                                    visiblePeriods = listOf(StatsPeriod.WEEK)
+                                )
+                        ),
+                    actions = stubActions(),
+                    onSettingsClick = {},
+                    onBackClick = {}
+                )
+            }
+        }
+
+        // Then — сегментов пикера («Месяц») нет, контент статистики на месте
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.overview_period_month))
+            .assertCountEquals(0)
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.overview_stats_empty))
+            .assertIsDisplayed()
     }
 
     /**

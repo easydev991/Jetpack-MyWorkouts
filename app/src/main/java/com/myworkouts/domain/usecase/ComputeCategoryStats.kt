@@ -2,23 +2,15 @@ package com.myworkouts.domain.usecase
 
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.ExerciseCategory
-import com.myworkouts.domain.model.ExerciseMeasuredBy
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlin.math.roundToInt
 
-/**
- * Доля категории в донате: суммы её записей за период — долю даёт
- * `totalSets` (подходы, overview-stats-time-support design Decision 1),
- * `totalReps`/`totalDurationSec` — значения легенды в естественных
- * единицах. Поля с нулевыми дефолтами — демо-данные макета задают
- * только то, что отображают.
- */
+/** Доля категории в донате: сумма подходов её записей за период. */
 data class CategoryTotal(
     val category: ExerciseCategory,
-    val totalSets: Int = 0,
-    val totalReps: Int = 0,
-    val totalDurationSec: Int = 0
+    val totalSets: Int = 0
 )
 
 /**
@@ -27,9 +19,7 @@ data class CategoryTotal(
  */
 data class ExerciseTotal(
     val exerciseName: String,
-    val totalSets: Int = 0,
-    val totalReps: Int = 0,
-    val totalDurationSec: Int = 0
+    val totalSets: Int = 0
 )
 
 /** Записи одного дня drill-down. */
@@ -79,33 +69,24 @@ internal fun entryDay(
 ): LocalDate = Instant.ofEpochMilli(entry.date).atZone(zone).toLocalDate()
 
 /**
- * Сумма повторов записи: подходы x повторы REPS-записи; TIME-запись
- * повторов не даёт — секунды и повторения не смешиваются.
+ * Процент строки легенды от базы её уровня (overview-periods-and-shares,
+ * design D6): целое, округление до ближайшего целого (`roundToInt`);
+ * сумма процентов строк может отличаться от 100 % — это допустимо по
+ * спеке и не «чинится». База — сумма `totalSets` отображаемых строк
+ * уровня: у уровня категорий — общая, в drill-down — своя у каждой
+ * категории. Вырожденная нулевая база (строки не показываются) — 0.
  */
-private fun EntryWithExercise.repsVolume(): Int =
-    if (measuredBy == ExerciseMeasuredBy.REPS) {
-        sets * (reps ?: 0)
-    } else {
-        0
-    }
-
-/**
- * Сумма длительности записи: подходы x длительность TIME-записи;
- * REPS-запись длительности не даёт.
- */
-private fun EntryWithExercise.durationVolume(): Int =
-    if (measuredBy == ExerciseMeasuredBy.TIME) {
-        sets * (durationSec ?: 0)
-    } else {
-        0
-    }
+@Suppress("MagicNumber") // 100.0 — перевод доли в процент (overview-periods-and-shares, design D6)
+internal fun percentOf(
+    totalSets: Int,
+    baseSets: Int
+): Int = if (baseSets <= 0) 0 else (totalSets * 100.0 / baseSets).roundToInt()
 
 /**
  * Рассчитывает вкладку «Статистика» (overview-screen, design Decision 4
  * + overview-stats-time-support Decision 1): чистая функция, `today` —
  * параметром. Доли доната и сортировка — по сумме подходов, TIME- и
- * REPS-записи наравне; `totalReps`/`totalDurationSec` — значения легенды
- * в естественных единицах. Окно периода — `[statsPeriodStart, today]`
+ * REPS-записи наравне. Окно периода — `[statsPeriodStart, today]`
  * включительно; будущие записи с кривой датой не рвут логику.
  */
 internal fun computeCategoryStats(
@@ -127,9 +108,7 @@ internal fun computeCategoryStats(
             .map { (category, list) ->
                 CategoryTotal(
                     category = category,
-                    totalSets = list.sumOf { it.sets },
-                    totalReps = list.sumOf { it.repsVolume() },
-                    totalDurationSec = list.sumOf { it.durationVolume() }
+                    totalSets = list.sumOf { it.sets }
                 )
             }.filter { it.totalSets > 0 }
             .sortedWith(compareByDescending<CategoryTotal> { it.totalSets }.thenBy { it.category.name })
@@ -142,9 +121,7 @@ internal fun computeCategoryStats(
                     .map { (name, perExercise) ->
                         ExerciseTotal(
                             exerciseName = name,
-                            totalSets = perExercise.sumOf { it.sets },
-                            totalReps = perExercise.sumOf { it.repsVolume() },
-                            totalDurationSec = perExercise.sumOf { it.durationVolume() }
+                            totalSets = perExercise.sumOf { it.sets }
                         )
                     }.filter { it.totalSets > 0 }
                     .sortedWith(
