@@ -21,21 +21,26 @@ description: >
 транзитивно через Room/Compose). В `androidTest` нет ни
 `kotlinx-coroutines-test`, ни Turbine (правило 13):
 `kotlinx-coroutines-test` подключён только в unit-тестах
-`app/src/test/` (`app/build.gradle.kts:66`).
+`app/src/test/` (`app/build.gradle.kts:128`).
 
 Два типа тестов в `androidTest/` (различаются по правилу, а не по слою данных):
 
 - **Компонентные UI-тесты** — `createComposeRule()` (v2 API,
   `androidx.compose.ui.test.junit4.v2`), без Activity. Внутри —
   изолированный Compose-компонент с готовым `*ScreenState` (без VM),
-  либо экран с реальной ViewModel поверх Room in-memory +
-  `NavHost`-harness (см. `references/component-testing.md`).
+  экран с реальной ViewModel поверх Room in-memory +
+  `NavHost`-harness, либо экран с реальной VM и фейк-репозиторием
+  на `MutableStateFlow` без Room (`MainScreenSectionsTest`, см.
+  `references/component-testing.md` → «Тест с фейковым репозиторием
+  на MutableStateFlow»).
 - **Интеграционные тесты** — `createAndroidComposeRule<MainActivity>()`
   (полный стек с реальной `MainActivity` и production-DI), либо
   Room DAO/репозиторий без Compose-правила (см.
   `references/activity-integration.md`, `references/room-repository.md`).
-  В проекте единственный случай с реальной Activity —
-  `ExerciseCreateLiveUpdateIntegrationTest`.
+  С реальной `MainActivity` — `EntryListLiveUpdateIntegrationTest`,
+  `ExerciseCreateLiveUpdateIntegrationTest`, `RootScreenTest`,
+  `MainScreenDetailCardRecreateTest`; кроме них, два компонентных
+  теста живут на `ComponentActivity` (см. правило 2).
 
 > Unit-тесты — это `app/src/test/` (JUnit 5, MockK). Их правила описаны
 > в навыке `kotlin-testing`. Этот skill про `app/src/androidTest/`.
@@ -53,6 +58,9 @@ description: >
 2. **ComposeTestRule — v2 API (`androidx.compose.ui.test.junit4.v2`).**
    Компонентный тест — `createComposeRule()`; тест с реальной
    MainActivity — `createAndroidComposeRule<MainActivity>()`.
+   Исключение: компонентный тест с `DropdownMenu` —
+   `createAndroidComposeRule(ComponentActivity)` (меню нужен
+   window-host; `MainScreenSectionsTest`, `MainScreenDetailCardTest`).
    Правило объявляется как `@get:Rule val composeTestRule = ...`.
 3. **Имена тестов: без обратных кавычек, обязательные
    `when_` / `then_`.** Префикс-subject опционален, регистр сегментов
@@ -110,8 +118,8 @@ description: >
 13. **Без `MainDispatcherRule` / Turbine в androidTest.**
     `Turbine` не подключён нигде. `kotlinx-coroutines-test` подключён
     только в unit-тестах `app/src/test/`
-    (`app/build.gradle.kts:66`) — в `androidTest/` его нет
-    (зависимости `androidTestImplementation` в `app/build.gradle.kts:72-75`).
+    (`app/build.gradle.kts:128`) — в `androidTest/` его нет
+    (зависимости `androidTestImplementation` в `app/build.gradle.kts:134-137`).
     В androidTest используется реальный `Dispatchers.Main` + `runBlocking`
     (Room + Compose UI Test работают с ним корректно).
 14. **Один `setContent` на тест (sealed v2 API).** Повторный
@@ -123,11 +131,15 @@ description: >
     разносить по двум тестам (образец — `MainScreenTest`:
     `row_when_dark_theme_then_icon_uses_dark_variant` +
     `row_when_light_theme_then_icon_uses_light_variant`).
-15. **Проверка `assertExists` в v2 API отсутствует** (unresolved
-    reference). Существование узла — `onAllNodesWithText(...).
-    assertCountEquals(n)` или счётчики тегов; видимость —
-    `assertIsDisplayed`. Не путать: «не displayed» = узел есть, но за
-    границами окна (частый случай — нижние опции dropdown-меню).
+15. **`assertExists` / `assertDoesNotExist` — методы
+    `SemanticsNodeInteraction`, импорт не нужен.** Top-level импорта
+    `androidx.compose.ui.test.assertExists` в v2-артефактах нет
+    (unresolved reference) — вызывай метод на receiver:
+    `onNodeWithText(...).assertExists()`. Для коллекций нод —
+    `assertCountEquals(n)` (top-level extension, импорт обязателен);
+    видимость — `assertIsDisplayed`. Не путать: «не displayed» = узел
+    есть, но за границами окна (частый случай — нижние опции
+    dropdown-меню).
 
 ## Запуск тестов
 
@@ -168,13 +180,20 @@ description: >
     Если нет — готовый `*ScreenState` через `setContent`.
   - Нужна ли реальная `MainActivity`? Почти всегда нет —
     `createComposeRule()` + реальный `NavHost`-harness
-    покрывают навигацию без Activity. Исключение —
-    `ExerciseCreateLiveUpdateIntegrationTest` (тестирует
-    `WhileSubscribed(5000)` в продакшен-DI).
-  - Нужна ли реальная БД для теста MainActivity?
-    `ExerciseCreateLiveUpdateIntegrationTest` — единственный
-    случай, когда используется `Room.databaseBuilder(context, ...,
-    DATABASE_NAME)` (production-БД); все остальные — in-memory.
+    покрывают навигацию без Activity. С реальной `MainActivity`
+    — `EntryListLiveUpdateIntegrationTest`,
+    `ExerciseCreateLiveUpdateIntegrationTest`, `RootScreenTest`,
+    `MainScreenDetailCardRecreateTest`; для `DropdownMenu` в
+    компонентном тесте — `createAndroidComposeRule(
+    ComponentActivity)` (правило 2).
+  - Нужна ли production-БД? Собственный
+    `Room.databaseBuilder(context, ..., DATABASE_NAME)` открывают
+    `EntryListLiveUpdateIntegrationTest`,
+    `ExerciseCreateLiveUpdateIntegrationTest` и `RootScreenTest`;
+    `MainScreenDetailCardRecreateTest` пишет в ту же production-БД
+    через продакшен-репозиторий процесса (`app.repository`, без
+    собственного `databaseBuilder`). Остальные тесты — Room
+    in-memory или без БД.
 
 ## Routing map (читай нужный reference быстро)
 
@@ -219,11 +238,14 @@ description: >
 | `onNodeWithText("20")` не находит день в M3 `DatePicker` | В material3 1.4+ номер дня вычищен из семантики ячейки (доступен только локализованный description даты). См. `references/compose-selectors.md` → «M3 DatePicker: семантика дней (material3 1.4+)» (канон) |
 | `performClick` на недоступной (disabled) ноде падает | У disabled-ноды нет click-action — паттерн «тап по недоступному → ничего не произошло» не работает. Проверяй `assertIsNotEnabled`, подсчёт disabled-нод или физический тап по координатам через `performTouchInput` |
 | `Unresolved reference 'click'` в `performTouchInput` | `click`/`longClick`/`doubleClick` — extension-функции `TouchInjectionScope`, каждой нужен свой импорт: `import androidx.compose.ui.test.click` |
-| Нод в диалоге больше, чем ожидал `assertCountEquals` | `onAllNodes(...)` видит форму под диалогом — см. `references/compose-selectors.md` → «M3 DatePicker: семантика дней» (канон) |
+| Нод в диалоге больше, чем ожидал `assertCountEquals` | `onAllNodes(...)` видит форму под диалогом — см. `references/compose-selectors.md` → «M3 DatePicker: семантика дней (material3 1.4+)» (канон) |
 | `onAllNodesWithTag` находит 0 нод, хотя тег проставлен | Тег на ноде внутри контейнера с `mergeDescendants = true` (строка списка, кнопка) не виден в merged-дереве — ищи с `useUnmergedTree = true` (канон — `ExerciseIcon` + `MainScreenTest`) |
 | Второй `setContent` бросает `IllegalStateException: has already set content` | Sealed v2 API разрешает один `setContent` на тест — подменяй состояние через `mutableStateOf` внутри первого `setContent` (правило 14) |
-| `Unresolved reference 'assertExists'` | В v2 API удаления нет: `onAllNodesWithText(...).assertCountEquals(n)` (правило 15) |
+| `Unresolved reference 'assertExists'` | Top-level импорта нет: `.assertExists()` — метод receiver'а, вызывай без импорта (`onNodeWithText(...).assertExists()`, правило 15); для `onAllNodes*` — `assertCountEquals` |
 | Позиционная проверка «что левее/выше» даёт неверные bounds | `onNodeWithText` в merged-дереве возвращает слитую строку целиком (bounds = вся строка, left = 0) — оба сравниваемых узла бери из unmerged-дерева (канон — `MainScreenTest.row_when_icon_assigned_...`) |
+| Assert на `FontWeight`/стиль шрифта — `GetTextLayoutResult` не резолвится | В Compose 1.12+ стиль `Text` удалён из семантики — через compose-test не проверить, закрывается превью. См. `references/compose-selectors.md` → «Семантика текста: стиль не проверить» (канон) |
+| Тест ждёт «Август – Сентябрь», а в UI «Сентябрь – Август» | Фикстуры с датами строй в порядке прод-контракта (хитмап — по возрастанию): order-dependent вывод (`distinct().joinToString`) рендерит порядок входа. См. `references/component-testing.md` → «Фикстуры с датами» (канон — `ActivityScreenTest.heatmapOf`) |
+| `println` в androidTest не виден в выводе gradle, дебажить падение нечем | Брось `AssertionError` с диагностикой (текст/bounds нод) — попадёт в `<failure>` XML-отчёта. См. `references/running-tests.md` → «Диагностика падающего теста» |
 
 ## Поиск иконки упражнения в UI-тестах
 
@@ -257,6 +279,11 @@ description: >
 - [ ] Нет `Thread.sleep` для ожидания UI — `waitUntil(timeoutMillis = ...)`
       / `waitForIdle()`. Реальные таймауты сценария — через
       `kotlinx.coroutines.delay`
+- [ ] Нет новых интеграционных ViewModel-тестов — логика VM
+      покрывается JVM-тестами с Fake-репозиторием (правило 12)
+- [ ] Нет `MainDispatcherRule` / `Turbine` / `kotlinx-coroutines-test`
+      в androidTest — реальный `Dispatchers.Main` + `runBlocking`
+      (правило 13)
 - [ ] Файлы в `app/src/androidTest/` зеркалят структуру `app/src/main/`
 - [ ] Имя класса оканчивается на `Test` (или `UiTest` / `IntegrationTest` /
       `InstrumentedTest`)

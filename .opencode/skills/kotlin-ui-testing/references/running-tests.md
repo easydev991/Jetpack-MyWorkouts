@@ -128,6 +128,27 @@ FQN = `com.myworkouts.` + путь файла под `app/src/androidTest/java/`
 grep -rl "@RunWith" app/src/androidTest --include="*.kt"
 ```
 
+## Диагностика падающего теста: stdout не виден
+
+`println` внутри androidTest **не попадает** в консоль gradle (вывод
+instrumentation-раннера не проксируется), а `Log.i` легко теряется в
+буфере logcat. Надёжный приём — бросить `AssertionError` с данными:
+он попадает в `<failure>` XML-отчёта без дополнительной настройки.
+
+```kotlin
+// Временно, вместо упавшего assert — дамп фактического состояния ноды:
+val node = composeTestRule.onNodeWithText(expected).fetchSemanticsNode()
+throw AssertionError(
+    "DEBUG text=${node.config[SemanticsProperties.Text]} bounds=${node.boundsInRoot}"
+)
+```
+
+Отчёт: `app/build/outputs/androidTest-results/connected/debug/flavors/github/TEST-<device>.xml`.
+Для дампа всех нод с подстрокой —
+`onAllNodes(hasText("…", substring = true)).fetchSemanticsNodes()`.
+После дебага вернуть обычные assert (канон реального кейса — отладка
+порядка месяцев в `ActivityScreenTest`).
+
 ## Зависимости androidTest (build.gradle.kts)
 
 ```kotlin
@@ -140,8 +161,8 @@ debugImplementation(libs.androidx.compose.ui.test.manifest)
 
 > `Turbine` в проекте **не подключён** нигде.
 > `kotlinx-coroutines-test` есть только в unit-тестах
-> (`app/build.gradle.kts:66` — `testImplementation`); в `androidTest/`
-> его нет (`androidTestImplementation` в `app/build.gradle.kts:72-75`).
+> (`app/build.gradle.kts:128` — `testImplementation`); в `androidTest/`
+> его нет (`androidTestImplementation` в `app/build.gradle.kts:134-137`).
 > В androidTest используется `kotlinx.coroutines.runBlocking` + `.first()`
 > для проверки Flow.
 

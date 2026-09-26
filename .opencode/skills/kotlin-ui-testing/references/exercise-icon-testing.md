@@ -67,7 +67,9 @@ LocalConfiguration provides ...)`).
 ## Где используется
 
 - `MainScreenTest` — наличие/отсутствие/неизвестный номер, тёмный и
-  светлый вариант (эталонный экран, design Decision 6);
+  светлый вариант (эталонный экран; exercise-icon-display, design
+  Decision 6 —
+  `openspec/changes/archive/2026-09-20-exercise-icon-display/design.md`);
 - `ExercisesScreenTest`, `ArchivedExercisesScreenTest` — строка
   списка и архива (наследование через общий `ExerciseListItemRow`);
 - `EntryCreateScreenTest` — опции dropdown (`leadingIcon`) и

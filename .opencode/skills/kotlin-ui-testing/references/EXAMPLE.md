@@ -346,8 +346,10 @@ class RoomWorkoutDataRepositoryTest {
 
 ## Тест с реальной MainActivity (живое обновление через WhileSubscribed)
 
-`ExerciseCreateLiveUpdateIntegrationTest.kt` — единственный тест
-с реальной `MainActivity` и **production-БД** (не in-memory):
+`ExerciseCreateLiveUpdateIntegrationTest.kt` — тест
+с реальной `MainActivity` и **production-БД** (не in-memory;
+production-БД также у `EntryListLiveUpdateIntegrationTest` и
+`RootScreenTest`):
 проверяет, что `WhileSubscribed(5000)` корректно доставляет
 invalidation после паузы > 5 с. Сокращённый скелет (тело хелпера
 `insertExerciseIntoAppDatabase()` + проверка включённой вкладки
@@ -408,11 +410,13 @@ class ExerciseCreateLiveUpdateIntegrationTest {
 > Это исключение из правила «in-memory». Реальная БД нужна
 > потому, что `MainActivity` поднимает DI с собственным
 > `WorkoutDatabase.create(context, ...)` — подменить его на
-> in-memory в этом тесте нельзя без переписывания DI. Для
-> всех остальных интеграционных тестов — in-memory обязателен.
+> in-memory в этом тесте нельзя без переписывания DI (то же
+> относится к `EntryListLiveUpdateIntegrationTest` и
+> `RootScreenTest`). Для DAO/репозиторий-тестов — in-memory
+> обязателен.
 >
 > Канонический разбор (полный `insertExerciseIntoAppDatabase()`
 > с `Room.databaseBuilder(... DATABASE_NAME)` и guard
 > «включена ли вкладка Каталог») — в
-> `references/activity-integration.md` → «Тест с реальной
-> MainActivity (живое обновление через WhileSubscribed)».
+> `references/activity-integration.md` → «Скелет (канонический
+> пример — ExerciseCreateLiveUpdateIntegrationTest)».

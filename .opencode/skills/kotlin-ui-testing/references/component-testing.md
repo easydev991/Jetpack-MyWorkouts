@@ -10,6 +10,10 @@ Activity. В Jetpack-MyWorkouts так тестируются (список не
   `ExerciseCreateScreenContent(state = ...)`
 - `EntryCreateScreenTest` — форма записи через
   `EntryCreateScreenContent(state = ...)`
+- `EntryEditArchivedExerciseTest` — правка записи, ссылающейся на
+  заархивированное упражнение: реальная `EntryCreateViewModel`
+  поверх Room in-memory; подмена VM через `mutableStateOf` внутри
+  первого `setContent` (образец для правила 14 SKILL.md)
 - `MainScreenTest` — главный экран через `MainScreenContent(state = ...)`
 - `MainScreenEditNavigationTest` — клик по строке секции → переход
   в `EntryCreateScreen`
@@ -17,9 +21,14 @@ Activity. В Jetpack-MyWorkouts так тестируются (список не
   переход в `ExerciseCreateScreen`
 - `MainScreenSectionsTest` — секции главного экрана с реальной VM
   и фейковым репозиторием на `MutableStateFlow` (без Room);
-  использует `createAndroidComposeRule(ComponentActivity)` —
-  единственный компонентный тест в проекте с `ComponentActivity`,
-  чтобы у `DropdownMenu` был host
+  использует `createAndroidComposeRule(ComponentActivity)`,
+  чтобы у `DropdownMenu` был host (то же — `MainScreenDetailCardTest`)
+- `MainScreenDetailCardTest` — карточка деталей записи: открытие
+  тапом, закрытие (крестик/скрим/Back), поведение при открытом
+  контекстном меню; `createAndroidComposeRule(ComponentActivity)`,
+  часть тестов — реальный `MainScreen` поверх Room in-memory
+  (не путать с `MainScreenDetailCardRecreateTest` — интеграционный
+  тест на реальной `MainActivity`, см. `references/activity-integration.md`)
 - `AppearanceScreenTest` / `AppearanceScreenStaticTest` — экран темы
 - `AppDataScreenTest`, `MoreScreenTest` — экраны настроек
 - `ExercisesLiveUpdateTest` — экран каталога с реальной VM + Room in-memory
@@ -40,6 +49,28 @@ Activity. В Jetpack-MyWorkouts так тестируются (список не
 - Все классы компонентных тестов аннотированы
   `@RunWith(AndroidJUnit4::class)` (см. `references/fundamentals.md`,
   раздел «Стек и аннотации»)
+
+## Фикстуры с датами — порядок как в прод-контракте
+
+Данные фикстуры строй в том же порядке, который обещает контракт
+прод-данных: хитмап — по возрастанию дат, списки записей — от свежих.
+Order-dependent вывод (`distinct()`, `joinToString`, grouping) в
+компоненте рендерит **порядок входа**, и фикстура «в обратную
+сторону от сегодня» даёт падение с вводящим в заблуждение сообщением
+(«Сентябрь – Август» вместо «Август – Сентябрь», далее ложный след
+«not displayed»). Надёжно: сортируй внутри хелпера фикстуры.
+
+```kotlin
+/** Хитмап из дат с ненулевым счётом; даты — по возрастанию (контракт). */
+private fun heatmapOf(dates: List<LocalDate>): List<HeatmapDayData> =
+    dates
+        .distinct()
+        .sorted()
+        .map { date -> HeatmapDayData(date = date, count = 1, level = 1) }
+```
+
+Канон — `ActivityScreenTest.heatmapOf`
+(`app/src/androidTest/.../ui/screens/overview/ActivityScreenTest.kt`).
 
 ## Навигация через NavHost-harness
 

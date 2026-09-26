@@ -47,8 +47,7 @@ assertEquals(expectedCount, all.size)
 in-memory `WorkoutDatabase` + `allowMainThreadQueries()`. Полный
 `@Before setUp` (in-memory DB + два `StandardExercise` REPS/TIME +
 вставка двух `ExerciseEntity` для покрытия обоих `measuredBy`) —
-в `references/EXAMPLE.md` → «Интеграционный тест
-RoomWorkoutDataRepository (runBlocking, fullCycle)».
+в `references/EXAMPLE.md` → «Репозиторий-интеграция (Room in-memory)».
 
 Ключевое (без кода):
 
@@ -60,6 +59,11 @@ RoomWorkoutDataRepository (runBlocking, fullCycle)».
 - `runBlocking { repository.addExercise(...).getOrThrow() }` +
   `runBlocking { repository.entries().first() }` — `.first()` для
   получения текущего значения `Flow`
+
+Учебный пример (не из реального теста): иллюстрация контракта
+`runBlocking` + `Result` на CRUD-цикле. В реальном
+`RoomWorkoutDataRepositoryTest` сквозного full-cycle-метода нет —
+реальные имена `@Test`-методов см. в самом тест-классе.
 
 ```kotlin
 @Test

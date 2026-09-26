@@ -4,29 +4,39 @@
 стек: Activity + Compose + продакшен-Room (БД на диске) + ViewModel
 + manual DI.
 
-В Jetpack-MyWorkouts **один** такой тест —
-`ExerciseCreateLiveUpdateIntegrationTest` (см.
+Таких тестов в проекте четыре:
+`EntryListLiveUpdateIntegrationTest`, `ExerciseCreateLiveUpdateIntegrationTest`,
+`RootScreenTest`, `MainScreenDetailCardRecreateTest`. Канонический
+разбор ниже — `ExerciseCreateLiveUpdateIntegrationTest`
+(см.
 `app/src/androidTest/java/com/myworkouts/ExerciseCreateLiveUpdateIntegrationTest.kt`).
 Он воспроизводит проводку продакшена: `MainActivity` поднимает DI
 с собственным `WorkoutDatabase.create(context, ...)`, подменить
-на in-memory нельзя без переписывания DI.
+на in-memory нельзя без переписывания DI (production-БД также
+у `EntryListLiveUpdateIntegrationTest` и `RootScreenTest`;
+`MainScreenDetailCardRecreateTest` собственного `databaseBuilder`
+не создаёт — пишет в ту же production-БД через продакшен-репозиторий
+процесса `app.repository`).
 
-Все остальные интеграционные сценарии (навигация, секции, поиск,
+Большинство остальных интеграционных сценариев (навигация, секции,
+поиск,
 long-press → меню, диалоги, формы) покрываются **компонентными**
-тестами с `createComposeRule()` + реальный `NavHost`-harness или
-реальная ViewModel поверх Room in-memory
+тестами — `createComposeRule()` (или
+`createAndroidComposeRule(ComponentActivity)` для window-host
+`DropdownMenu`) + реальный `NavHost`-harness или реальная ViewModel
+поверх Room in-memory
 (см. `references/component-testing.md` →
 «Тест с реальной ViewModel поверх Room in-memory»).
 
 ## Когда реальная MainActivity оправдана
 
-Только когда воспроизводится продакшен-DI целиком — например,
+Когда воспроизводится продакшен-DI целиком — например,
 проверка, что `WhileSubscribed(5000)` в `stateIn` не теряет
 invalidation при паузе > таймаута. Без реального DI
 (`MainActivity → manual DI → WorkoutDatabase.create(...)`) подменять
 БД на in-memory невозможно.
 
-## Скелет (единственный реальный случай в проекте)
+## Скелет (канонический пример — ExerciseCreateLiveUpdateIntegrationTest)
 
 ```kotlin
 @RunWith(AndroidJUnit4::class)

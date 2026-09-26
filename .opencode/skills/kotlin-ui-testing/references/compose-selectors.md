@@ -67,13 +67,36 @@ composeTestRule.onAllNodesWithText(text)                      // все ноды
 .assertTextEquals(text)        // текст ноды = text
 ```
 
-> **Важно:** `.assert*()` — это **методы** `SemanticsNodeInteraction`,
-> а не top-level функции. В Compose 1.12+ импорты вида
-> `import androidx.compose.ui.test.assertExists` **не резолвятся**
-> (`Unresolved reference 'assertExists'`). Просто вызывайте на receiver
-> (`composeTestRule.onNodeWithText(...).assertExists()`) — Kotlin
-> резолвит метод через тип receiver'а без импорта. То же для
-> `assertIsDisplayed`, `assertCountEquals`, `assertTextEquals` и т.п.
+> **Важно:** API разный. `assertExists` / `assertDoesNotExist` —
+> **методы receiver'а** `SemanticsNodeInteraction`: импорт не нужен,
+> вызывайте прямо (`composeTestRule.onNodeWithText(...).assertExists()`).
+> Top-level импорта `import androidx.compose.ui.test.assertExists`
+> в этой версии нет (`Unresolved reference 'assertExists'`).
+> Остальные `.assert*()` — `assertIsDisplayed`, `assertIsEnabled`,
+> `assertIsNotEnabled`, `assertCountEquals`, `assertTextEquals` —
+> **top-level extension-функции**, каждой нужен свой импорт:
+> `import androidx.compose.ui.test.assertIsDisplayed`,
+> `import androidx.compose.ui.test.assertCountEquals` и т.п.
+
+## Семантика текста: стиль (шрифт, цвет) не проверить
+
+В Compose 1.12+ (BOM 2026.08+) `SemanticsProperties.GetTextLayoutResult`
+**удалён** — стиль `Text` (`FontWeight`, `fontSize`, цвет) недоступен
+в семантике, и `BasicText` не регистрирует и action-вариант
+(`SemanticsActions.GetTextLayoutResult`). Ассерт на жирность/размер
+шрифта через compose-test невозможен — такие требования закрываются
+превью (светлая/тёмная, `*Preview.kt` рядом с экраном), а не
+androidTest. Пример вывода: канонический спор «assert FontWeight.Bold
+needs no extra work» из ревью — false для этой версии BOM.
+
+Фактический API семантики своей версии BOM проверяется по артефактам
+в кэше Gradle (не по памяти и не по докам старых версий):
+
+```bash
+J=$(find ~/.gradle/caches/modules-2/files-2.1/androidx.compose.ui/ui-android -name "*.aar" | head -1)
+unzip -qo "$J" classes.jar -d /tmp/ui && unzip -qo /tmp/ui/classes.jar -d /tmp/ui/c
+javap -classpath /tmp/ui/c androidx.compose.ui.semantics.SemanticsProperties | grep -i text
+```
 
 ## Ожидание idle-состояния
 
@@ -198,6 +221,7 @@ composeTestRule.runOnIdle {
 // Импорты:
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals    // extension — нужен импорт!
 import androidx.compose.ui.test.click          // extension — нужен импорт!
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performTouchInput
