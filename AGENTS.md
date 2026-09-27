@@ -35,7 +35,7 @@ detekt-предупреждения исправляются до заверше
 `docs/plans/flavors-implementation.md`.
 
 `make install` ставит debug-APK на подключённый adb-девайс
-(`./gradlew install$(FLAVOR)Debug`).
+(`./gradlew install$(FLAVOR_TITLE)Debug`).
 
 `make apk` — подписанный release-APK в корне репо
 (`myworkouts{VERSION_CODE}.apk`); при первом запуске сам подтягивает
@@ -51,6 +51,11 @@ detekt-предупреждения исправляются до заверше
 `make test` — JVM. `make android-test` — на подключённом устройстве.
 Для ускорения androidTest: `make emulator-fast` — выключает анимации
 эмулятора; применять после каждого старта эмулятора.
+
+`make screenshots{,-ru,-en}` — скриншоты для маркетплейса: модуль
+`:screenshot-tests` пишет PNG в app-specific external storage, make
+забирает их в `fastlane/metadata/android/<locale>/images/phoneScreenshots/`.
+Нужны эмулятор без google_play-образа (`adb root`) и API 33+.
 
 **Запуск тестов — один прогон → один отчёт**: `make test` / `make android-test`
 уже вызывают `scripts/test_report.py` (статистика + список упавших).
@@ -116,6 +121,12 @@ detekt-предупреждения исправляются до заверше
 
 ## Project Structure
 
+`:screenshot-tests/` — инструментальный модуль (`com.android.test`,
+`targetProjectPath = ":app"`, без своих flavors) для генерации
+скриншотов маркетплейса: `ScreenshotsTest` ставит demo-данные,
+снимает главный экран и пишет PNG (`Bitmap.compress` в самом тесте);
+запуск — `make screenshots{,-ru,-en}`.
+
 `app/src/main/java/com/myworkouts/`:
 - `MainActivity.kt`
 - `MyWorkoutsApplication.kt` — композиционный корень manual DI
@@ -129,10 +140,10 @@ detekt-предупреждения исправляются до заверше
 - `data/preferences/AppSettingsDataStore.kt`
 - `data/repository/` — `WorkoutDataRepository`, `RoomWorkoutDataRepository`,
   `EntryValidator`, `DeletionExceptions`
-- `domain/model/` — `AppTheme`, `Exercise`, `ExerciseCategory`, `ExerciseEntry`,
-  `EntryListItem`, `ExerciseMeasuredBy`, `BackupEntry`, `DeleteExerciseError`
-- `domain/usecase/` — `ExportBackupUseCase`, `ImportBackupUseCase` (бэкап в JSON),
-  `BackupException`
+- `domain/model/` — domain-модели (упражнения, записи, настройки, периоды,
+  `BackupEntry` и т.д.). Полный список — в каталоге.
+- `domain/usecase/` — use-cases: бэкап в JSON, статистика (streaks, heatmap,
+  records, category stats), вычисление периодов. Полный список — в каталоге.
 - `analytics/` — событийная модель и провайдеры: sealed interface
   `AnalyticsEvent` (`ScreenView`/`UserAction`/`AppError`), enum'ы
   `AppScreen`/`UserActionType`/`AppErrorOperation`, интерфейс
@@ -141,12 +152,12 @@ detekt-предупреждения исправляются до заверше
 - `crash/` — `CrashlyticsHelper` (object, `logException` в `try/catch`,
   `setCustomKey` для контекста; используется из use-cases и VM)
 - `navigation/Screen.kt` (только `route`) + `BottomTab` + `BottomTabs`
-- `ui/screens/{main,entry,more,root,appearance,appdata,exercises}/`
-- `ui/components/` — переиспользуемые composable-компоненты
-  (`SettingToggleRow` — общий для экранов настроек)
+- `ui/screens/{main,entry,more,root,appearance,appdata,exercises,overview}/`
+- `ui/components/` — общие composable: `SettingToggleRow` (экраны
+  настроек), `ExerciseListItemRow`, `EntryListItemRow` (строки списков)
 - `ui/state/` — UiState-класс, по одному на экран
 - `ui/theme/{Color,Theme,Type}.kt` ← `Type`, не `Typography`
-- `ui/util/` — `DurationFormatter.kt` (общий для main и entry экранов)
+- `ui/util/` — `DurationFormatter.kt` (main + entry), `SectionDateFormatter.kt`
 - `ui/viewmodel/` — ViewModel, по одной на экран
 
 `di/` и `util/` намеренно не создаются — manual DI без Hilt; `MainActivity`

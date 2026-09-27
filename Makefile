@@ -66,6 +66,56 @@ emulator-fast:
 	@adb shell settings put global animator_animation_scale 0
 	@printf "$(GREEN)Анимации эмулятора выключены (window/transition/animator = 0)$(RESET)\n"
 
+# Скриншоты для маркетплейса
+DEVICE_PNG_DIR := /storage/emulated/0/Android/data/com.myworkouts/files/Pictures/screenshots
+META_DIR := fastlane/metadata/android
+# Компонент instrumentation: пакет test-APK (namespace) + runner
+SCREENSHOTS_COMPONENT := com.myworkouts.screenshots/androidx.test.runner.AndroidJUnitRunner
+LOCALES ?= ru-RU en-US
+
+ifeq ($(strip $(LOCALES)),)
+$(error LOCALES is empty. Expected: ru-RU en-US)
+endif
+ifneq ($(filter ru-RU en-US,$(LOCALES)),$(LOCALES))
+$(error Unknown LOCALES=$(LOCALES). Expected: ru-RU en-US)
+endif
+
+# ponytail: ручной am instrument вместо :screenshot-tests:connectedDebugAndroidTest —
+# AGP после connected-прогона УДАЛЯЕТ оба APK, а вместе с приложением
+# и его app-specific каталог с PNG (проверено на AGP 9.4.1): adb pull
+# после задачи забирал бы пустоту. Собираем/ставим сами, pull — между
+# итерациями цикла, анинсталла нет. Успех прогона распознаём по '^OK'
+# в выводе: am instrument всегда exit 0, даже при FAILURES (проверено).
+# ponytail: `sleep 5` после set-app-locales — гасим системный тост IME
+# "Changed the keyboard language..." (LENGTH_LONG ≈3.5 с), иначе он
+# ложится на bottom-tab в скриншоте.
+## screenshots: Сгенерировать скриншоты для локалей LOCALES (по умолчанию ru-RU en-US) в fastlane/metadata
+screenshots: _ensure_secrets
+	adb root && adb wait-for-device; \
+	./gradlew :app:assemble$(FLAVOR_TITLE)Debug :screenshot-tests:assembleDebug --console=plain || exit 1; \
+	adb install -r -t app/build/outputs/apk/$(FLAVOR)/debug/app-$(FLAVOR)-debug.apk || exit 1; \
+	adb install -r -t screenshot-tests/build/outputs/apk/debug/screenshot-tests-debug.apk || exit 1; \
+	adb shell rm -rf $(DEVICE_PNG_DIR); \
+	status=0; \
+	for locale in $(LOCALES); do \
+		printf "$(YELLOW)Локаль $$locale...$(RESET)\n"; \
+		adb shell cmd locale set-app-locales com.myworkouts --user 0 --locales $$locale || exit 1; \
+		sleep 5; \
+		out=$$(adb shell am instrument -w -e locale $$locale $(SCREENSHOTS_COMPONENT)); \
+		printf '%s\n' "$$out"; \
+		printf '%s' "$$out" | grep -q '^OK' || status=1; \
+		mkdir -p $(META_DIR)/$$locale/images/phoneScreenshots; \
+		adb pull $(DEVICE_PNG_DIR)/$$locale/. $(META_DIR)/$$locale/images/phoneScreenshots/ || status=1; \
+	done; \
+	adb shell cmd locale set-app-locales com.myworkouts --user 0; \
+	exit $$status
+
+## screenshots-ru: Сгенерировать скриншоты только для ru-RU
+screenshots-ru: ; $(MAKE) screenshots LOCALES=ru-RU
+
+## screenshots-en: Сгенерировать скриншоты только для en-US
+screenshots-en: ; $(MAKE) screenshots LOCALES=en-US
+
 ## scripts-test: Запуск unit-тестов Python-скриптов
 scripts-test:
 	python3 -m unittest discover -s scripts -p "*_test.py"
@@ -268,4 +318,4 @@ setup_git_hooks:
 ## all: Полная проверка (сборка + тесты + линтер) и установка APK на устройство
 all: check install
 
-.PHONY: help build clean test scripts-test lint format check install all android-test emulator-fast setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets rustore rustore-draft rustore-commit whats-new _rustore_build_aab
+.PHONY: help build clean test scripts-test lint format check install all android-test emulator-fast screenshots screenshots-ru screenshots-en setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets rustore rustore-draft rustore-commit whats-new _rustore_build_aab

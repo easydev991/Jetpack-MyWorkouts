@@ -1,38 +1,28 @@
 # План: модуль `:screenshot-tests` (инфраструктура для скриншотов)
 
+> **Статус: реализовано** (Этапы 0–5, 7–8). Этап 6 — опциональный,
+> не делался.
+> История коммитов — `git log -- screenshot-tests Makefile AGENTS.md docs/plans/screenshot-tests-infrastructure.md`.
+
 ## Цель
 
-Поднять модуль, аналогичный `JetpackDays/screenshot-tests/`,
-для автоматической генерации скриншотов на двух локалях (`ru-RU`,
-`en-US`) и укладки их в
-`fastlane/metadata/android/<locale>/images/phoneScreenshots/`.
-**Только инфраструктура.** Конкретные сценарии («главный экран с
-10 записями», «форма создания с открытым DatePicker» и т. п.) выносятся
-в отдельный план — здесь их писать не нужно.
+Поднять модуль `:screenshot-tests` для автоматической генерации
+скриншотов на двух локалях (`ru-RU`, `en-US`) и укладки их в
+`fastlane/metadata/android/<locale>/images/phoneScreenshots/`;
+русские показываются в секции «Скриншоты» README (Этап 8).
+
+Этапы 0–5 — **только инфраструктура**. Конкретные сценарии
+(«главный экран со списком», «форма создания с открытым DatePicker»
+и т. п.) — Этап 7: добавляются по одному по мере утверждения,
+начиная с `1-workouts-list`.
 
 ## Контекст
 
-- Референс — `JetpackDays/screenshot-tests/`:
-  - `build.gradle.kts` (плагин `com.android.test` + `kotlin.compose`,
-    `targetProjectPath = ":app"`,
-    `missingDimensionStrategy("distribution", "rustore")`,
-    `testInstrumentationRunner = "…ScreenshotTestRunner"`).
-  - `AndroidManifest.xml` с `<instrumentation>` и `WAKE_LOCK`,
-    `DISABLE_KEYGUARD`, `CHANGE_CONFIGURATION`, `WRITE/READ_EXTERNAL_STORAGE`.
-  - `ScreenshotTestRunner.kt` — пустой `class … : AndroidJUnitRunner()`.
-  - `ScreenshotsTest.kt` — `createAndroidComposeRule<MainActivity>()` +
-    `@Rule LocaleTestRule` + `Screengrab.setDefaultScreenshotStrategy(
-    UiAutomatorScreenshotStrategy())` + `Screengrab.screenshot("1-demoList")`.
-  - `Screengrabfile`/`Fastfile` (`capture_android_screenshots` для
-    `locales: ['ru-RU', 'en-US']`).
-  - `Makefile`-цели `screenshots{,ru,en}`,
-    `_build_screenshots_apk` (`./gradlew :app:assembleRustoreDebug
-    :screenshot-tests:assembleDebug`), `_cleanup_screenshots_apk`.
 - В проекте **нет fastlane** (публикация — через `tools/release`,
   Ruby/bundler не используется; проверено: в репо нет ни `Fastfile`,
   ни `Screengrabfile`) — что из этого следует для плана, см.
   «Принципы и ограничения». Вместо `Screengrab.screenshot(name)` —
-  `composeTestRule.onRoot().captureToImage()` + запись Bitmap через
+  `UiDevice.takeScreenshot()` + запись Bitmap через
   `java.io.File` (механика записи — Этап 2, хранение и пермишены —
   «Принципы»).
 - Уже есть: `app/src/androidTest/` (`make android-test` через
@@ -41,7 +31,9 @@
   GitHub + RuStore flavors (`github` — дефолт; см. `AGENTS.md`,
   `docs/plans/flavors-implementation.md`).
 - `fastlane/metadata/android/` уже создан для `whats_new` —
-  `images/phoneScreenshots/` появится при первой генерации.
+  `images/phoneScreenshots/` со smoke-PNG генерировался при первой
+  проверке (локально, в git не попал — канон про хранение: Этап 5);
+  реальные PNG сценариев заменили их (Этап 7).
 - TDD здесь точечно (один `@Test`-smoke, проверяющий, что инфраструктура
   пишет валидный PNG); реальные сценарии — в отдельной задаче.
 
@@ -58,9 +50,7 @@
   тест-модуля: PNG пишутся в app-specific external storage —
   `WRITE_EXTERNAL_STORAGE` на API 29+ не нужен. Чтение с хоста —
   через `adb root` перед pull-циклом (на API 30+ shell не читает
-  `/sdcard/Android/data/<pkg>/`; так же делает JetpackDays через
-  `use_adb_root true`, см. Этап 4; у JetpackDays путь другой —
-  app-private `/data/data/<pkg>/app_screengrab/`). `adb root`
+  `/sdcard/Android/data/<pkg>/`). `adb root`
   доступен на AOSP/Google-APIs образах, на google_play — нет
   (проверка — «Проверка окружения», Этап 0).
 - **Переключение локали UI — снаружи теста, пер-апп.** Тег локали для
@@ -68,8 +58,10 @@
   (`-Pandroid.testInstrumentationRunnerArguments.locale=ru-RU`, читается
   в `@Before`, дефолт `ru-RU`). Сама UI-локаль приложения переключается
   **до** instrumentation-запуска:
-  `adb shell cmd locale set-app-locales com.myworkouts --user 0 --locales <tag>`,
-  после цикла — `reset-app-locales` (аналог `ending_locale` у JetpackDays).
+   `adb shell cmd locale set-app-locales com.myworkouts --user 0 --locales <tag>`,
+   после цикла — `set-app-locales` с пустым списком (субкоманды
+   `reset-app-locales` на API 36 нет — сброс это тот же вызов без
+   `--locales`).
   Это официальный shell-API (API 33+), система сама доставит новую
   конфигурацию в приложение: подхватятся и ресурсы `values-en`, и
   `LocalConfiguration.current.locales[0]` (`ActivityScreen.kt`),
@@ -99,397 +91,362 @@
 - **Тест-модуль БЕЗ своих `productFlavors`** — только `com.android.test`,
   `targetProjectPath = ":app"` и `missingDimensionStrategy`.
   `missingDimensionStrategy` фиксирует, **какую** flavor-карту
-  `:app` тест-APK компилируется против (`distribution = github` —
-  не `rustore`, как в референсе: github — дефолтный флейвор проекта,
-  распределение на содержимое скриншотов не влияет),
+      `:app` тест-APK компилируется против (`distribution = github`,
+      не `rustore`: github — дефолтный флейвор проекта,
+      распределение на содержимое скриншотов не влияет),
   но **не создаёт** `productFlavors` в самом тест-модуле и не
   попадает в имена его gradle-задач — у тест-модуля без собственных
-  flavors остаются варианты `debug`/`release` независимо от flavor-карты
-  `:app` (поведение AGP для `com.android.test` модулей; окончательная
-  проверка имен задач — после создания модуля, см. «Критерии»).
-  → Gradle-задача для прогона — `:screenshot-tests:connectedDebugAndroidTest`
-  (без `-Github`/`-Rustore`), не `connectedGithubDebugAndroidTest`.
+   flavors остаются варианты `debug`/`release` независимо от flavor-карты
+   `:app` (поведение AGP для `com.android.test` модулей; подтверждено
+   `tasks --all` после создания модуля, см. «Критерии завершения»).
+   → Задач у модуля ровно `connectedDebugAndroidTest` (проверено
+   `tasks --all`), но для прогона она **не используется**: AGP после
+   connected-прогона удаляет оба APK, а вместе с приложением — и его
+   app-specific каталог с PNG (проверено на AGP 9.4.1: `pm list
+   packages` пуст сразу после задачи, каталог `Android/data/<pkg>/`
+    исчез). Прогон — ручной `am instrument` из рецепта `make screenshots`
+    (Этап 4): install/pull — под нашим контролем, анинсталла нет.
+- **Ссылки на код в этом документе:** номер строки ставим только у
+  файлов длиннее 300 строк (`MainScreen.kt`, `EntryCreateScreen.kt`,
+  `EntryCreateViewModel.kt`, `OverviewScreen.kt`, `StatsScreen.kt`,
+  `ActivityScreen.kt`, androidTest-файлы) — там поиск по символу
+  неоднозначен. У коротких файлов (`Screen.kt`, `EntryCreateUiState.kt`,
+  `EntryListItemRow.kt`, `ExerciseEntryDao.kt`, `OverviewViewModel.kt`)
+  номер не пишем: он протухает при первом же коммите и вводит
+  читателя в заблуждение.
 
 ## Этапы
 
 ### Этап 0 — Проверка окружения (гейт всего подхода)
 
-- [ ] Выполнить **до** Этапов 1–4, на целевом эмуляторе (~2 минуты;
-      если гейт не проходит — подход не работает вовсе, см. «Принципы»):
-      `adb root` отвечает `restarting adbd as root` (не `adbd cannot run
-      as root` — google_play-образ не годится);
-      `adb shell cmd locale set-app-locales com.myworkouts --user 0
-      --locales en-US` + ручной запуск приложения — UI на английском
-      (`cmd locale` доступен с API 33; эмулятор для скриншотов — API 34+).
-- [ ] Плюс **probe по файловому пути** — цепочка, которую не закрывают
-      первые два пункта и которая ломается чаще всего (app-specific
-      external storage + чтение с хоста):
-      `adb root` → `adb shell mkdir -p <DEVICE_PNG_DIR>` →
-      `adb shell touch <DEVICE_PNG_DIR>/probe.txt` →
-      `adb pull <DEVICE_PNG_DIR>/probe.txt` на хост.
-      Подтверждает, что `DEVICE_PNG_DIR` из Этапа 4 существует, доступен
-      и читается после `adb root` (почему нужен именно root —
-      «Принципы и ограничения»).
-      Чего гейт **не** проверяет: само совпадение
-      `context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)` с этим
-      путём — вызова `getExternalFilesDir` в коде приложения пока нет
-      (в репо 0 обращений), и создать каталог из-под `:app` вне Этапа 3
-      нечем. Совпадение доказывает smoke-тест Этапа 3: он пишет через
-      `ScreenshotWriter` в target-каталог и тянется тем же `DEVICE_PNG_DIR`.
+- [x] Гейт пройден на целевом эмуляторе (API 36, google-APIs): `adb root`,
+      `cmd locale set-app-locales` (API 33+) выставил английский UI.
+- [x] Probe файлового пути: app-specific external + `mkdir`/`touch`/
+      `adb pull` — успех; `getExternalFilesDir(Pictures)` совпал
+      с `$(DEVICE_PNG_DIR)`.
 
 ### Этап 1 — Каркас модуля
 
-- [ ] Создать `screenshot-tests/` с пустым `build.gradle.kts`.
-- [ ] `gradle/libs.versions.toml`: добавить алиас
-      `android-test = { id = "com.android.test", version.ref = "agp" }`
-      (в `app/build.gradle.kts` все плагины идут через `alias`,
-      для единообразия тест-плагин подключаем так же; `version.ref = "agp"`
-      переиспользует уже зафиксированную версию AGP).
-- [ ] `screenshot-tests/build.gradle.kts`: плагины
-      `alias(libs.plugins.android.test)` +
-      `alias(libs.plugins.kotlin.compose)` +
-      `alias(libs.plugins.ktlint)` (обязательно, иначе код модуля
-      не пройдёт `make lint` — ktlint применяется per-module,
-      как в `app/build.gradle.kts`).
-- [ ] `android { namespace = "com.myworkouts.screenshots";
-      compileSdk { version = release(37) };
-      minSdk = 26;
-      targetProjectPath = ":app";
-      testInstrumentationRunner = "com.myworkouts.screenshots.ScreenshotTestRunner";
-      missingDimensionStrategy("distribution", "github");
-      buildFeatures { compose = true } }` — повторяет форму `app/build.gradle.kts`
-      (top-level форма `compileSdk = 37`, как в референсе JetpackDays,
-      на AGP 9 устарела — используем блочную
-      `compileSdk { version = release(37) }`);
-      `targetSdk` для тест-модуля не задаём (модуль не публикуется).
-- [ ] `kotlin { jvmToolchain(17) }` — пин toolchain (как в референсе
-      `JetpackDays/screenshot-tests/build.gradle.kts`); `compileOptions`
-      JVM 17 не нужен — toolchain синхронизирует target.
-- [ ] Зависимости (`screenshot-tests/build.gradle.kts`; порядок в списке
-      не важен — резолв от него не зависит):
-      `implementation(project(":app"))` (без него не резолвятся
-      `MainActivity`, `WorkoutDatabase`, `RoomWorkoutDataRepository`,
-      `MyWorkoutsApplication` — весь Этап 3 на них опирается);
-      `androidx-junit`;
-      Compose BOM + `androidx-compose-ui-test-junit4`
-      (Compose BOM и `ui-test-junit4` тянут `espresso-core` и `core-ktx`
-      транзитивно — для AGP-`com.android.test`-модулей это рабочее
-      поведение; **проверяется после создания модуля** через
-      `./gradlew :screenshot-tests:dependencies --configuration debugRuntimeClasspath`
-      — если `espresso-core`/`core-ktx` не пришли транзитивно, добавить явно).
-      **Без** Room — `project(":app")` тянет Room/KSP-генерированный
-      код транзитивно, дублировать deps не нужно. **Без**
-      `tools.fastlane:screengrab`.
-- [ ] `screenshot-tests/src/main/AndroidManifest.xml` — **пустой**
-      `<manifest/>`. `testInstrumentationRunner` из DSL (Этап 1)
-      сам порождает `<instrumentation>` в merged-манифесте;
-      ручной тег в source-манифесте только создаёт риск конфликта merger'а.
-      Проверка после `processDebugManifest`:
-      `build/intermediates/merged_manifests/debug/AndroidManifest.xml`
-      должен содержать ровно один `<instrumentation>` с `targetPackage="com.myworkouts"`.
-      (Хранение PNG и пермишены — решение в «Принципах и ограничениях».)
-- [ ] `screenshot-tests/src/main/java/com/myworkouts/screenshots/ScreenshotTestRunner.kt`
-      — пустой наследник `androidx.test.runner.AndroidJUnitRunner`.
-- [ ] `settings.gradle.kts`: `include(":screenshot-tests")`.
+- [x] Каркас: `screenshot-tests/` + `include(":screenshot-tests")`;
+      плагин `com.android.test` через алиас в `libs.versions.toml` +
+      `apply false` в корневом `build.gradle.kts` (без него резолв
+      в модуле падает).
+- [x] DSL `screenshot-tests/build.gradle.kts`: namespace, compileSdk 37,
+      minSdk 26, `targetProjectPath=":app"`, стандартный
+      `AndroidJUnitRunner`, `missingDimensionStrategy("distribution",
+      "github")`, jvmToolchain(17). Зависимости: `project(":app")`,
+      androidx-junit, явно `androidx-test-runner` и
+      `androidx-uiautomator`, Compose BOM + `ui-test-junit4`. Без
+      Room/screengrab/espresso; свой Runner и пустой манифест сделаны
+      и удалены по ревью (AGP генерит манифест сам).
 
 ### Этап 2 — Утилита записи PNG
 
-- [ ] `screenshot-tests/src/main/java/com/myworkouts/screenshots/ScreenshotWriter.kt`:
-      без `util/`-уровня — модуль из 3 файлов, отдельная папка ради
-      одной функции (AGENTS.md: `di/`/`util/` не плодим):
-      функция
-      `fun writeScreenshotBitmap(
-        context: Context,
-        localeTag: String,        // "ru-RU" / "en-US"
-        fileName: String,         // "1-mainScreen" (без расширения)
-        bitmap: android.graphics.Bitmap
-      ): File`,
-      которая кладёт PNG в
-      `File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
-        "screenshots/<localeTag>/<fileName>.png")`.
-      Если директории нет — `mkdirs()`. Возврат `File` нужен
-      для `adb pull`. Логирование пути — на русском
-      (`"Скриншот сохранён: <path>"`).
-- [ ] Sanity-check `Bitmap.compress`/try-with-resources **не нужен** —
-      покрывается smoke-тестом в Этапе 3 (проверка сигнатуры PNG +
-      ненулевой длины).
+- [x] Запись PNG (`Bitmap.compress` 100 + `mkdirs` +
+      `FileOutputStream.use`) в
+      `getExternalFilesDir(Pictures)/screenshots/<localeTag>/<fileName>.png`
+      — изначально в `ScreenshotWriter.kt`, инлайнена в `ScreenshotsTest`
+      (YAGNI: единственный вызов).
 
 ### Этап 3 — Test-харнесс и smoke-тест
 
-- [ ] `screenshot-tests/src/main/java/com/myworkouts/screenshots/ScreenshotsTest.kt`
-      — `@RunWith(AndroidJUnit4::class)`,
-      `@get:Rule val composeTestRule = createAndroidComposeRule<MainActivity>()`.
-- [ ] Тег локали читается **один раз** в `@Before` через
-      `InstrumentationRegistry.getArguments().getString("locale")
-        ?: "ru-RU"`,
-      сохраняется в `private lateinit var localeTag: String` (не
-      `val` — из `@Before` присвоить нельзя). Фикстура
-      использует его для выбора русских/английских полей. Сама
-      UI-локаль выставляется **снаружи** (см. Этап 4, `cmd locale
-      set-app-locales`) — в тесте никаких locale-правил и `LocaleTestRule`.
-- [ ] В `@Before` (после чтения `localeTag`):
-      ```kotlin
-      val app = ApplicationProvider.getApplicationContext<MyWorkoutsApplication>()
-      // оба вызова — Result<Unit> (WorkoutDataRepository.kt):
-      // игнорировать нельзя — упавший импорт даст зелёный setup на
-      // пустой БД. Канон проверки — assertTrue(result.isSuccess),
-      // RoomWorkoutDataRepositoryDataManagementTest.kt.
-      runBlocking {
-        assertTrue(app.repository.deleteAllData().isSuccess) // восстановит набор
-        val imported = app.repository.importData(            // demo-записи
-          exercises = demoExercises(),
-          entries = demoEntries(localeTag)
-        )
-        assertTrue("Импорт demo-данных не удался: $imported", imported.isSuccess)
-      }
-      composeTestRule.waitForIdle() // safety-net: слив pending-рекомпозиций;
-      // основная гарантия готовности данных — waitUntil в @Test ниже
-      ```
-      Никакого отдельного helper-класса: всё, что нужно для setup,
-      попадает в `@Before` (он не принимает параметров, но может
-      инкапсулировать всё, что не зависит от тела `@Test`).
-- [ ] Единственный smoke-`@Test fun capturesSingleScreenshot_whenInfraBuilt_thenWritesValidPng()`:
-      открыть главный экран, **дождаться асинхронной готовности данных**:
-      ```kotlin
-      composeTestRule.waitUntil(ENTRY_TEXT_TIMEOUT) {
-          composeTestRule.onAllNodesWithText(<первая demo-запись>)
-              .fetchSemanticsNodes().isNotEmpty()
-      }
-      ```
-      (идиома из `MainScreenDetailCardRecreateTest.kt`;
-      `ENTRY_TEXT_TIMEOUT` объявляем **локально** в `ScreenshotsTest.kt`
-      (`private companion object { const val ENTRY_TEXT_TIMEOUT = 5_000L }`) —
-      в `:app` он `private` внутри companion-объекта этого класса
-      (`MainScreenDetailCardRecreateTest.kt`), из другого gradle-модуля
-      не виден. `waitForIdle()`
-      недостаточен — `createAndroidComposeRule` поднимает Activity
-      **до** `@Before`, а `waitForIdle()` ждёт только рекомпозиции,
-      а не round-trip'а в БД).
-      Затем — **ассерт на UI-локаль**: на экране есть строка из ресурсов
-      приложения (`composeTestRule.onNodeWithText(
-      activity.getString(R.string.workouts_title)).assertIsDisplayed()`;
-      `workouts_title` — заголовок TopAppBar главного экрана
-      (`MainScreen.kt`), ru «Тренировки» / en «Workouts») — это
-      доказывает, что пер-апп локаль
-      применилась к UI, а не только к фикстуре. Демо-текст из фикстуры
-      этого не доказывает: он локале-зависим по построению.
-      Затем `composeTestRule.onRoot().captureToImage().asAndroidBitmap()`,
-      записать через `ScreenshotWriter.writeScreenshotBitmap(
-        context, localeTag, "0-smoke", bitmap)` и **проверить PNG, а не
-      «файл непустой»** — `length() > 0` пропустит обрезанный файл:
-      ```kotlin
-      assertTrue(file.exists() && file.length() > PNG_SIGNATURE.size)
-      file.inputStream().use { stream ->
-        val header = ByteArray(PNG_SIGNATURE.size)
-        assertTrue(stream.read(header) == PNG_SIGNATURE.size)
-        assertTrue(header.contentEquals(PNG_SIGNATURE))
-      }
-      ```
-      с локальной константой в том же companion-объекте:
-      `private val PNG_SIGNATURE = byteArrayOf(
-        0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)`.
-      Заявленный в «Контексте» «валидный PNG» — это 8 байт **сигнатуры
-      PNG** (magic number `89 50 4E 47 0D 0A 1A 0A`; IHDR — следующий за
-      ней chunk, здесь он не проверяется) плюс ненулевая длина; полная
-      валидность (раскраска, целостность IDAT) остаётся за ручной
-      проверкой `file <png>` из Этапа 5.
-      `context` берётся один раз через
-      `InstrumentationRegistry.getInstrumentation().targetContext`
-      (проектский канон из `MainScreenDetailCardRecreateTest.kt`;
-      `getContext()` в `com.android.test` модуле может указывать на
-      instrumentation-package, а не на `:app`-package, и `adb pull`
-      потом молча не найдёт файлы).
-- [ ] Фикстура demo-данных строится по образцу JetpackDays
-      (`loadDemoData()` в `ScreenshotsTest.kt` в референсном проекте —
-      параллельные поля titleRu/titleEn, detailsRu/detailsEn на
-      каждый демо-элемент).
-- [ ] Без `!!`, `Thread.sleep`; синхронизация — `waitUntil` с таймаутом
-      + `waitForIdle()` (см. smoke-тест выше); строки UI — через
-      `activity.getString(R.string.*)`.
-- [ ] Прямая запись **не** покрывается JVM-юнит-тестом — пишем Bitmap
-      через Android-API (`Bitmap.compress` + `FileOutputStream`),
-      который в `app/src/test/` недоступен без моков. Покрытие —
-      smoke-`@Test` (там же, где живёт реальный код) — это сделано
-      осознанно, см. принцип «TDD точечно» в разделе «Контекст».
+- [x] `ScreenshotsTest`: `createAndroidComposeRule<MainActivity>()`,
+      `context` = targetContext (канон `MainScreenDetailCardRecreateTest`
+      — иначе `adb pull` молча не найдёт файлы), `localeTag`
+      из runner-аргументов (дефолт `ru-RU`); UI-локаль выставляется
+      **снаружи** (Этап 4) — никаких `LocaleTestRule`. `@Before`:
+      `deleteAllData()` + импорт фикстуры, `@After tearDown` —
+      `deleteAllData()` (без уборки demo-записи ломают
+      `EntryListLiveUpdateIntegrationTest` при следующем
+      `make android-test`).
+- [x] smoke-`@Test`: `waitUntil` → ассерт локали через
+      `workouts_title` в локали прогона (`onFirst` — строка дублируется
+      в TopAppBar и bottom-bar) → capture → валидация PNG.
+- [x] Capture — **`UiDevice.takeScreenshot()`**, не
+      `captureToImage()`: Compose-API рисует только корневой узел
+      (нав-/статусбар не попадают), `UiDevice` даёт framebuffer целиком.
+      *(Smoke-тест позже заменён Сценарием 1; валидация PNG —
+      `check(bitmap.compress(...))` вместо `PNG_SIGNATURE`.)*
+- [x] Фикстура smoke: `DemoExercise` ×6 + `DemoEntry` ×8; имена **не
+      совпадают** со стандартными 13 (иначе `importData` дал бы дубли).
+      JVM-покрытия записи нет (`Bitmap.compress` в `app/src/test/`
+      недоступен без моков).
 
 ### Этап 4 — Makefile
 
-- [ ] **Make-переменные для путей** (вводим в начале `screenshots`-блока,
-      чтобы не дублировать строки между `ScreenshotWriter`, рецептом
-      `adb pull` и рецептом копирования в `fastlane/`):
-      ```make
-      DEVICE_PNG_DIR := /storage/emulated/0/Android/data/com.myworkouts/files/Pictures/screenshots
-      META_DIR := fastlane/metadata/android
-      ```
-      `applicationId = "com.myworkouts"` берётся из `app/build.gradle.kts`;
-      flavors не добавляют `applicationIdSuffix` (`app/build.gradle.kts`),
-      поэтому путь фиксированный для обоих flavors.
-      Чтение `$(DEVICE_PNG_DIR)` с хоста — через `adb root` перед
-      pull-циклом (обоснование и ограничения образов — «Принципы»,
-      проверка — «Проверка окружения» в Этапе 0).
-- [ ] `screenshots: _ensure_secrets` (без `_build_screenshots_apk`).
-      `_ensure_secrets` нужен не для сборки (debug-APK не требует keystore),
-      а потому что `app/build.gradle.kts` вызывает
-      `checkNotNull(secretsProperties["KEYSTORE_FILE"])` в фазе
-      конфигурации `:app` — любая задача с `targetProjectPath = ":app"`
-      (включая `:screenshot-tests:*`) валится без секретов, даже если
-      ей нужен только debug-вариант.
-      Тело `screenshots` собирает+ставит APK сам через
-      `:screenshot-tests:connectedDebugAndroidTest`; отдельный
-      `assembleDebug`/`assembleGithubDebug` избыточен.
-- [ ] Главная gradle-задача для тестового прогона (по образцу
-      `make android-test`, которая вызывает
-      `./gradlew :app:connectedGithubDebugAndroidTest` через
-      `run_tests`):
-      `./gradlew :screenshot-tests:connectedDebugAndroidTest
-       -Pandroid.testInstrumentationRunnerArguments.locale=<locale>`
-      (без `-Github` в имени — модуль не имеет своих
-      `productFlavors`, см. «Принцип» про имена задач).
-- [ ] `LOCALES ?= ru-RU en-US` с двумя проверками, обе в стиле
-      `$(error ...)` валидации `FLAVOR` (`Makefile`):
-      `ifeq ($(strip $(LOCALES)),)` → `$(error LOCALES is empty. Expected: ru-RU en-US)`.
-      Без неё `make screenshots LOCALES=` проходит валидацию
-      (`$(filter …,$(LOCALES))` и `$(LOCALES)` оба пусты → `ifneq` ложно),
-      цикл `for locale in` делает ноль итераций и цель «успешна» без
-      скриншотов; затем `ifneq ($(filter ru-RU en-US,$(LOCALES)),$(LOCALES))` —
-      опечатки в `make screenshots LOCALES=ru` падают с понятной
-      ошибкой, а не тихо прогоняют одну локаль или мусор.
-- [ ] Тело `screenshots` (после `_ensure_secrets` и подключения
-      `DEVICE_PNG_DIR`/`META_DIR`):
-      ```make
-      adb root && adb wait-for-device; \
-      adb shell rm -rf $(DEVICE_PNG_DIR); \
-      status=0; \
-      for locale in $(LOCALES); do \
-          adb shell cmd locale set-app-locales com.myworkouts --user 0 \
-              --locales $$locale || exit 1; \
-          ./gradlew :screenshot-tests:connectedDebugAndroidTest \
-              -Pandroid.testInstrumentationRunnerArguments.locale=$$locale \
-              || status=1; \
-          mkdir -p $(META_DIR)/$$locale/images/phoneScreenshots; \
-          adb pull $(DEVICE_PNG_DIR)/$$locale/ \
-              $(META_DIR)/$$locale/images/phoneScreenshots/ || status=1; \
-      done; \
-      adb shell cmd locale reset-app-locales com.myworkouts --user 0; \
-      exit $$status
-      ```
-      `status`/`exit $$status` — по канону `run_tests` в `Makefile`
-      (`BUILD_STATUS=$$?` … `exit $$BUILD_STATUS`). Без этого падение
-      gradle в одной локале не прерывает цикл: добегает следующая
-      локаль, `reset-app-locales` отрабатывает, а код цели = код
-      последней команды → `make screenshots` возвращает 0 вообще без
-      PNG, что формально проходит «Критерии завершения».
-      Локаль сбрасывается **всегда**, даже если какая-то итерация
-      упала, — девайс не остаётся с чужой локалью для следующего
-      запуска.
-      Исключение — `set-app-locales`: там `|| exit 1` сразу, потому что
-      локаль не выставилась → тянуть нечего (иначе в
-      `$(META_DIR)/<locale>/` лягут скриншоты чужой локали и уедут в
-      git), и сбрасывать нечего: предыдущий запуск сбросил сам.
-      Гарантию «для локали реально есть PNG» даёт instrumentation-тест
-      (Этап 3), а не `make`.
-      Назначение `set-app-locales`/`reset-app-locales` и `adb root` —
-      см. «Принципы» (механика пер-апп локали) и блок переменных выше.
-      PNG-файлы в `$(META_DIR)/<locale>/images/phoneScreenshots/`
-      **коммитятся в git** (это и есть цель цели). Разрешение в
-      `.gitignore` **уже есть**: правило `*.png` снято исключением
-      `!fastlane/metadata/android/**/*.png` (с комментарием
-      «Скриншоты сохраняем в гите») — действий на этом этапе не
-      требуется, только не удалить исключение при будущих правках
-      `.gitignore`: без allow-list PNG остались бы только локально
-      и не попали бы в релиз.
-- [ ] `screenshots-ru: ; $(MAKE) screenshots LOCALES=ru-RU` (целиком
-      одна строка — single-source-of-truth на основную `screenshots`).
-      Аналогично `screenshots-en: ; $(MAKE) screenshots LOCALES=en-US`.
-      Переопределение `LOCALES` внутри выключает цикл — `make`
-      подставляет значение переменной в рецепт вызываемой цели.
-      **Без** отдельной `_cleanup_screenshots_apk` — `screenshot-tests/build/`
-      уже в `.gitignore` (`build/` — глобально), `make clean` чистит
-      `screenshot-tests/build/` через `./gradlew clean`, а
-      `connectedDebugAndroidTest` собирает/ставит APK самостоятельно;
-      очистку PNG-каталога при этом рецепт делает сам (`rm -rf` перед
-      циклом, аналог `clear_previous_screenshots` у screengrab).
-- [ ] `.PHONY` дополнить. Для каждой новой цели (`screenshots`,
-      `screenshots-ru`, `screenshots-en`) — своя строка
-      `## <имя>: <описание>` **над** целью: без неё `make help`
-      (`Makefile`, парсинг `sed -n 's/^##//p'`) новые цели не
-      покажет, даже после добавления в `.PHONY`.
+- [x] Переменные `screenshots`-блока: `DEVICE_PNG_DIR`, `META_DIR`,
+      `SCREENSHOTS_COMPONENT`, `LOCALES ?= ru-RU en-US`
+      (flavors не добавляют `applicationIdSuffix` — путь фиксирован).
+- [x] `screenshots: _ensure_secrets` — `:app`-конфиг валится на
+      `checkNotNull(...KEYSTORE_FILE...)` для любой задачи с
+      `targetProjectPath=":app"`.
+- [x] Прогон **ручной**: build → install -r -t → `adb root` → цикл
+      `set-app-locales` / `sleep 5` / `am instrument -w -e locale` /
+      `mkdir -p` / `adb pull $DEVICE_PNG_DIR/$locale/.` → reset локали
+      пустым списком. Успех — по `^OK` (`am instrument -w` всегда
+      exit 0). Не `connectedDebugAndroidTest`: AGP удаляет APK вместе
+      с каталогом PNG (см. «Принципы и ограничения»). `sleep 5` —
+      буфер на тост IME (его также переждывает `captureAndValidate`,
+      Этап 7).
+- [x] Валидация `LOCALES` через `$(error …)` (пустое и опечатки падают
+      явно); `set-app-locales` — `|| exit 1`; `adb pull` каталога —
+      `/.` на конце (иначе вложенный `phoneScreenshots/<locale>/`).
+- [x] `screenshots-ru/en` — single-line proxy `$(MAKE) screenshots
+      LOCALES=…`; `.PHONY` + `## <имя>: <описание>` для `make help`.
 
 ### Этап 5 — Документация и проверка
 
-- [ ] Параграф «Screenshot-tests» в **двух** местах (оба — разделы `AGENTS.md`):
-      - `AGENTS.md`, раздел «Tests»: что за модуль, как запускать
-        (`make screenshots{,ru,en}`);
-      - `AGENTS.md`, раздел «Project Structure»: добавить
-        `:screenshot-tests` рядом с `:app`, упомянуть, что это
-        инструментальный модуль для генерации скриншотов.
-      **В «Build» не вставляем** — `make screenshots` пока не часть
-      ежедневного воркфлоу (нет CI, чек-листов в release); когда/если
-      появится — перенесём одной строкой.
-      `docs/deployment.md` сейчас описывает только `whats-new`
-      и rustore-публикацию; в нём секция для screenshots тоже не нужна.
-      Skill `kotlin-screenshot-testing` **не упоминается** (YAGNI:
-      в этом плане его нет, Этап 6 явный «опционально, если
-      понадобится», а AGENTS.md — это не roadmap).
-- [ ] `make format && make lint && make test` — без новых ktlint-замечаний
-      (через `alias(libs.plugins.ktlint)` в Этапе 1).
-      **detekt новый модуль не покрывает**: `Makefile` вызывает
-      `./gradlew app:detekt` (только `:app`); для модуля из 2-3 файлов
-      detekt-плагин сознательно не подключаем — ktlint уже ловит основное,
-      а добавление `detekt { config.setFrom(files("../config/detekt/detekt.yml")) }`
-      под каждый новый модуль — лишний шум (см. AGENTS.md про detekt-лимит).
-- [ ] **Сквозная проверка** после прогона:
-      `adb shell ls $(DEVICE_PNG_DIR)/ru-RU/` — PNG видны
-      (гейт-проверки `adb root`/`cmd locale` — Этап 0).
-- [ ] Запуск: подключить эмулятор (`adb devices` — если нет, прогон
-      `make android-test` тоже не пройдёт; см. `.opencode/rules/android-emulator.md`),
-      затем `make emulator-fast` (выключает анимации — без этого
-      скриншоты на эмуляторе смазываются), затем `make screenshots-ru`
-      и `make screenshots-en`. На выходе — пара PNG в обеих локалях.
-      Проверка: `file <png>` — валидный PNG. Каталог
-      `fastlane/metadata/.../images/phoneScreenshots/` создаётся самим
-      рецептом, `.gitkeep` не нужен.
+- [x] AGENTS.md в **двух** местах: «Tests» (модуль, запуск
+      `make screenshots{,-ru,-en}`) и «Project Structure»
+      (`:screenshot-tests` рядом с `:app`). Detekt на модуль
+      не подключаем.
+- [x] Прогон: `adb devices` → `make emulator-fast` →
+      `make screenshots-ru` + `-en` → PNG в
+      `fastlane/metadata/android/<locale>/images/phoneScreenshots/`
+      (следующий прогон перезаписывает); `format`/`lint`/`test`
+      зелёные; `file <png>` — валидный PNG.
+- [x] **Канон про хранение PNG** (сюда ссылаются Контекст, Критерии
+      завершения и Этап 8): каталоги `images/phoneScreenshots/`
+      появились в репозитории при съёмке Этапа 7 (12 PNG:
+      6 × ru-RU/en-US); `.gitignore` уже разрешает хранение —
+      `!fastlane/metadata/android/**/*.png`, `git add` после
+      `make screenshots` коммитит PNG без дополнительных правил.
 
-### Этап 6 (опционально, за рамками этого плана)
+### Этап 6 (опционально)
 
 - [ ] Skill `.opencode/skills/kotlin-screenshot-testing/SKILL.md` —
       «как писать сценарии скриншотов» (фикстуры, порядок
       `waitForIdle` после вставки в БД, имена PNG
-      `<номер>-<описание>`, локализация полей фикстуры). Заводится,
-      когда появится второй сценарий и захочется зафиксировать
-      соглашения. В этом плане skill **не объявляется обязательным**.
+      `<номер>-<описание>`, локализация полей фикстуры). Триггер —
+       появление второго сценария (Этап 7); пока ни один сценарий
+       Этапа 7 не реализован, skill **не обязателен**.
+
+### Этап 7 — Сценарии скриншотов
+
+Общие правила, действующие для каждого сценария:
+
+- [x] **Smoke-@Test заменён Сценарием 1**: capture, валидация PNG
+      и ассерт локали переехали в общие хелперы, `importFixture`
+      импортирует только записи (иначе был бы лишний `0-smoke.png`).
+- [x] **Только стандартные упражнения:** `importData(exercises =
+      emptyList())`, имена — `getString(R.string.exercise_*)` в локали
+      прогона (связь резолвится по `name.trim().lowercase()`).
+- [x] **Даты и порядок:** `daysAgoMillis(days)` =
+      `LocalDate.now().minusDays(days).atStartOfDay(zone)` (DST-безопасно),
+      `createdAt = daysAgoMillis(1) + index * 60_000L` — внутри дня записи
+      обратно-хронологичны (`ORDER BY date DESC, created_at DESC`),
+      последнее выполненное вверху группы.
+- [x] **Имя PNG** `<номер>-<slug>.png` по порядку сценариев плана.
+- [x] **Один `@Test` на сценарий:** фикстура — Given в теле теста
+      (`importFixture(baseEntries())` / `overviewEntries()`), общий
+      `@Before` (тег локали + очистка БД), общий `@After tearDown`;
+      общий код — в хелперах (`waitFor`, `openOverview`,
+      `openFilledCreateForm`, `selectRepsExercise`, `hideIme`,
+      `captureAndValidate`).
+- [x] **Перед capture** — `waitForIdle()` + `waitFor(matcher)` на
+      узел-якорь экрана (`waitUntil(5_000)`) и `delay(5_000)` на
+      транзиентные оверлеи: тост Gboard «Changed the keyboard
+      language…» в дереве доступности и `dumpsys window` не ловится
+      (проверено), переждывается гарантированный срок жизни
+      (LENGTH_LONG ≈3,5 с).
+- [x] **Комментарии локализованы** (ru/en — видны в `CommentRow` и
+      меняют высоту строки): пары выбирает `localizedComment(ru, en)`
+      по `localeTag`.
+
+#### Сценарий 1 — `1-workouts-list.png` (главный экран)
+
+Три дня, 9 записей. Таблица в порядке **выполнения**; `d-N` — N дней
+назад относительно сегодня.
+
+| День | `R.string` | ru / en | sets | reps | durationSec | Комментарий ru / en |
+| --- | --- | --- | --- | --- | --- | --- |
+| d-1 | `exercise_lunges` | Выпады / Lunges | 2 | 20 | — | — |
+| d-1 | `exercise_squats` | Приседания / Squats | 4 | 15 | — | — |
+| d-2 | `exercise_pullups` | Подтягивания / Pull-ups | 2 | 6 | — | — |
+| d-2 | `exercise_australian_pullups` | Австралийские подтягивания / Australian pull-ups | 2 | 12 | — | — |
+| d-2 | `exercise_crunches` | Скручивания / Crunches | 1 | 30 | — | — |
+| d-2 | `exercise_plank` | Планка / Plank | 1 | — | 45 | добиваю пресс / finishing off the core |
+| d-3 | `exercise_pushups` | Отжимания / Push-ups | 1 | 20 | — | новый рекорд, мощно / new personal record, felt strong |
+| d-3 | `exercise_bars` | Отжимания на брусьях / Bar dips | 1 | 4 | — | — |
+| d-3 | `exercise_bars` | Отжимания на брусьях / Bar dips | 1 | 4 | — | — |
+
+- [x] Зафиксировано и проверено: брусья — **две отдельные записи
+      1×4** (группа d-3 — три строки), планка — `durationSec = 45`
+      без reps последней в свой день; все записи `weightKg = null`.
+      Порядок сверху вниз (следствие сортировки): d-1 Приседания,
+      Выпады; d-2 Планка, Скручивания, Австралийские подтягивания,
+      Подтягивания; d-3 Брусья (2-я), Брусья (1-я), Отжимания.
+      PNG в обеих локалях, ru/en различаются, в кадре нет IME-тоста
+      и обрезанных строк.
+
+#### Сценарии 2–6 — создание записи и экран обзора
+
+Один пользовательский поток в пяти кадрах: FAB → заполненная форма
+создания → «Сохранить» → главный экран с новой записью → кнопка
+«donut» → Обзор (Статистика «Неделя» → Рекорды → Активность).
+Пять PNG, пять `@Test` (общее правило Этапа 7 «один `@Test` на
+сценарий»), фикстура импортируется первым шагом каждого теста,
+общий `@After tearDown` (`deleteAllData()`).
+
+Зависимость: сценарии 2–6 переиспользуют фикстуру Сценария 1
+(стандартные упражнения, `importData(exercises = emptyList())`,
+относительные даты, `createdAt = daysAgoMillis(1) + index * 60_000L`) —
+общие приватные хелперы `baseEntries()` / `overviewEntries()`.
+
+| Шаг | Действие | PNG |
+| --- | --- | --- |
+| 1 | FAB → форма: Отжимания, 12 повторов, 5 кг, комментарий | `2-create-new-entry.png` |
+| 2 | «Сохранить» → главный экран, скролл к новой записи | `3-new-entry-saved.png` |
+| 3 | «donut» → Статистика, период «Неделя» | `4-week-stats.png` |
+| 4 | вкладка «Рекорды» (режим «За подход» — дефолт) | `5-records-per-set.png` |
+| 5 | вкладка «Активность» | `6-activity-screen.png` |
+
+Фикстуры:
+
+- `baseEntries()` — 9 записей Сценария 1 (d-1…d-3). Импортируют
+  сценарии 1, 2, 3.
+- `overviewEntries()` = `baseEntries` + запись **сегодня**:
+  `exercise_pushups`, 1 × 12, 5 кг, комментарий из пары ru/en ниже.
+  Импортируют сценарии 4–6.
+
+Запись сегодня нужна именно в фикстуре 4–6, а не «создаётся в UI»:
+`tearDown` каждого теста делает `deleteAllData()`, записи сценариев
+2–3 не переживают свой тест. Без неё обзор снимался бы с другими
+данными, чем показывает `3-new-entry-saved.png`, а на пустой БД — с
+пустыми состояниями.
+
+Общее для 2–6:
+
+- **Комментарий ru/en**: «пробую с утяжелением» / «trying it
+  weighted» — хелпер `weightedEntryComment()` поверх
+  `localizedComment(ru, en)`, выбор по `localeTag` (правило
+  «Комментарии локализованы» из общих правил Этапа 7). Ввод
+  кириллицей работает: `performTextReplacement` идёт через semantics,
+  а не через adb (канон — `ExerciseCreateScreenTest.kt:165`).
+- **Клавиатура не попала в кадр.** `performTextReplacement` поднимает
+  IME, а та перекрывает низ формы и половину кнопки «Сохранить».
+  Гасится хелпером `hideIme()`
+  (`InputMethodManager.hideSoftInputFromWindow` на
+  `activity.window.decorView.windowToken` + `waitForIdle`): в
+  Сценарии 2 — после заполнения формы, в Сценарии 3 — после
+  сохранения (IME пережил бы навигацию). Навигации «назад» нет:
+  экран создания закрывается только кнопкой «Сохранить»
+  (`viewModel.save(onSaved = onBackClick)`, `EntryCreateScreen.kt:73`).
+
+##### Сценарий 2 — `2-create-new-entry.png` (заполненная форма)
+
+- [x] FAB (`add_workout`, `MainScreen.kt:252`) → форма
+      (`entry_create_title`). «Отжимания» через `selectRepsExercise`:
+      клик по полю `entry_field_exercise`, `waitFor(«Выпады»)` —
+      признак открытого меню, доскролл опции в открытом попапе
+      (`onAllNodes(hasScrollAction()).onLast().performScrollToNode(...)`)
+      и клик по **видимой** опции (клик по невидимому пункту
+      применялся через раз), `waitFor` поля повторов — признак
+      выбора. Точное совпадение `onNodeWithText` не путает
+      «Отжимания» с «на коленях» / «на брусьях».
+- [x] Повторы `12` / вес `5` / комментарий — по label полей
+      (`performTextReplacement`, канон `EntryCreateScreenTest.kt:255`);
+      перед capture — `hideIme()` + `performScrollToNode` на
+      комментарий (форма — `Column(verticalScroll)`). Не заполняем
+      подходы (`setsText = "1"` — дефолт) и дату/время (дефолты
+      годятся): предзаполнение из истории не мешает (гварды
+      `repsText.isEmpty()` / `weightTouched`), вес `5` проходит
+      нормализацию (`draftOf` отбрасывает только `<= 0`).
+
+##### Сценарий 3 — `3-new-entry-saved.png` (главный экран, новая запись)
+
+- [x] «Сохранить» (`entry_save`, `SaveBottomBar`) → `waitFor` FAB →
+      `hideIme()` → `performScrollToIndex(0)` +
+      `onAllNodesWithText(comment).onFirst().assertIsDisplayed()`.
+      Кадр: строка «Отжимания» вверху списка — группа «Сегодня» без
+      заголовка (`SectionDateFormatter`: `date == today -> null`),
+      с повторами, блоком веса (`WeightRow`, рендерится при
+      `weightKg > 0`) и комментарием (`CommentRow`).
+
+##### Сценарий 4 — `4-week-stats.png` (Обзор → Статистика, Неделя)
+
+- [x] Кнопка «donut» (`a11y_open_overview`, `MainScreen.kt:243`) —
+      в TopAppBar, не в bottom-tabs (`Screen.Overview` вне вкладок);
+      далее вкладка «Статистика» кликается явно: `lastOverviewTab`
+      в DataStore переживает `deleteAllData()`, а порядок `@Test`
+      произволен (сценарий 5 сохраняет «Рекорды»).
+- [x] Период «Неделя» (`StatsScreen.kt:461`) кликается явно —
+      идемпотентно (дефолт `StatsPeriod.WEEK`), но кадр не зависит
+      от дефолта. Окно **скользящее** — 7 дней до сегодня
+      (`rolling-stats-periods`): захватывает d-1…d-3 и сегодня в любой
+      день календарной недели — донат из четырёх категорий (до ченджа
+      ISO-понедельник вырождался в один сектор). Пикер виден на
+      фикстуре глубже самой ранней записи (`visiblePeriods`);
+      якорь: `overview_stats_empty` **не** отображается.
+
+##### Сценарий 5 — `5-records-per-set.png` (Обзор → Рекорды)
+
+- [x] Таб «Рекорды» (`OverviewScreen.kt:228`); режим «За подход»
+      (`RecordsMode.PER_SET`) — дефолт, второй сегмент не трогаем.
+      Якорь: `records_empty` не отображается (новая запись рекордом
+      не станет, но участвует в расчёте и heatmap).
+
+##### Сценарий 6 — `6-activity-screen.png` (Обзор → Активность)
+
+- [x] Таб «Активность»; период не переключаем — дефолт
+      `ActivityPeriod.MONTH` (в имени PNG не отражён). Якорь — легенда
+      хитмапа `activity_less` (надёжнее plurals-текстов карточки серии).
+
+Проверка сценариев 1–6 (6 PNG суммарно: `1-workouts-list` + пять из
+этого блока):
+
+- [x] `make screenshots-ru` / `-en`: 6 PNG в каждой локали, ru/en
+      визуально различаются; кадры соответствуют сценариям — форма
+      заполнена без клавиатуры, новая запись сверху с весом
+      и комментарием, стат-кадры непустые («Неделя», «За подход»).
+      `make format && make lint && make test` зелёные; после прогона
+      `make android-test` БД чистая (`tearDown`).
+
+### Этап 8 — Скриншоты в README
+
+Зависит от Этапа 7: PNG должны лежать по фиксированным путям, иначе
+`src` в README указывает в пустоту. Формат секции: markdown-таблица
+из двух строк, первая — заголовки-подписи, вторая — `<img>`.
+
+- [x] Секция `## Скриншоты` в `README.md` — сразу после
+      `<!-- END_VERSIONS -->`, первой содержательной секцией файла.
+      Таблица из двух строк: заголовки-подписи шести сценариев
+      («Список тренировок» … «Активность») и `<img alt=""` в том же
+      порядке. Только `ru-RU` (README русский, `en-US` лежит в
+      fastlane-метаданных), путь относительный от корня репо:
+      `./fastlane/metadata/android/ru-RU/images/phoneScreenshots/<файл>`.
+      markdownlint не мешает: `MD013`/`MD033` выключены,
+      `MD055`/`MD056` включены — колонок шесть в обеих строках.
+- [x] **Скрипт-перегенератор не нужен.** Он уместен, когда имена PNG
+      нестабильны (например, `fastlane screengrab` дописывает временную
+      метку: `1-demoList_1786560117567.png`, и путь каждый прогон новый).
+      У нас имя задаёт сам тест, оно стабильно (`1-workouts-list.png`),
+      путь не меняется — перегенератор был бы мёртвым кодом. Вернуться
+      к нему (`make update_readme` + `scripts/update_readme.py` + тест
+      в `scripts/*_test.py`, который подхватит `make scripts-test`) —
+      если PNG начнут получать временные метки или сценарии станут
+      переезжать/переименовываться.
+- [x] Проверка: `make lint` (markdownlint) зелёный; все шесть путей из
+      README резолвятся в существующие файлы; `git status --porcelain
+      fastlane/` пуст — PNG уже в git (канон хранения — Этап 5).
 
 ## Критерии завершения
 
-- [ ] `./gradlew :screenshot-tests:assembleDebug` собирается без ошибок
-      на машине разработчика.
-- [ ] `./gradlew :screenshot-tests:tasks --all | grep -i connected`
-      показывает ровно `connectedDebugAndroidTest` (а не две/три — это
-      доказательство, что модуль не имеет своих `productFlavors`).
-      Без `--offline`: plugin marker `com.android.test` ещё не в кеше
-      до первой успешной сборки и `--offline` упадёт на резолве.
-- [ ] `make screenshots` проходит end-to-end: build →
-      `:screenshot-tests:connectedDebugAndroidTest` (UI реально на
-      целевой локали — smoke-ассерт на `R.string` зелёный) → PNG в
-      `$(DEVICE_PNG_DIR)` → `adb pull` → файлы появились в
-      `fastlane/metadata/android/ru-RU/images/phoneScreenshots/` и
-      `fastlane/metadata/android/en-US/images/phoneScreenshots/`,
-      пары ru/en для одного сценария визуально различаются.
-- [ ] `make screenshots LOCALES=fr-FR` падает с понятной ошибкой
-      (валидация на `ru-RU|en-US` срабатывает).
-- [ ] Существующие `make test`, `make android-test`, `make format`,
-      `make lint` не сломаны.
-- [ ] Detekt-лимит не повышен.
-- [ ] В `AGENTS.md` отражён новый модуль в **двух** местах
-      («Tests», «Project Structure»). «Build»/«deployment.md»
-      пока не трогаем — `make screenshots` не входит в release-чек-лист.
+- [x] `:screenshot-tests:assembleDebug` собирается; `tasks --all`
+      показывает ровно `connectedDebugAndroidTest` (доказательство
+      отсутствия `productFlavors` в тест-модуле).
+- [x] `make screenshots` end-to-end: build → install → `am instrument`
+      (UI на целевой локали — ассерт на `R.string` зелёный) → PNG
+      в `fastlane/metadata/...`, пары ru/en визуально различаются.
+      `LOCALES=fr-FR` и `LOCALES=` падают явно.
+- [x] Существующие `make test`, `make android-test`, `make format`,
+      `make lint` не сломаны; detekt-лимит не повышен.
 
 ## Не входит (открытые задачи)
 
-- Сценарии скриншотов (`MainScreen`, `EntryCreateScreen`,
-  `ExercisesScreen`, `ArchivedExercisesScreen`, `AppDataScreen` и т.д.)
-  — **отдельный план** после закрытия этого. Опирается на
-  `ScreenshotWriter`, `ScreenshotsTest` и соглашения по именованию PNG.
+- Остальные сценарии (`ExercisesScreen`, `ArchivedExercisesScreen`,
+  `AppDataScreen` и т.д.) — продолжение Этапа 7 по мере утверждения
+  (запланированные сценарии 1–6 реализованы все).
 - Подключение `make screenshots` к CI / pre-release чек-листу —
   обсуждается отдельно (offline-only проект, CI не активен).
 - Выбор стратегии сжатия PNG (качество, размеры под RuStore/Google

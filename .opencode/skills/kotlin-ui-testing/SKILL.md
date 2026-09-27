@@ -5,7 +5,8 @@ description: >
   в Android-проекте Jetpack-MyWorkouts: JUnit 4, Compose Testing
   (createComposeRule / createAndroidComposeRule), Room in-memory,
   реальные классы (WorkoutDatabase, RoomWorkoutDataRepository),
-  запуск через make android-test. Использовать при написании новых
+  запуск через make android-test; скриншот-сценарии :screenshot-tests —
+  через make screenshots{,-ru,-en}. Использовать при написании новых
   UI- и интеграционных тестов, отладке flaky androidTest и
   улучшении покрытия.
 ---
@@ -164,6 +165,22 @@ description: >
   Exit code 0 при успехе, 1 при упавших. Подробности —
   `references/running-tests.md`.
 
+### Скриншот-тесты (`:screenshot-tests`)
+
+Сценарии живут в **отдельном** gradle-модуле `:screenshot-tests`, а не
+в `app/src/androidTest/`. Правила 1–15 выше применимы и там
+(JUnit 4 + v2 Compose API — канон в `ScreenshotsTest`).
+
+Запуск — `make screenshots-ru` / `make screenshots-en` (**не**
+`make android-test`; `test_report.py` не вызывается).
+
+**`@After` обязан сбросить БД через `deleteAllData()`** — иначе
+`make android-test` упадёт (`EntryListLiveUpdateIntegrationTest`,
+воспроизведённый кейс).
+
+Локаль (per-app), фикстура, capture и deps модуля — отдельный
+reference: `references/screenshot-tests.md`.
+
 ## First 60 seconds (triage template)
 
 Прежде чем писать код, собери факты:
@@ -216,6 +233,9 @@ description: >
 - Поиск иконки упражнения (`testTag` + unmerged-дерево), проверка
   тёмного/светлого варианта по яркости →
   `references/exercise-icon-testing.md`
+- Скриншот-сценарии в `:screenshot-tests`: per-app локаль, фикстура
+  через production-репозиторий, capture и запись PNG →
+  `references/screenshot-tests.md`
 - Полные канонические примеры → `references/EXAMPLE.md`
 
 > Файлы `viewmodel-integration.md`, `alarm-reminder.md` в
@@ -227,6 +247,7 @@ description: >
 | Проблема | Решение |
 |---|---|
 | `onNodeWithText` не находит строку | Используй `context.getString(R.string.xxx)` — строка может быть в ресурсах, а не хардкодом; проверь, что вызван `setContent` (тема `JetpackMyWorkoutsTheme` — если компонент её использует) |
+| `onNodeWithText` падает «Expected at most 1 node» | Строка встречается на экране дважды (на главном экране `workouts_title` — и в TopAppBar, и в подписи bottom-tab): `onAllNodesWithText(...).onFirst().assertIsDisplayed()` (канон — `ScreenshotsTest` в `:screenshot-tests`) |
 | Данные вставил, а UI их не видит | После `runBlocking { ... }` в Compose-тесте вызови `composeTestRule.waitForIdle()` |
 | `onAllNodesWithContentDescription` без проверки количества | Добавь `.assertCountEquals(n)` — иначе тест проходит при 0 нод |
 | `assertIsDisplayed()` падает, хотя нода есть вне экрана | Проверяй позицию через `fetchSemanticsNode().boundsInRoot` или проскролль до ноды (`performScrollToNode(hasText(...))`) |
@@ -302,4 +323,5 @@ description: >
 - `references/exercise-icon-testing.md`
 - `references/running-tests.md`
 - `references/manual-verification.md`
+- `references/screenshot-tests.md`
 - `references/EXAMPLE.md`

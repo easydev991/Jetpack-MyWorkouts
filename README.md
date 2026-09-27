@@ -7,3 +7,9 @@
 [<img alt="Gradle" src="https://img.shields.io/badge/Gradle-9.7.1-blue">](https://gradle.org/)
 [<img alt="AGP" src="https://img.shields.io/badge/AGP-9.4.1-green">](https://developer.android.com/tools/releases/gradle-plugin)
 <!-- END_VERSIONS -->
+
+## Скриншоты
+
+| Список тренировок | Создание записи | Новая запись | Статистика за неделю | Рекорды | Активность |
+| --- | --- | --- | --- | --- | --- |
+| <img alt="" src="./fastlane/metadata/android/ru-RU/images/phoneScreenshots/1-workouts-list.png"> | <img alt="" src="./fastlane/metadata/android/ru-RU/images/phoneScreenshots/2-create-new-entry.png"> | <img alt="" src="./fastlane/metadata/android/ru-RU/images/phoneScreenshots/3-new-entry-saved.png"> | <img alt="" src="./fastlane/metadata/android/ru-RU/images/phoneScreenshots/4-week-stats.png"> | <img alt="" src="./fastlane/metadata/android/ru-RU/images/phoneScreenshots/5-records-per-set.png"> | <img alt="" src="./fastlane/metadata/android/ru-RU/images/phoneScreenshots/6-activity-screen.png"> |

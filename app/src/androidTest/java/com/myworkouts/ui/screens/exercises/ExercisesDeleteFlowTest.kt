@@ -219,6 +219,7 @@ class ExercisesDeleteFlowTest {
  */
 @RunWith(Parameterized::class)
 class ExercisesErrorSnackbarTest(
+    @Suppress("UNUSED_PARAMETER") private val label: String,
     private val failure: Throwable,
     private val expectedTextRes: Int
 ) {
@@ -383,19 +384,25 @@ class ExercisesErrorSnackbarTest(
     }
 
     companion object {
+        // Метка вместо {0}=Throwable.toString(): FQCN + русское сообщение
+        // раздувало display name до >255 байт — AGP не мог создать
+        // logcat-файл теста («File name too long»).
         @JvmStatic
         @Parameterized.Parameters(name = "[{0}]")
         fun failures(): List<Array<Any>> =
             listOf(
                 arrayOf(
+                    "linked",
                     LinkedEntriesDeletionException(),
                     R.string.exercise_delete_error_used_in_workouts
                 ),
                 arrayOf(
+                    "standard",
                     StandardExerciseDeletionException(),
                     R.string.exercise_delete_error_standard
                 ),
                 arrayOf(
+                    "io",
                     IllegalStateException("io"),
                     R.string.exercise_delete_error_generic
                 )

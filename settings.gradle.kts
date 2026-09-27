@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Jetpack-MyWorkouts"
 include(":app")
+include(":screenshot-tests")
