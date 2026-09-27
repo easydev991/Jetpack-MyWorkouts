@@ -278,4 +278,106 @@ class ExerciseEntryDaoTest {
             // Then
             assertTrue(entryDao.getAll().isEmpty())
         }
+
+    // Снимок истории упражнения (entry-prefilled-reps-and-duration, задача 1.1).
+
+    /**
+     * Снимок истории упорядочен `date DESC` — новые записи первыми;
+     * «последняя запись» упражнения для предзаполнения — первый элемент.
+     */
+    @Test
+    fun historyForExercise_withMultipleDates_thenReturnsNewestFirst() =
+        runBlocking {
+            // Given — три записи упражнения с разными датами
+            val oldest = 1_700_000_000_000L
+            val middle = 1_700_000_100_000L
+            val newest = 1_700_000_200_000L
+            entryDao.insert(sampleEntry(existingExerciseId).copy(date = oldest))
+            entryDao.insert(sampleEntry(existingExerciseId).copy(date = newest))
+            entryDao.insert(sampleEntry(existingExerciseId).copy(date = middle))
+
+            // When
+            val history = entryDao.historyForExercise(existingExerciseId)
+
+            // Then
+            assertEquals(
+                "История упражнения упорядочена date DESC",
+                listOf(newest, middle, oldest),
+                history.map { it.date }
+            )
+        }
+
+    /**
+     * Тай-брейк записей с одинаковым моментом выполнения: позже созданная
+     * (`created_at DESC`) — первая (spec-сценарий «Тай-брейк нескольких
+     * записей в один момент»).
+     */
+    @Test
+    fun historyForExercise_whenSameDate_thenOrdersByCreatedAtDesc() =
+        runBlocking {
+            // Given — две записи в один момент, созданы в разное время
+            val sameDate = 1_700_000_000_000L
+            entryDao.insert(
+                sampleEntry(existingExerciseId).copy(date = sameDate, createdAt = 100L)
+            )
+            entryDao.insert(
+                sampleEntry(existingExerciseId).copy(date = sameDate, createdAt = 200L)
+            )
+
+            // When
+            val history = entryDao.historyForExercise(existingExerciseId)
+
+            // Then
+            assertEquals(
+                "При равных датах позже созданная запись — первая",
+                listOf(200L, 100L),
+                history.map { it.createdAt }
+            )
+        }
+
+    /** История упражнения не содержит записей других упражнений. */
+    @Test
+    fun historyForExercise_excludesEntriesOfOtherExercises() =
+        runBlocking {
+            // Given — второе упражнение и записи обоих
+            val otherExerciseId =
+                exerciseDao.insert(
+                    ExerciseEntity(
+                        name = "Планка",
+                        category = "CORE",
+                        isCustom = false,
+                        comment = null,
+                        createdAt = 0L,
+                        measuredBy = "TIME"
+                    )
+                )
+            entryDao.insert(sampleEntry(existingExerciseId))
+            entryDao.insert(sampleEntry(otherExerciseId))
+
+            // When
+            val history = entryDao.historyForExercise(existingExerciseId)
+
+            // Then
+            assertTrue("История не пуста", history.isNotEmpty())
+            assertTrue(
+                "История содержит только записи своего упражнения",
+                history.all { it.exerciseId == existingExerciseId }
+            )
+        }
+
+    /** Упражнение без записей — пустой снимок (spec «Нет прошлых записей»). */
+    @Test
+    fun historyForExercise_whenNoEntries_thenReturnsEmptyList() =
+        runBlocking {
+            // Given — упражнение из setUp, записей нет
+
+            // When
+            val history = entryDao.historyForExercise(existingExerciseId)
+
+            // Then
+            assertTrue(
+                "Упражнение без записей — пустая история",
+                history.isEmpty()
+            )
+        }
 }

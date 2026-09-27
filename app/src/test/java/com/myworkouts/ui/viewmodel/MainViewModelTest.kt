@@ -88,6 +88,10 @@ private class MainViewModelFakeRepository(
 
     override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = Result.success(emptyList())
 
+    // Новый метод контракта (entry-prefilled-reps-and-duration, задача 1.4):
+    // заглушка — VM этого экрана историю упражнений не читает.
+    override suspend fun exerciseHistory(exerciseId: Long): Result<List<ExerciseEntry>> = Result.success(emptyList())
+
     override suspend fun importData(
         exercises: List<Exercise>,
         entries: List<BackupEntry>

@@ -80,6 +80,10 @@ class MainScreenFabNavigationTest {
 
             override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = error("Не используется в этом тесте")
 
+            // Новый метод контракта (entry-prefilled-reps-and-duration): заглушка.
+            override suspend fun exerciseHistory(exerciseId: Long): Result<List<ExerciseEntry>> =
+                error("Не используется в этом тесте")
+
             override suspend fun importData(
                 exercises: List<Exercise>,
                 entries: List<BackupEntry>

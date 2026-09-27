@@ -167,7 +167,7 @@ complexity:
     ignoreStringsRegex: '$^'
   TooManyFunctions:
     active: true
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt', '**/dao/**Dao.kt', '**/viewmodel/**ViewModel.kt']
+    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt', '**/db/**Dao.kt', '**/viewmodel/**ViewModel.kt']
     thresholdInFiles: 11
     thresholdInClasses: 11
     thresholdInInterfaces: 11

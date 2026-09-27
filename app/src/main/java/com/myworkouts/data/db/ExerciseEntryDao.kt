@@ -74,6 +74,20 @@ interface ExerciseEntryDao {
     suspend fun getAll(): List<ExerciseEntryEntity>
 
     /**
+     * Упорядоченный снимок истории записей одного упражнения
+     * (entry-prefilled-reps-and-duration, design Decision D1): новые
+     * первыми — `date DESC`, тай-брейк записей с одинаковым моментом
+     * выполнения — `created_at DESC` (позже созданная важнее). «Последняя
+     * запись» упражнения — первый элемент; из того же снимка без второго
+     * запроса выводится статистика веса для предзаполнения.
+     */
+    @Query(
+        "SELECT * FROM exercise_entries WHERE exercise_id = :id " +
+            "ORDER BY date DESC, created_at DESC"
+    )
+    suspend fun historyForExercise(id: Long): List<ExerciseEntryEntity>
+
+    /**
      * Массовая вставка подготовленных записей внутри транзакции `importData`
      * (app-data-screen, design Decision 6).
      */

@@ -413,6 +413,10 @@ class ExerciseCreateScreenTest {
 
         override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = Result.success(emptyList())
 
+        // Новый метод контракта (entry-prefilled-reps-and-duration): заглушка.
+        override suspend fun exerciseHistory(exerciseId: Long): Result<List<ExerciseEntry>> =
+            Result.success(emptyList())
+
         override suspend fun importData(
             exercises: List<Exercise>,
             entries: List<BackupEntry>

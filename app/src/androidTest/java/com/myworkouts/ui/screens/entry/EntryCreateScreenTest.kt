@@ -21,16 +21,29 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
+import androidx.room.Room
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
+import com.myworkouts.analytics.NoopAnalyticsProvider
+import com.myworkouts.data.db.WorkoutDatabase
+import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.repository.RoomWorkoutDataRepository
+import com.myworkouts.domain.model.EntryField
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseCategory
+import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.icons.EXERCISE_ICON_TEST_TAG
 import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.EntryCreateUiState
+import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
+import com.myworkouts.ui.viewmodel.EntryCreateViewModel
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -1022,5 +1035,299 @@ class EntryCreateScreenTest {
         composeTestRule
             .onNodeWithText(context.getString(R.string.entry_field_weight))
             .assertIsDisplayed()
+    }
+
+    // ---------- entry-prefilled-reps-and-duration: предзаполнение из истории ----------
+
+    /** In-memory БД харнесса предзаполнения; создаётся лениво, закрывается в [tearDown]. */
+    private var prefillDatabase: WorkoutDatabase? = null
+
+    /** Закрывает БД харнесса и сбрасывает видимость веса (DataStore-синглтон
+     * живёт весь инструментальный процесс — скрытие не должно утекать
+     * в другие тесты и классы). */
+    @After
+    fun tearDown() {
+        runBlocking {
+            AppSettingsDataStore.create(context).setFieldVisible(EntryField.WEIGHT, true)
+        }
+        prefillDatabase?.close()
+        prefillDatabase = null
+    }
+
+    /** Room in-memory без стандартных упражнений — каталог только из сида. */
+    private fun setupPrefillRepository(): RoomWorkoutDataRepository {
+        val database =
+            Room
+                .inMemoryDatabaseBuilder(context.applicationContext, WorkoutDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
+        prefillDatabase = database
+        return RoomWorkoutDataRepository(database, standardExercises = emptyList())
+    }
+
+    /** Миллисы «[days] дней назад» — записи различаются датами, порядок строгий. */
+    private fun daysAgoMillis(days: Long): Long = System.currentTimeMillis() - days * 86_400_000L
+
+    /** Запись истории с фиксированными подходами (2) — не пересекаются
+     * с сохраняемой в тестах (3). */
+    private fun historyEntry(
+        exerciseId: Long,
+        date: Long,
+        reps: Int?,
+        weightKg: Double?,
+        createdAt: Long,
+        durationSec: Int? = null
+    ): ExerciseEntry =
+        ExerciseEntry(
+            id = 0L,
+            exerciseId = exerciseId,
+            workoutId = null,
+            date = date,
+            sets = 2,
+            reps = reps,
+            weightKg = weightKg,
+            durationSec = durationSec,
+            comment = null,
+            createdAt = createdAt,
+            modifiedAt = createdAt
+        )
+
+    /** Каталожное упражнение харнесса: значимы имя, тип измерения и порядок создания. */
+    private fun exercise(
+        name: String,
+        category: ExerciseCategory,
+        measuredBy: ExerciseMeasuredBy,
+        createdAt: Long
+    ): Exercise =
+        Exercise(
+            id = 0L,
+            name = name,
+            category = category,
+            isCustom = true,
+            comment = null,
+            createdAt = createdAt,
+            measuredBy = measuredBy
+        )
+
+    /**
+     * Сид каталога и истории: «Жим лёжа» — 4 записи, 3 с весом (строгое
+     * большинство), последняя (12 повторов, вчера) без веса → вес берётся
+     * из записи позавчера (25.0); «Отжимания» — без записей; «Планка» —
+     * одна запись с длительностью 90 секунд.
+     */
+    private fun seedHistory(repository: RoomWorkoutDataRepository): Unit =
+        runBlocking {
+            val repsWithHistoryId =
+                repository
+                    .addExercise(exercise("Жим лёжа", ExerciseCategory.PUSH, ExerciseMeasuredBy.REPS, createdAt = 1L))
+                    .getOrThrow()
+            repository
+                .addExercise(exercise("Отжимания", ExerciseCategory.PUSH, ExerciseMeasuredBy.REPS, createdAt = 2L))
+                .getOrThrow()
+            val timeId =
+                repository
+                    .addExercise(exercise("Планка", ExerciseCategory.CORE, ExerciseMeasuredBy.TIME, createdAt = 3L))
+                    .getOrThrow()
+            val add: suspend (ExerciseEntry) -> Unit = { repository.addEntry(it).getOrThrow() }
+            add(historyEntry(repsWithHistoryId, daysAgoMillis(4), reps = 6, weightKg = 15.0, createdAt = 1L))
+            add(historyEntry(repsWithHistoryId, daysAgoMillis(3), reps = 8, weightKg = 20.0, createdAt = 2L))
+            add(historyEntry(repsWithHistoryId, daysAgoMillis(2), reps = 10, weightKg = 25.0, createdAt = 3L))
+            add(historyEntry(repsWithHistoryId, daysAgoMillis(1), reps = 12, weightKg = null, createdAt = 4L))
+            add(historyEntry(timeId, daysAgoMillis(1), reps = null, weightKg = null, durationSec = 90, createdAt = 5L))
+        }
+
+    /**
+     * Открывает экран создания с реальной [EntryCreateViewModel] поверх
+     * [repository] (образец — `EntryEditArchivedExerciseTest`): сквозная
+     * проверка «выбор в UI → предзаполнение в полях → сохранение в БД»;
+     * правила расчёта покрыты JVM-тестами `EntryCreateViewModelTest`.
+     */
+    private fun setPrefillContent(
+        repository: RoomWorkoutDataRepository,
+        dataStore: AppSettingsDataStore,
+        onBackClick: () -> Unit = {}
+    ) {
+        composeTestRule.setContent {
+            JetpackMyWorkoutsTheme {
+                EntryCreateScreen(
+                    viewModel =
+                        EntryCreateViewModel(
+                            repository = repository,
+                            nowProvider = { System.currentTimeMillis() },
+                            entryId = Screen.EntryCreate.NO_ENTRY_ID,
+                            dataStore = dataStore,
+                            analyticsProvider = NoopAnalyticsProvider()
+                        ),
+                    onBackClick = onBackClick,
+                    onOpenSettings = {}
+                )
+            }
+        }
+    }
+
+    /**
+     * Открывает дропдаун с пунктом [fieldTextRes] и выбирает [optionText].
+     * Клик повторяется, пока пункт не появится: попап композируется кадром
+     * позже клика (образец — `EntryEditArchivedExerciseTest`).
+     */
+    private fun selectDropdownOption(
+        fieldTextRes: Int,
+        optionText: String
+    ) {
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            val optionExists =
+                composeTestRule.onAllNodesWithText(optionText).fetchSemanticsNodes().isNotEmpty()
+            if (!optionExists) {
+                composeTestRule
+                    .onNodeWithText(context.getString(fieldTextRes))
+                    .performClick()
+            }
+            optionExists
+        }
+        composeTestRule.onNodeWithText(optionText).performClick()
+    }
+
+    /** Ждёт появления узла с текстом [text] (предзаполнение асинхронно). */
+    private fun awaitText(text: String) {
+        composeTestRule.waitUntil(timeoutMillis = 10_000) {
+            composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    /** Ждёт появления узла с текстом [text] и проверяет, что он отображается. */
+    private fun waitForDisplayed(text: String) {
+        awaitText(text)
+        composeTestRule.onNodeWithText(text).assertIsDisplayed()
+    }
+
+    /** Выбор REPS-упражнения с историей предзаполняет повторы последней
+     * записи и вес последней записи с положительным весом. */
+    @Test
+    fun prefill_when_reps_exercise_with_history_selected_then_reps_and_weight_prefilled() {
+        // Given — «Жим лёжа»: 4 записи, 3 с весом; последняя (12 повторов)
+        // без веса → вес из записи позавчера (25.0)
+        val repository = setupPrefillRepository()
+        seedHistory(repository)
+        val dataStore = AppSettingsDataStore.create(context)
+        runBlocking { dataStore.setFieldVisible(EntryField.WEIGHT, true) }
+        setPrefillContent(repository, dataStore)
+
+        // When — выбор упражнения с историей в дропдауне
+        selectDropdownOption(R.string.entry_field_exercise, "Жим лёжа")
+
+        // Then — повторы последней записи и вес последней записи с весом
+        waitForDisplayed("12")
+        composeTestRule.onNodeWithText("25.0").assertIsDisplayed()
+    }
+
+    /** Выбор TIME-упражнения с историей предзаполняет длительность последней
+     * записи; вес без большинства остаётся нулевым. */
+    @Test
+    fun prefill_when_time_exercise_with_history_selected_then_duration_prefilled() {
+        // Given — «Планка»: единственная запись с длительностью 90 секунд
+        val repository = setupPrefillRepository()
+        seedHistory(repository)
+        val dataStore = AppSettingsDataStore.create(context)
+        runBlocking { dataStore.setFieldVisible(EntryField.WEIGHT, true) }
+        setPrefillContent(repository, dataStore)
+
+        // When — выбор TIME-упражнения с историей
+        selectDropdownOption(R.string.entry_field_exercise, "Планка")
+
+        // Then — длительность последней записи в поле, плейсхолдер исчез;
+        // 0 записей с весом из 1 → «Доп. вес» остаётся «0»
+        waitForDisplayed("1 мин 30 сек")
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_duration_not_selected))
+            .assertCountEquals(0)
+        composeTestRule.onNodeWithText("0").assertIsDisplayed()
+    }
+
+    /** Выбор упражнения без записей оставляет типозависимое поле пустым,
+     * вес — нулевым, сохранение — недоступным. */
+    @Test
+    fun prefill_when_exercise_without_history_selected_then_fields_stay_empty() {
+        // Given — «Отжимания» без единой записи
+        val repository = setupPrefillRepository()
+        seedHistory(repository)
+        val dataStore = AppSettingsDataStore.create(context)
+        runBlocking { dataStore.setFieldVisible(EntryField.WEIGHT, true) }
+        setPrefillContent(repository, dataStore)
+
+        // When — выбор упражнения без истории
+        selectDropdownOption(R.string.entry_field_exercise, "Отжимания")
+        composeTestRule.waitForIdle()
+
+        // Then — повторы пустые (подсказка), вес «0», сохранение неактивно
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_hint_fill_reps))
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("0").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_save))
+            .assertIsNotEnabled()
+    }
+
+    /** Скрытое настройкой поле «Доп. вес» не отображается, но предзаполняется
+     * на общих правилах и попадает в сохранённую запись (spec-сценарий
+     * «Скрытое поле веса предзаполняется на общих правилах»). */
+    @Test
+    fun prefill_when_weight_field_hidden_then_not_rendered_but_saved_with_prefilled_weight() {
+        // Given — поле веса скрыто настройкой; история «Жима» — 3 из 4 с весом
+        val repository = setupPrefillRepository()
+        seedHistory(repository)
+        val dataStore = AppSettingsDataStore.create(context)
+        runBlocking { dataStore.setFieldVisible(EntryField.WEIGHT, false) }
+        var backClicked = false
+        setPrefillContent(repository, dataStore) { backClicked = true }
+
+        // When — выбор упражнения с историей
+        selectDropdownOption(R.string.entry_field_exercise, "Жим лёжа")
+        awaitText("12")
+
+        // Then — поле веса не отображается, хотя предзаполнено в состоянии
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.entry_field_weight))
+            .assertCountEquals(0)
+
+        // When — подходы заполнены, запись сохранена; клик повторяется, пока
+        // запись не появится в БД (инъекция может уйти в IME-анимацию —
+        // образец `awaitSaved` из `EntryEditArchivedExerciseTest`)
+        composeTestRule
+            .onNode(hasText(context.getString(R.string.entry_field_sets)))
+            .performTextReplacement("3")
+        Espresso.closeSoftKeyboard()
+        composeTestRule.waitForIdle()
+        composeTestRule.waitUntil(timeoutMillis = 20_000) {
+            val saved =
+                backClicked ||
+                    runBlocking {
+                        repository.getAllEntries().getOrThrow().any { it.sets == 3 }
+                    }
+            if (!saved) {
+                composeTestRule
+                    .onNodeWithText(context.getString(R.string.entry_save))
+                    .performClick()
+            }
+            saved
+        }
+
+        // Then — запись получила предзаполненные значения скрытых полей
+        val saved =
+            checkNotNull(
+                runBlocking {
+                    repository.getAllEntries().getOrThrow().firstOrNull { it.sets == 3 }
+                }
+            ) {
+                "Сохранённая запись должна появиться в БД"
+            }
+        assertEquals(
+            "Скрытый вес предзаполнился и сохранился",
+            25.0,
+            checkNotNull(saved.weightKg),
+            0.0
+        )
+        assertEquals("Повторы взялись из предзаполнения", 12, saved.reps)
+        assertTrue("После сохранения экран закрывается", backClicked)
     }
 }

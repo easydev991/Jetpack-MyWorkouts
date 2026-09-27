@@ -15,6 +15,8 @@ import java.time.LocalDate
  *   TIME-упражнений, `null` — не выбрана)
  * @property weightText Текст поля «Доп. вес» (опционально, дефолт «0» —
  *   «без доп. веса»; десятичный ввод, разделитель — точка)
+ * @property weightTouched Поле веса изменено пользователем (design D5):
+ *   не сбрасывается сменой упражнения, предзаполнение веса — только при `false`
  * @property date Дата выполнения
  * @property hour Час времени выполнения (0–23)
  * @property minute Минута времени выполнения (0–59)
@@ -46,6 +48,7 @@ data class EntryCreateUiState(
     val repsText: String = "",
     val durationSec: Int? = null,
     val weightText: String = "0",
+    val weightTouched: Boolean = false,
     val date: LocalDate = LocalDate.now(),
     val hour: Int = 0,
     val minute: Int = 0,

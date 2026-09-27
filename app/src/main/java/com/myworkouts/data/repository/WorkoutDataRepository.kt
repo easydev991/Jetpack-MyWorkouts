@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.Flow
  * (design.md Decision 1 change `entry-create-screen`). API реактивный там,
  * где нужен список (`Flow`), и `suspend` + `Result` для точечных операций.
  *
- * `TooManyFunctions` подавлен осознанно: 16 методов — точечные операции
+ * `TooManyFunctions` подавлен осознанно: 17 методов — точечные операции
  * экранов + снимки и массовые операции управления данными
  * (app-data-screen, exercises-archive); единый контракт вместо
  * интерфейсов под каждый экран.
@@ -137,6 +137,15 @@ interface WorkoutDataRepository {
      * Decision 6) — для экспорта и дедупликации импорта.
      */
     suspend fun getAllEntries(): Result<List<ExerciseEntry>>
+
+    /**
+     * Разовый снимок истории записей одного упражнения, новые первыми
+     * (entry-prefilled-reps-and-duration, design D2): сортировка
+     * `date DESC, created_at DESC` — на стороне SQL. Пустая история —
+     * `success(emptyList())`, не failure. Источник предзаполнения
+     * полей экрана записи в режиме создания.
+     */
+    suspend fun exerciseHistory(exerciseId: Long): Result<List<ExerciseEntry>>
 
     /**
      * Транзакционная вставка подготовленных use-case'ом данных

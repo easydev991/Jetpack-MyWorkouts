@@ -139,8 +139,13 @@ class EntryCreateViewModel(
      * Выбирает упражнение; типозависимое поле стирается только при смене
      * типа измерения (spec-сценарий «Смена упражнения переключает поле»),
      * при смене в пределах одного типа введённое значение сохраняется.
+     *
+     * После синхронного обновления в режиме создания запускается загрузка
+     * истории упражнения для предзаполнения пустых полей (design D3):
+     * результат применяется, только если упражнение не сменилось, целевые
+     * поля не изменены пользователем и режим — создание.
      */
-    fun onExerciseChange(exercise: Exercise) =
+    fun onExerciseChange(exercise: Exercise) {
         mutableUiState.update {
             it.copy(
                 selectedExercise = exercise,
@@ -150,6 +155,15 @@ class EntryCreateViewModel(
                 isSaveError = false
             )
         }
+        if (entryId != Screen.EntryCreate.NO_ENTRY_ID) return
+        val requestedId = exercise.id
+        viewModelScope.launch {
+            val history = repository.exerciseHistory(requestedId).getOrNull().orEmpty()
+            mutableUiState.update { state ->
+                applyHistoryPreFill(state, requestedId, history)
+            }
+        }
+    }
 
     /** Ввод подходов: нецифровые символы и ведущие нули отбрасываются. */
     fun onSetsChange(text: String) =
@@ -163,10 +177,11 @@ class EntryCreateViewModel(
             it.copy(repsText = sanitizeNumber(text), isSaveError = false)
         }
 
-    /** Ввод доп. веса: десятичный санитайзинг (design Decision 2). */
+    /** Ввод доп. веса: десятичный санитайзинг (design Decision 2); поле
+     * помечается изменённым пользователем — предзаполнение его не тронет (design D5). */
     fun onWeightChange(text: String) =
         mutableUiState.update {
-            it.copy(weightText = sanitizeWeight(text), isSaveError = false)
+            it.copy(weightText = sanitizeWeight(text), weightTouched = true, isSaveError = false)
         }
 
     /** Выбор длительности (`null` — сброс). */
@@ -300,6 +315,40 @@ class EntryCreateViewModel(
             createdAt = original?.createdAt ?: nowProvider(),
             modifiedAt = original?.modifiedAt ?: nowProvider()
         )
+    }
+
+    /**
+     * Предзаполнение из истории (design D3–D5): guard «упражнение не
+     * сменилось», типозависимое поле из последней записи снимка, вес при
+     * строгом большинстве записей с `weightKg > 0`. Подходы не предзаполняются.
+     */
+    private fun applyHistoryPreFill(
+        state: EntryCreateUiState,
+        requestedExerciseId: Long,
+        history: List<ExerciseEntry>
+    ): EntryCreateUiState {
+        val selected = state.selectedExercise
+        val last = history.firstOrNull()
+        if (selected?.id != requestedExerciseId || last == null) return state
+        var updated = state
+        when (selected.measuredBy) {
+            ExerciseMeasuredBy.REPS ->
+                if (updated.repsText.isEmpty()) {
+                    updated = updated.copy(repsText = last.reps?.toString().orEmpty())
+                }
+
+            ExerciseMeasuredBy.TIME ->
+                if (updated.durationSec == null) {
+                    updated = updated.copy(durationSec = last.durationSec)
+                }
+        }
+        if (!updated.weightTouched) {
+            val weighted = history.mapNotNull { it.weightKg }.filter { it > 0.0 }
+            if (weighted.size * 2 > history.size) {
+                updated = updated.copy(weightText = weighted.first().toString())
+            }
+        }
+        return updated
     }
 
     /** Предзаполнение полей формы загруженной записью (design Decision 2). */

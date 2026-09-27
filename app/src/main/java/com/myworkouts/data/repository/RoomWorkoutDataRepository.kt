@@ -35,7 +35,7 @@ import kotlinx.coroutines.flow.map
  *   [deleteAllData] — тот же список, что передаётся в
  *   [com.myworkouts.data.db.WorkoutDatabase.create]
  *
- * `TooManyFunctions` подавлен осознанно: 17 методов — единый контракт
+ * `TooManyFunctions` подавлен осознанно: 18 методов — единый контракт
  * [WorkoutDataRepository] (app-data-screen, exercises-archive); дробить
  * реализацию на части хуже подавления.
  */
@@ -272,6 +272,17 @@ class RoomWorkoutDataRepository(
     override suspend fun getAllEntries(): Result<List<ExerciseEntry>> =
         runCatching {
             exerciseEntryDao.getAll().map { it.toDomain() }
+        }
+
+    /**
+     * Разовый снимок истории записей упражнения (design D2): упорядоченный
+     * запрос [ExerciseEntryDao.historyForExercise], маппинг — `toDomain()`.
+     * Пустая история — `success(emptyList())`; ошибки БД — generic
+     * `Result.failure`.
+     */
+    override suspend fun exerciseHistory(exerciseId: Long): Result<List<ExerciseEntry>> =
+        runCatching {
+            exerciseEntryDao.historyForExercise(exerciseId).map { it.toDomain() }
         }
 
     override suspend fun importData(

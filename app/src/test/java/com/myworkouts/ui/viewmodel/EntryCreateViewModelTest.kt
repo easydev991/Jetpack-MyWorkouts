@@ -17,6 +17,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -123,6 +124,21 @@ private class FakeWorkoutDataRepository(
     override suspend fun getAllExercises(): Result<List<Exercise>> = Result.success(allExercises.value)
 
     override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = Result.success(emptyList())
+
+    /**
+     * Настраиваемая история по id упражнения (entry-prefilled-reps-and-duration,
+     * задача 2.x): список — уже упорядоченный снимок (новые первыми),
+     * как отдаёт контракт репозитория.
+     */
+    var historyByExerciseId: Map<Long, List<ExerciseEntry>> = emptyMap()
+
+    /** Задержка ответа `exerciseHistory` (мс виртуального времени) — тест гонок. */
+    var exerciseHistoryDelayMs: Long = 0
+
+    override suspend fun exerciseHistory(exerciseId: Long): Result<List<ExerciseEntry>> {
+        delay(exerciseHistoryDelayMs)
+        return Result.success(historyByExerciseId[exerciseId].orEmpty())
+    }
 
     override suspend fun importData(
         exercises: List<Exercise>,
@@ -1322,5 +1338,341 @@ class EntryCreateViewModelTest {
             // Then — запись сохранена с exerciseId = X.id
             val saved = checkNotNull(repository.updatedEntry) { "updateEntry должен быть вызван" }
             assertEquals(repsExercise.id, saved.exerciseId, "exerciseId остаётся X.id")
+        }
+
+    // Предзаполнение из истории (entry-prefilled-reps-and-duration, задачи 2.1–2.3).
+
+    /**
+     * Шаблон записи истории: в fake список передаётся уже упорядоченным
+     * (новые первыми) — это контракт `exerciseHistory`, сортировка (включая
+     * тай-брейк по `created_at`) проверяется на уровне DAO/репозитория.
+     */
+    private fun historyEntry(
+        exerciseId: Long,
+        reps: Int? = 10,
+        weightKg: Double? = null,
+        durationSec: Int? = null
+    ): ExerciseEntry =
+        ExerciseEntry(
+            id = 0L,
+            exerciseId = exerciseId,
+            workoutId = null,
+            date = 1_700_000_000_000L,
+            sets = 4,
+            reps = reps,
+            weightKg = weightKg,
+            durationSec = durationSec,
+            comment = null,
+            createdAt = 1L,
+            modifiedAt = 1L
+        )
+
+    /** Пустые повторы предзаполняются повторами последней записи (spec «Пустые повторы предзаполняются»). */
+    @Test
+    fun on_exercise_change_when_reps_exercise_with_history_then_prefills_reps_from_last_entry() =
+        runTest(testDispatcher) {
+            // Given — история: новейшая запись с 12 повторами
+            repository.historyByExerciseId =
+                mapOf(
+                    repsExercise.id to
+                        listOf(
+                            historyEntry(exerciseId = repsExercise.id, reps = 12),
+                            historyEntry(exerciseId = repsExercise.id, reps = 8)
+                        )
+                )
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.onExerciseChange(repsExercise)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                "12",
+                viewModel.uiState.value.repsText,
+                "Пустые повторы предзаполняются повторами последней записи"
+            )
+        }
+
+    /** Нулевая длительность отсутствует — предзаполняется из последней записи TIME. */
+    @Test
+    fun on_exercise_change_when_time_exercise_with_history_then_prefills_duration() =
+        runTest(testDispatcher) {
+            // Given
+            repository.historyByExerciseId =
+                mapOf(
+                    timeExercise.id to
+                        listOf(historyEntry(exerciseId = timeExercise.id, durationSec = 90))
+                )
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.onExerciseChange(timeExercise)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                90,
+                viewModel.uiState.value.durationSec,
+                "Невыбранная длительность предзаполняется из последней записи"
+            )
+        }
+
+    /** Введённое значение не перезаписывается при смене упражнения (spec «Непустое поле»). */
+    @Test
+    fun on_exercise_change_when_reps_entered_then_keeps_user_value_on_same_type_switch() =
+        runTest(testDispatcher) {
+            // Given — оба упражнения с историей; в первом поле предзаполнилось,
+            // пользователь ввёл своё значение
+            repository.historyByExerciseId =
+                mapOf(
+                    repsExercise.id to listOf(historyEntry(exerciseId = repsExercise.id, reps = 12)),
+                    repsExercise2.id to listOf(historyEntry(exerciseId = repsExercise2.id, reps = 15))
+                )
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onExerciseChange(repsExercise)
+            advanceUntilIdle()
+            viewModel.onRepsChange("5")
+            advanceUntilIdle()
+
+            // When — смена на другое REPS-упражнение
+            viewModel.onExerciseChange(repsExercise2)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                "5",
+                viewModel.uiState.value.repsText,
+                "Введённые повторы не перезаписываются предзаполнением"
+            )
+        }
+
+    /** У упражнения без записей поля остаются пустыми (spec «Нет прошлых записей»). */
+    @Test
+    fun on_exercise_change_when_exercise_without_history_then_fields_stay_empty() =
+        runTest(testDispatcher) {
+            // Given — истории нет ни у одного упражнения
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.onExerciseChange(repsExercise)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals("", viewModel.uiState.value.repsText, "Без истории повторы пустые")
+            assertNull(viewModel.uiState.value.durationSec, "Без истории длительность не выбрана")
+            assertEquals("0", viewModel.uiState.value.weightText, "Без истории вес — дефолт 0")
+        }
+
+    /**
+     * Вес предзаполняется, когда записи с весом составляют строго больше
+     * половины; берётся вес последней записи С весом (spec «Большинство
+     * записей с весом» + «Последняя без веса — берётся более ранняя с весом»).
+     */
+    @Test
+    fun on_exercise_change_when_weighted_majority_then_prefills_weight_of_latest_weighted() =
+        runTest(testDispatcher) {
+            // Given — 3 записи с весом из 4; новейшая без веса
+            repository.historyByExerciseId =
+                mapOf(
+                    repsExercise.id to
+                        listOf(
+                            historyEntry(exerciseId = repsExercise.id, weightKg = null),
+                            historyEntry(exerciseId = repsExercise.id, weightKg = 25.0),
+                            historyEntry(exerciseId = repsExercise.id, weightKg = 20.0),
+                            historyEntry(exerciseId = repsExercise.id, weightKg = 10.0)
+                        )
+                )
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.onExerciseChange(repsExercise)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                "25.0",
+                viewModel.uiState.value.weightText,
+                "Вес — из последней записи с положительным весом (3 из 4 с весом)"
+            )
+        }
+
+    /** Ровно половина с весом (ноль весом не считается) — предзаполнения нет. */
+    @Test
+    fun on_exercise_change_when_weighted_half_or_less_then_keeps_default_zero() =
+        runTest(testDispatcher) {
+            // Given — 2 из 4 с весом; weightKg = 0.0 записью с весом НЕ считается
+            repository.historyByExerciseId =
+                mapOf(
+                    repsExercise.id to
+                        listOf(
+                            historyEntry(exerciseId = repsExercise.id, weightKg = 0.0),
+                            historyEntry(exerciseId = repsExercise.id, weightKg = 0.0),
+                            historyEntry(exerciseId = repsExercise.id, weightKg = 10.0),
+                            historyEntry(exerciseId = repsExercise.id, weightKg = 20.0)
+                        )
+                )
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.onExerciseChange(repsExercise)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                "0",
+                viewModel.uiState.value.weightText,
+                "Ровно половина с весом — предзаполнения нет (остаётся 0)"
+            )
+        }
+
+    /** Правило веса одинаково для TIME: длительность и вес предзаполняются вместе. */
+    @Test
+    fun on_exercise_change_when_time_exercise_weighted_majority_then_prefills_weight() =
+        runTest(testDispatcher) {
+            // Given — единственная TIME-запись с длительностью и весом (1 из 1)
+            repository.historyByExerciseId =
+                mapOf(
+                    timeExercise.id to
+                        listOf(
+                            historyEntry(
+                                exerciseId = timeExercise.id,
+                                durationSec = 90,
+                                weightKg = 5.0
+                            )
+                        )
+                )
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.onExerciseChange(timeExercise)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(90, viewModel.uiState.value.durationSec, "Длительность предзаполнена")
+            assertEquals(
+                "5.0",
+                viewModel.uiState.value.weightText,
+                "Вес предзаполняется и для TIME-упражнения"
+            )
+        }
+
+    /**
+     * Введённое пользователем значение (в том числе 0) не перезаписывается —
+     * флаг `weightTouched` (design D5, spec «Введённый пользователем вес»).
+     */
+    @Test
+    fun on_weight_change_then_entered_weight_not_overwritten_on_exercise_switch() =
+        runTest(testDispatcher) {
+            // Given — оба упражнения с большинством записей с весом
+            repository.historyByExerciseId =
+                mapOf(
+                    repsExercise.id to
+                        listOf(
+                            historyEntry(exerciseId = repsExercise.id, weightKg = 25.0),
+                            historyEntry(exerciseId = repsExercise.id, weightKg = 20.0)
+                        ),
+                    repsExercise2.id to
+                        listOf(
+                            historyEntry(exerciseId = repsExercise2.id, weightKg = 30.0),
+                            historyEntry(exerciseId = repsExercise2.id, weightKg = 20.0)
+                        )
+                )
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onExerciseChange(repsExercise)
+            advanceUntilIdle()
+            assertEquals("25.0", viewModel.uiState.value.weightText, "Пре-условие: вес предзаполнен")
+
+            // When — пользователь ввёл 0 и сменил упражнение
+            viewModel.onWeightChange("0")
+            advanceUntilIdle()
+            viewModel.onExerciseChange(repsExercise2)
+            advanceUntilIdle()
+
+            // Then — введённый 0 сохранён
+            assertEquals(
+                "0",
+                viewModel.uiState.value.weightText,
+                "Введённый 0 не перезаписывается предзаполнением"
+            )
+        }
+
+    /**
+     * Гонка «запрос → смена упражнения → ответ»: результат истории первого
+     * упражнения не применяется к новому (design D3, проверка (а)).
+     */
+    @Test
+    fun on_exercise_change_when_history_arrives_after_switch_then_not_applied_to_new_exercise() =
+        runTest(testDispatcher) {
+            // Given — история только у первого упражнения; ответ задержан
+            repository.historyByExerciseId =
+                mapOf(repsExercise.id to listOf(historyEntry(exerciseId = repsExercise.id, reps = 12)))
+            repository.exerciseHistoryDelayMs = 1_000L
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — смена упражнения до ответа репозитория
+            viewModel.onExerciseChange(repsExercise)
+            viewModel.onExerciseChange(repsExercise2)
+            advanceUntilIdle()
+
+            // Then — значение первого упражнения не приехало во второе
+            assertEquals(
+                "",
+                viewModel.uiState.value.repsText,
+                "Запоздавший ответ истории не применяется к новому упражнению"
+            )
+        }
+
+    /** В режиме редактирования предзаполнения из истории нет (design D3, проверка (в)). */
+    @Test
+    fun on_exercise_change_in_edit_mode_then_no_history_prefill() =
+        runTest(testDispatcher) {
+            // Given — загруженная запись (10 повторов, 12.5 кг), у нового
+            // упражнения история 15 повторов / 25 кг
+            repository.entryById = originalEntry
+            repository.historyByExerciseId =
+                mapOf(
+                    repsExercise2.id to
+                        listOf(
+                            historyEntry(exerciseId = repsExercise2.id, reps = 15, weightKg = 25.0)
+                        )
+                )
+            val viewModel = createViewModel(entryId = originalEntry.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.onExerciseChange(repsExercise2)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                "10",
+                viewModel.uiState.value.repsText,
+                "В режиме редактирования повторы из истории не подставляются"
+            )
+            assertEquals(
+                "12.5",
+                viewModel.uiState.value.weightText,
+                "В режиме редактирования вес остаётся из записи, не подменяется историей"
+            )
         }
 }

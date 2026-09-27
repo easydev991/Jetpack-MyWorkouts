@@ -1457,4 +1457,73 @@ class RoomWorkoutDataRepositoryTest {
             )
             assertNotNull(bySubstring.firstOrNull { it.name == "Подтягивания" })
         }
+
+    // Снимок истории упражнения (entry-prefilled-reps-and-duration, задача 1.3).
+
+    /** Шаблон записи для тестов истории: поля переопределяются copy-стилем. */
+    private fun historyEntry(
+        exerciseId: Long,
+        date: Long,
+        reps: Int? = 10,
+        weightKg: Double? = null,
+        durationSec: Int? = null,
+        createdAt: Long = 1L
+    ): ExerciseEntry =
+        ExerciseEntry(
+            id = 0L,
+            exerciseId = exerciseId,
+            workoutId = null,
+            date = date,
+            sets = 4,
+            reps = reps,
+            weightKg = weightKg,
+            durationSec = durationSec,
+            comment = null,
+            createdAt = createdAt,
+            modifiedAt = createdAt
+        )
+
+    /**
+     * `exerciseHistory` возвращает доменные записи в порядке снимка DAO —
+     * `date DESC` (design D2): «последняя запись» упражнения — первый элемент.
+     */
+    @Test
+    fun exerciseHistory_withEntries_thenReturnsDomainEntriesNewestFirst() =
+        runBlocking {
+            // Given — три записи «Подтягиваний» (id = 1 из setUp) с разными датами
+            val oldest = 1_700_000_000_000L
+            val middle = 1_700_000_100_000L
+            val newest = 1_700_000_200_000L
+            repository.addEntry(historyEntry(exerciseId = 1L, date = oldest))
+            repository.addEntry(historyEntry(exerciseId = 1L, date = newest))
+            repository.addEntry(historyEntry(exerciseId = 1L, date = middle))
+
+            // When
+            val result = repository.exerciseHistory(exerciseId = 1L)
+
+            // Then
+            assertTrue(result.isSuccess)
+            assertEquals(
+                "История доменных записей упорядочена date DESC",
+                listOf(newest, middle, oldest),
+                result.getOrThrow().map { it.date }
+            )
+        }
+
+    /** Упражнение без записей — `success(emptyList())`, не failure. */
+    @Test
+    fun exerciseHistory_whenNoEntries_thenReturnsSuccessEmptyList() =
+        runBlocking {
+            // Given — «Планка» (id = 2 из setUp), записей нет
+
+            // When
+            val result = repository.exerciseHistory(exerciseId = 2L)
+
+            // Then
+            assertTrue("Ожидается success, не failure", result.isSuccess)
+            assertTrue(
+                "Пустая история — пустой список",
+                result.getOrThrow().isEmpty()
+            )
+        }
 }
