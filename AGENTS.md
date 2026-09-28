@@ -30,16 +30,18 @@ detekt-предупреждения исправляются до заверше
 `make help` — список целей. Перед коммитом:
 `make format && make lint && make test`.
 
-Флейворы дистрибуции: `github` (по умолчанию) и `rustore` (заглушка),
-выбор — `FLAVOR=`: `make build FLAVOR=rustore`. Детали —
+Флейворы дистрибуции: `github` (дефолт сборки) и `rustore` (RuStore —
+основной канал релизов), выбор — `FLAVOR=`: `make build FLAVOR=rustore`.
+Релизный процесс — `docs/deployment.md`; реализация флейворов —
 `docs/plans/flavors-implementation.md`.
 
 `make install` ставит debug-APK на подключённый adb-девайс
 (`./gradlew install$(FLAVOR_TITLE)Debug`).
 
 `make apk` — подписанный release-APK в корне репо
-(`myworkouts{VERSION_CODE}.apk`); при первом запуске сам подтягивает
-секреты из приватного репозитория `android-secrets` (`_load_secrets`).
+(`myworkouts{VERSION_CODE}.apk`); секреты из приватного репозитория
+`android-secrets` подтягиваются автоматически (`_ensure_secrets` —
+клонирует их, только если `.secrets/`/`google-services.json` отсутствуют).
 
 ---
 
@@ -123,9 +125,11 @@ detekt-предупреждения исправляются до заверше
 
 `:screenshot-tests/` — инструментальный модуль (`com.android.test`,
 `targetProjectPath = ":app"`, без своих flavors) для генерации
-скриншотов маркетплейса: `ScreenshotsTest` ставит demo-данные,
-снимает главный экран и пишет PNG (`Bitmap.compress` в самом тесте);
-запуск — `make screenshots{,-ru,-en}`.
+скриншотов маркетплейса: `ScreenshotsTest` ставит demo-данные, снимает
+6 сценариев (список тренировок, создание и сохранение записи,
+статистика, рекорды, активность) и пишет PNG (`Bitmap.compress` в самом
+тесте); имена PNG стабильны — README ссылается на них напрямую.
+Запуск — `make screenshots{,-ru,-en}`.
 
 `app/src/main/java/com/myworkouts/`:
 - `MainActivity.kt`
@@ -151,10 +155,12 @@ detekt-предупреждения исправляются до заверше
   (релизный маппинг в `Bundle`) и `NoopAnalyticsProvider` (debug)
 - `crash/` — `CrashlyticsHelper` (object, `logException` в `try/catch`,
   `setCustomKey` для контекста; используется из use-cases и VM)
-- `navigation/Screen.kt` (только `route`) + `BottomTab` + `BottomTabs`
+- `navigation/Screen.kt` — маршруты + `BottomTab`/`BottomTabs` (в одном
+  файле, «только route» уже не про него)
 - `ui/screens/{main,entry,more,root,appearance,appdata,exercises,overview}/`
-- `ui/components/` — общие composable: `SettingToggleRow` (экраны
-  настроек), `ExerciseListItemRow`, `EntryListItemRow` (строки списков)
+- `ui/components/` — общий composable `SettingToggleRow` (экраны
+  настроек); строки списков живут у своих экранов:
+  `main/EntryListItemRow`, `exercises/ExerciseListItemRow`
 - `ui/state/` — UiState-класс, по одному на экран
 - `ui/theme/{Color,Theme,Type}.kt` ← `Type`, не `Typography`
 - `ui/util/` — `DurationFormatter.kt` (main + entry), `SectionDateFormatter.kt`
