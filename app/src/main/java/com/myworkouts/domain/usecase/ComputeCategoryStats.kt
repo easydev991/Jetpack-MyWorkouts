@@ -44,20 +44,14 @@ data class CategoryStatsResult(
 )
 
 /**
- * Старт периода статистики включительно (overview-screen, design
- * Decision 3): день = сегодня, неделя = ISO-неделя с понедельника,
- * месяц и год — календарные. Системная зона.
+ * Старт скользящего окна периода статистики включительно (overview-screen,
+ * design Decision 3): окно фиксированной длины [StatsPeriod.days] от сегодня
+ * назад, заканчивается сегодня. Системная зона.
  */
 internal fun statsPeriodStart(
     period: StatsPeriod,
     today: LocalDate
-): LocalDate =
-    when (period) {
-        StatsPeriod.DAY -> today
-        StatsPeriod.WEEK -> today.minusDays((today.dayOfWeek.value - 1).toLong())
-        StatsPeriod.MONTH -> today.withDayOfMonth(1)
-        StatsPeriod.YEAR -> today.withDayOfYear(1)
-    }
+): LocalDate = today.minusDays((period.days - 1).toLong())
 
 /**
  * Календарный день записи (epoch millis → LocalDate), паттерн

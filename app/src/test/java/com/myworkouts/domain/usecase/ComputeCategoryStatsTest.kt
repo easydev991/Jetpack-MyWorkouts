@@ -67,54 +67,63 @@ class ComputeCategoryStatsTest {
     }
 
     @Test
-    fun week_period_starts_monday_includes_today_excludes_sunday() {
-        // Given — вс предыдущей недели, пн текущей (= today) и today+1
+    fun week_period_is_last_seven_days_including_today() {
+        // Given — 4 граничные точки окна [today − 6, today], разные категории
+        // для явной проверки in/out
         val entries =
             listOf(
-                entry(id = 1L, date = millis(today.minusDays(1))),
-                entry(id = 2L, date = millis(today)),
-                entry(id = 3L, date = millis(today.plusDays(1)))
+                entry(id = 1L, category = ExerciseCategory.PULL, date = millis(today.minusDays(7))),
+                entry(id = 2L, category = ExerciseCategory.PUSH, date = millis(today.minusDays(6))),
+                entry(id = 3L, category = ExerciseCategory.LEGS, date = millis(today)),
+                entry(id = 4L, category = ExerciseCategory.CORE, date = millis(today.plusDays(1)))
             )
 
         // When
         val result = computeCategoryStats(entries, StatsPeriod.WEEK, today)
 
-        // Then — окно [пн 14.09, today]; воскресенье и «завтра» не входят
-        val totals = result.categoryTotals
-        assertEquals(1, totals.size, "Только запись сегодняшнего дня в неделе")
-        assertEquals(3, totals.first().totalSets, "Подходы = 3")
+        // Then — окно скользящее: d-7 вне, d-6 внутри, today внутри, завтра вне
+        val categories = result.categoryTotals.map { it.category }.toSet()
+        assertEquals(setOf(ExerciseCategory.PUSH, ExerciseCategory.LEGS), categories, "В окне только d-6 и today")
     }
 
     @Test
-    fun month_period_includes_first_day_excludes_last_of_previous() {
-        // Given — записи 1 сентября и 31 августа
+    fun month_period_is_last_thirty_days_including_today() {
+        // Given — 15.08 (today − 30, вне), 16.08 (today − 29, ровно граница), today
         val entries =
             listOf(
-                entry(id = 1L, date = millis(LocalDate.of(2026, 9, 1))),
-                entry(id = 2L, date = millis(LocalDate.of(2026, 8, 31)))
+                entry(id = 1L, category = ExerciseCategory.PULL, date = millis(LocalDate.of(2026, 8, 15))),
+                entry(id = 2L, category = ExerciseCategory.PUSH, date = millis(LocalDate.of(2026, 8, 16))),
+                entry(id = 3L, category = ExerciseCategory.LEGS, date = millis(today))
             )
 
         // When
         val result = computeCategoryStats(entries, StatsPeriod.MONTH, today)
 
-        // Then — календарный месяц: только 1 сентября
-        assertEquals(1, result.categoryTotals.size, "Только запись 1 сентября в месяце")
+        // Then — окно 30 дней: 15.08 вне, 16.08 и today внутри
+        val categories = result.categoryTotals.map { it.category }.toSet()
+        assertEquals(setOf(ExerciseCategory.PUSH, ExerciseCategory.LEGS), categories, "В окне только 16.08 и today")
     }
 
     @Test
-    fun year_period_includes_january_excludes_last_year() {
-        // Given — записи в январе текущего года и в декабре прошлого
+    fun year_period_is_last_365_days_including_today() {
+        // Given — 14.09.2025 (today − 365, вне), 15.09.2025 (today − 364, граница), today
         val entries =
             listOf(
-                entry(id = 1L, date = millis(LocalDate.of(2026, 1, 5))),
-                entry(id = 2L, date = millis(LocalDate.of(2025, 12, 31)))
+                entry(id = 1L, category = ExerciseCategory.PULL, date = millis(LocalDate.of(2025, 9, 14))),
+                entry(id = 2L, category = ExerciseCategory.PUSH, date = millis(LocalDate.of(2025, 9, 15))),
+                entry(id = 3L, category = ExerciseCategory.LEGS, date = millis(today))
             )
 
         // When
         val result = computeCategoryStats(entries, StatsPeriod.YEAR, today)
 
-        // Then — календарный год: только январь 2026
-        assertEquals(1, result.categoryTotals.size, "Только запись января 2026 в году")
+        // Then — окно 365 дней: 14.09.2025 вне, 15.09.2025 и today внутри
+        val categories = result.categoryTotals.map { it.category }.toSet()
+        assertEquals(
+            setOf(ExerciseCategory.PUSH, ExerciseCategory.LEGS),
+            categories,
+            "В окне только 15.09.2025 и today"
+        )
     }
 
     @Test

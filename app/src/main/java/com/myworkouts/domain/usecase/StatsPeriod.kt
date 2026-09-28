@@ -4,16 +4,20 @@ import androidx.annotation.StringRes
 import com.myworkouts.R
 
 /**
- * Календарный период вкладки «Статистика» (overview-screen, design
- * Decision 3): день = сегодня, неделя = ISO-неделя с понедельника,
- * месяц и год — календарные; системная зона. Соседствует с калькуляторами —
+ * Скользящее окно периода вкладки «Статистика» (overview-screen, design
+ * Decision 3): окно фиксированной длины [days] от сегодня назад, оканчивается
+ * сегодня включительно, системная зона. Соседствует с калькуляторами —
  * используется расчётами и ViewModel, Compose его не хранит.
+ *
+ * @property days Длина окна в днях
  */
+@Suppress("MagicNumber")
 enum class StatsPeriod(
+    val days: Int,
     @StringRes val labelResId: Int
 ) {
-    DAY(R.string.overview_period_day),
-    WEEK(R.string.overview_period_week),
-    MONTH(R.string.overview_period_month),
-    YEAR(R.string.overview_period_year)
+    DAY(1, R.string.overview_period_day),
+    WEEK(7, R.string.overview_period_week),
+    MONTH(30, R.string.overview_period_month),
+    YEAR(365, R.string.overview_period_year)
 }
