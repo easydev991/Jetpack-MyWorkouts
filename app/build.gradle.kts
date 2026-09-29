@@ -12,7 +12,7 @@ plugins {
     alias(libs.plugins.detekt)
 }
 
-// Секреты подписи (план flavors-implementation.md): .secrets/secrets.properties
+// Секреты подписи (docs/deployment.md, «Секреты для подписи»): .secrets/secrets.properties
 // загружается make-целью _load_secrets из приватного репозитория
 // android-secrets. KEYSTORE_FILE обязателен — его записывает _load_secrets
 // из $(APP_NAME); отсутствие означает сломанное окружение.
@@ -38,10 +38,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Флейворы дистрибуции (план flavors-implementation.md): без суффиксов
-    // applicationId/versionName — один package для всех каналов, как в
-    // JetpackDays. RUSTORE_FEATURES — компайл-тайм-гейт для кнопок
-    // «Оценить приложение»/«Поделиться приложением» (more-screen).
+    // Флейворы дистрибуции: без суффиксов applicationId/versionName — один
+    // package для всех каналов. RUSTORE_FEATURES —
+    // компайл-тайм-гейт для кнопок «Оценить приложение»/«Поделиться
+    // приложением» (more-screen). Каналы — docs/deployment.md.
     flavorDimensions += "distribution"
     productFlavors {
         create("github") {

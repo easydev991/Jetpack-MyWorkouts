@@ -35,8 +35,8 @@ printf 'fake-aab' > app/build/outputs/bundle/rustoreRelease/app-rustore-release.
 exit 0
 """
 
-# Нейтральный dummy: тест не зависит от дефолта Makefile, а копия
-# проводки из JetpackDays не требует правок app-id.
+# Нейтральный dummy: тест не зависит от дефолта Makefile
+# и не требует правок app-id.
 _DUMMY_APP_ID = "com.example.test"
 
 

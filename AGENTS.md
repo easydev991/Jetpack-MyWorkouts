@@ -32,8 +32,8 @@ detekt-предупреждения исправляются до заверше
 
 Флейворы дистрибуции: `github` (дефолт сборки) и `rustore` (RuStore —
 основной канал релизов), выбор — `FLAVOR=`: `make build FLAVOR=rustore`.
-Релизный процесс — `docs/deployment.md`; реализация флейворов —
-`docs/plans/flavors-implementation.md`.
+Релизный процесс и детали флейворов — `docs/deployment.md`.
+В Android Studio flavor выбирается в Run Configuration.
 
 `make install` ставит debug-APK на подключённый adb-девайс
 (`./gradlew install$(FLAVOR_TITLE)Debug`).

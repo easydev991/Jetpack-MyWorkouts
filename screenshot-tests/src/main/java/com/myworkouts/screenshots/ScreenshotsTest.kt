@@ -93,7 +93,7 @@ class ScreenshotsTest {
      * краснеет (живые интеграционные тесты не ждут чужих данных в
      * списке; проверено: без уборки падают
      * `EntryListLiveUpdateIntegrationTest`). Паттерн — `@After
-     * tearDown` в `ScreenshotsTest` JetpackDays: `deleteAllData`
+     * tearDown`: `deleteAllData`
      * восстанавливает стандартный набор, состояние БД — как после
      * ручного «удалить все данные».
      */

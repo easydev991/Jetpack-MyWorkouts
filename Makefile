@@ -7,7 +7,7 @@ RED=\033[1;31m
 BOLD=\033[1m
 RESET=\033[0m
 
-# Флейвор дистрибуции и секреты (план flavors-implementation.md)
+# Флейвор дистрибуции и секреты (см. docs/deployment.md)
 FLAVOR ?= github
 FLAVOR_TITLE := $(if $(filter rustore,$(FLAVOR)),Rustore,Github)
 ifeq ($(filter rustore github,$(FLAVOR)),)

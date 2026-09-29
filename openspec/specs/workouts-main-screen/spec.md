@@ -233,7 +233,7 @@ SHALL допускаться.
 #### Scenario: Insets do not double-subtract
 
 - **WHEN** `MainScreen` is rendered inside `RootScreen`
-- **THEN** the FAB sits at the same vertical offset as in the `JetpackDays` reference
+- **THEN** the FAB sits at the same vertical offset as in the [`Jetpack-Days`](https://github.com/easydev991/Jetpack-Days) reference
 - **AND** content body sits flush with the `NavigationBar` top edge via `paddingValues`
 
 ### Requirement: Workouts tab labels are localized ru/en

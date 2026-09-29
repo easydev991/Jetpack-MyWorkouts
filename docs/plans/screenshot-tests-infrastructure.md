@@ -28,8 +28,8 @@
 - Уже есть: `app/src/androidTest/` (`make android-test` через
   `:app:connectedGithubDebugAndroidTest`),
   `.opencode/skills/kotlin-ui-testing/`, `kotlin-testing`, `Makefile`,
-  GitHub + RuStore flavors (`github` — дефолт; см. `AGENTS.md`,
-  `docs/plans/flavors-implementation.md`).
+   GitHub + RuStore flavors (`github` — дефолт; см. `AGENTS.md`,
+   `docs/deployment.md`).
 - `fastlane/metadata/android/` уже создан для `whats_new` —
   `images/phoneScreenshots/` со smoke-PNG генерировался при первой
   проверке (локально, в git не попал — канон про хранение: Этап 5);
@@ -464,9 +464,8 @@
   `2026-09-17-firebase-crashlytics-mvp` (SDK + gradle-обвязка),
   `2026-09-18-rustore-flavor-buttons` (flavors), `2026-09-17-seed-on-destructive-migration`.
   То есть само наличие OpenSpec-записи — **не** признак «это фича».
-- Инфраструктурные прецеденты через `docs/plans/` —
-  `docs/plans/flavors-implementation.md`, `docs/plans/ui-tests-optimization.md`,
-  `docs/plans/fix-ide-warnings.md`. То есть и OpenSpec, и `docs/plans/`
+- Инфраструктурный прецедент через `docs/plans/` — сам этот документ.
+  То есть и OpenSpec, и `docs/plans/`
   пригодны для инфраструктуры в зависимости от контекста.
 - Скриншоты — это артефакт для маркетплейса, не пользовательская
   функциональность. Когда появятся сценарии — если сценарий иллюстрирует
