@@ -19,4 +19,4 @@
 
 - [x] 4.1 `make format && make lint && make test` — один прогон, все зелёные (отчёт `scripts/test_report.py` в выводе)
 - [x] 4.2 `make emulator-fast`, затем `make android-test` — один прогон, все зелёные (отчёт `scripts/test_report.py` в выводе). Примечание: вместо полного `make android-test` — точечные прогоны задетых классов по правилу пользователя (change не трогает экраны; production-путь `create()` задет только в классах, запускающих реальное приложение): WorkoutDatabaseTest 11/11, EntryListLiveUpdateIntegrationTest 3/3, ExerciseCreateLiveUpdateIntegrationTest 1/1, RootScreenTest 2/2, MainScreenDetailCardRecreateTest 1/1
-- [ ] 4.3 Заархивировать изменение: `openspec archive release-migration-no-destructive-fallback`
+- [x] 4.3 Заархивировать изменение: `openspec archive release-migration-no-destructive-fallback`
