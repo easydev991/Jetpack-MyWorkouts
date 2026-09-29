@@ -25,12 +25,10 @@ import androidx.room.PrimaryKey
  *   Kotlin-дефолт конструктора (не SQL DEFAULT), именованные вызовы
  *   без поля продолжают компилироваться
  * @property isArchived Флаг архивации: `true` — скрыто из каталога,
- *   `false` — активно. SQL DEFAULT `0` — существующие строки при
- *   деструктивном пересоздании схемы остаются активными (design.md
- *   exercises-archive Decision 1)
+ *   `false` — активно. SQL DEFAULT `0` — существующие строки остаются
+ *   активными (design.md exercises-archive Decision 1)
  * @property iconNumber Опциональный номер иконки (`icon_number` INTEGER,
- *   nullable, без SQL DEFAULT — деструктивное пересоздание и так даёт
- *   `NULL` в существующих строках; exercise-icon-mvp)
+ *   nullable, без SQL DEFAULT; exercise-icon-mvp)
  */
 @Entity(tableName = "exercises")
 data class ExerciseEntity(

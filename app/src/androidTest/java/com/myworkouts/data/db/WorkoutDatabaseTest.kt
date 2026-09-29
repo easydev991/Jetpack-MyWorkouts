@@ -1,6 +1,8 @@
 package com.myworkouts.data.db
 
 import android.content.Context
+import android.database.DatabaseUtils
+import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -13,6 +15,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -30,9 +33,9 @@ import java.util.Locale
  * предсказуемо (AVD по умолчанию может иметь английскую локаль).
  * Локализация как таковая покрыта [StandardExercisesLocalizationTest].
  *
- * Исключение — тест деструктивной миграции: он работает с файловой БД
- * на production-имени [WorkoutDatabase.DATABASE_NAME] (см. KDoc теста),
- * файл удаляется в [tearDown].
+ * Исключение — тест отсутствия деструктивного фоллбека: он работает
+ * с файловой БД на production-имени [WorkoutDatabase.DATABASE_NAME]
+ * (см. KDoc теста), файл удаляется в [tearDown].
  */
 @RunWith(AndroidJUnit4::class)
 class WorkoutDatabaseTest {
@@ -61,7 +64,7 @@ class WorkoutDatabaseTest {
     @After
     fun tearDown() {
         database.close()
-        // Файловый тест деструктивной миграции работает на production-имени —
+        // Файловый тест отсутствия фоллбека работает на production-имени —
         // не оставляем после себя изменённый файл данных приложения
         ruContext().deleteDatabase(WorkoutDatabase.DATABASE_NAME)
     }
@@ -314,13 +317,13 @@ class WorkoutDatabaseTest {
         }
 
     @Test
-    fun destructiveMigration_whenUserVersionDowngraded_thenReseedsThirteenStandardExercises() {
+    fun noDestructiveFallback_whenUserVersionDowngraded_thenThrowsAndKeepsData() {
         val ctx = ruContext()
 
-        // Given — файловая БД без prepopulate. Имя файла — production-имя:
+        // Given — файловая БД на production-имени DATABASE_NAME:
         // WorkoutDatabase.create(...) открывает DATABASE_NAME и не принимает
         // имени в параметрах, изолированное имя тесту недоступно. Гигиена —
-        // удаление файла в tearDown. Схема создаётся сразу в v3 (без
+        // удаление файла в tearDown. Plain-схема создаётся сразу в v3 (без
         // seed-callback), в неё вставляется пользовательская строка, затем
         // версия файла занижается до 2.
         database.close()
@@ -332,50 +335,56 @@ class WorkoutDatabaseTest {
         plain.openHelper.writableDatabase.execSQL(
             "INSERT INTO exercises " +
                 "(name, category, is_custom, comment, created_at, measured_by, icon_number) " +
-                "VALUES ('Пользовательское до миграции', 'PUSH', 1, NULL, 1, 'REPS', NULL)"
+                "VALUES ('Пользовательское до отката версии', 'PUSH', 1, NULL, 1, 'REPS', NULL)"
         )
         plain.openHelper.writableDatabase.execSQL("PRAGMA user_version = 2")
         plain.close()
 
-        // When — переоткрытие production-путём: schema v3, файл в v2 →
-        // fallbackToDestructiveMigration, tables пересоздаются; Room вызывает
-        // onDestructiveMigration, но НЕ onCreate — до фикса каталог пустой
+        // When — переоткрытие production-путём: schema v3, файл в v2,
+        // зарегистрированных миграций нет → Room обязан бросить исключение
+        // при первом открытии (build() базу не открывает, инстанс присваиваем
+        // полю — tearDown закроет его)
         database =
             WorkoutDatabase.create(
                 context = ctx,
                 standardExercises = standardExercises(ctx)
             )
 
-        // Then — после деструктивной миграции стандартный набор восстановлен:
-        // ровно 13 строк с is_custom = 0 (spec-сценарий «Деструктивная
-        // миграция восстанавливает стандартный набор»)
-        val standardCount = countExercisesByCustomFlag(isCustom = false)
-        assertEquals(
-            "После деструктивной миграции каталог должен содержать 13 стандартных упражнений",
-            13L,
-            standardCount
-        )
+        assertThrows(
+            "Без миграции открытие БД с чужой версией должно падать исключением",
+            IllegalStateException::class.java
+        ) {
+            database.openHelper.writableDatabase
+        }
+        // Неудачный инстанс закрываем до raw-проверки файла (повторный close
+        // в tearDown безопасен — SQLiteOpenHelper идемпотентен)
+        database.close()
 
-        // Then — пользовательские данные до миграции не восстанавливаются
-        // (AND-условие сценария: миграция остаётся деструктивной)
-        val customCount = countExercisesByCustomFlag(isCustom = true)
-        assertEquals(
-            "Пользовательские упражнения не должны восстанавливаться после деструктивной миграции",
-            0L,
-            customCount
-        )
+        // Then — файл не тронут: версия по-прежнему 2, пользовательская
+        // строка на месте, пересоздания не было. Raw-доступ мимо Room,
+        // без валидации схемы (spec-сценарий «Изменение схемы без миграции
+        // отклоняется»)
+        val raw =
+            SQLiteDatabase.openDatabase(
+                ctx.getDatabasePath(WorkoutDatabase.DATABASE_NAME).absolutePath,
+                null,
+                SQLiteDatabase.OPEN_READWRITE
+            )
+        raw.use { db ->
+            assertEquals(
+                "Версия файла БД не должна измениться при неудачном открытии",
+                2,
+                db.version
+            )
+            assertEquals(
+                "Пользовательские данные должны остаться в файле без изменений",
+                1L,
+                DatabaseUtils.longForQuery(
+                    db,
+                    "SELECT count(*) FROM exercises WHERE is_custom = 1",
+                    null
+                )
+            )
+        }
     }
-
-    /** Считает строки `exercises` с заданным значением `is_custom`. */
-    private fun countExercisesByCustomFlag(isCustom: Boolean): Long =
-        database
-            .openHelper
-            .readableDatabase
-            .query(
-                "SELECT count(*) FROM exercises WHERE is_custom = " +
-                    if (isCustom) "1" else "0"
-            ).use { cursor ->
-                assertTrue("Ожидается строка результата count(*)", cursor.moveToFirst())
-                cursor.getLong(0)
-            }
 }

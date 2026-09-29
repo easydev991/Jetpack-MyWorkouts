@@ -138,9 +138,10 @@ detekt-предупреждения исправляются до заверше
   `RoomWorkoutDataRepository`)
 - `data/db/` — Room: entities, DAOs, `Mappers`, `WorkoutDatabase`,
   стандартные упражнения. Смена схемы — bump `version` + коммит
-  экспортированного JSON из `app/schemas/`; до первого релиза
-  `fallbackToDestructiveMigration(dropAllTables = false)` пересоздаёт БД с повторным prepopulate
-  стандартного набора (тот же список используется и в `deleteAllData`)
+  экспортированного JSON из `app/schemas/` + `Migration` в
+  `addMigrations(...)` (без подходящей миграции Room при открытии
+  бросает `IllegalStateException`); prepopulate стандартного набора —
+  при первом создании БД (тот же список используется и в `deleteAllData`)
 - `data/preferences/AppSettingsDataStore.kt`
 - `data/repository/` — `WorkoutDataRepository`, `RoomWorkoutDataRepository`,
   `EntryValidator`, `DeletionExceptions`
