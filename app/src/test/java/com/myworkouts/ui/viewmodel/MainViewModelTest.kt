@@ -3,6 +3,7 @@ package com.myworkouts.ui.viewmodel
 import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
+import com.myworkouts.crash.CrashlyticsHelper
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
@@ -10,6 +11,9 @@ import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.ui.state.MainUiState
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -52,6 +56,9 @@ private class MainViewModelFakeRepository(
     /** Идентификаторы, переданные в [deleteEntry], в порядке вызова. */
     val deletedIds: MutableList<Long> = mutableListOf()
 
+    /** Сценарий провала для теста ошибки; по умолчанию успех. */
+    var deleteEntryResult: Result<Unit> = Result.success(Unit)
+
     override fun exercises(query: String): Flow<List<Exercise>> = catalog
 
     override fun entries(): Flow<List<EntryListItem>> = entriesFlow
@@ -70,6 +77,7 @@ private class MainViewModelFakeRepository(
 
     override suspend fun deleteEntry(id: Long): Result<Unit> {
         deletedIds += id
+        if (deleteEntryResult.isFailure) return deleteEntryResult
         entriesFlow.value = entriesFlow.value.filterNot { it.id == id }
         return Result.success(Unit)
     }
@@ -332,5 +340,41 @@ class MainViewModelTest {
                 fakeAnalytics.events,
                 "confirmDelete логирует UserAction(DELETE)"
             )
+        }
+
+    /** Провал deleteEntry логируется в Crashlytics, pending остаётся для повтора. */
+    @Test
+    fun confirm_delete_on_failure_then_logs_exception_and_keeps_pending() =
+        runTest(testDispatcher) {
+            // Given — провал репозитория и открытый алерт удаления
+            mockkObject(CrashlyticsHelper)
+            try {
+                val error = IllegalStateException("Сбой БД")
+                repository.deleteEntryResult = Result.failure(error)
+                val viewModel = createViewModel()
+                backgroundScope.launch { viewModel.uiState.collect { } }
+                advanceUntilIdle()
+                viewModel.requestDelete(item1)
+                advanceUntilIdle()
+
+                // When
+                viewModel.confirmDelete()
+                advanceUntilIdle()
+
+                // Then
+                verify {
+                    CrashlyticsHelper.logException(error, "Удаление записи")
+                }
+                val state = viewModel.uiState.value
+                assertTrue(state is MainUiState.Success, "После провала — Success")
+                val success = state as MainUiState.Success
+                assertEquals(
+                    item1.id,
+                    success.pendingDeleteId,
+                    "При провале pendingDeleteId сохраняется для повтора"
+                )
+            } finally {
+                unmockkObject(CrashlyticsHelper)
+            }
         }
 }

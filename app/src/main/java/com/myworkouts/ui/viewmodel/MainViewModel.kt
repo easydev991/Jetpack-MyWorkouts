@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.UserActionType
+import com.myworkouts.crash.CrashlyticsHelper
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.ui.state.MainUiState
@@ -84,9 +85,17 @@ class MainViewModel(
         // Действие на вызове операции, до/независимо от исхода (design D10)
         analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.DELETE))
         viewModelScope.launch {
-            repository.deleteEntry(id).onSuccess {
-                pendingDeleteId.update { null }
-            }
+            repository
+                .deleteEntry(id)
+                .onSuccess {
+                    pendingDeleteId.update { null }
+                }
+                // Провал не виден в UI (pending остаётся для повтора),
+                // поэтому сбой должен дойти до телеметрии — как в
+                // ExercisesViewModel.confirmDelete.
+                .onFailure { error ->
+                    CrashlyticsHelper.logException(error, "Удаление записи")
+                }
         }
     }
 
