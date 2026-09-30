@@ -13,9 +13,13 @@
   Кнопка flavor-нейтральна: рисуется на обоих флейворах.
 - Добавляются строковые ресурсы `github_button` (ru: «GitHub»,
   en: "GitHub").
-- Добавляется file-private функция `openGitHub(context)` — открытие URL
-  через `Intent.ACTION_VIEW` по существующему образцу `rateApp`
-  (`toUri()` + `try/catch ActivityNotFoundException` + `Log.e`).
+- Добавляется private fun `openUrl(context, url, logMessage)` — единый
+  обработчик `Intent.ACTION_VIEW` (`toUri()` +
+  `try/catch ActivityNotFoundException` + `Log.e`); поглощает бывший
+  образец `rateApp` (review-решение владельца, design.md, Decision 2).
+- Все кнопки экрана переводятся на общий composable
+  `ScreenButton(text, onClick)` — `contentPadding` в одном месте
+  (review-решение владельца, design.md, Decision 3).
 - Добавляется preview `GitHubButton` в `MoreScreenPreview.kt`
   (светлая + тёмная, `locale = "ru"`).
 - Навигация, ViewModel, репозиторий, флейворы — без изменений

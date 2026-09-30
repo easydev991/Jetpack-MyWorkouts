@@ -2,14 +2,17 @@
 
 ## Context
 
-`MoreScreen.kt` уже содержит весь нужный паттерн: константы URL на
-верхнем уровне файла (`APP_RATE_URL`, `APP_SHARE_URL`), file-private
+До изменения `MoreScreen.kt` содержал весь нужный паттерн: константы URL
+на верхнем уровне файла (`APP_RATE_URL`, `APP_SHARE_URL`), file-private
 функции открытия (`rateApp` через `Intent.ACTION_VIEW` + `toUri()` +
 `try/catch ActivityNotFoundException` + `Log.e("MoreScreen", …)`),
 private composable-кнопки (`RateAppButton`, `ShareAppButton`) на
-`FilledTonalButton` с `contentPadding = PaddingValues(horizontal =
-dimensionResource(R.dimen.button_horizontal_padding))`. Экран осознанно
-без ViewModel. См. proposal.md (Why) и спеку more-screen
+`FilledTonalButton` с общим `contentPadding`. Экран осознанно
+без ViewModel. В ходе задачи паттерн переработан: функции открытия
+свёрнуты в хелпер `openUrl`, кнопки рендерятся через общий
+`ScreenButton` (Decision 2/3), `ExercisesTabToggle` вынесен в отдельный
+файл (detekt `TooManyFunctions: 11`).
+См. proposal.md (Why) и спеку more-screen
 (Requirement «MoreScreen имеет кнопку-ссылку на GitHub»).
 
 ## Goals / Non-Goals
@@ -45,9 +48,11 @@ dimensionResource(R.dimen.button_horizontal_padding))`. Экран осозна�
    сигнатура единообразна с соседними
    `RateAppButton`/`ShareAppButton` (тоже `(context: Context)`); вариант
    `(text: String, onClick: () -> Unit)` отклонён ради этого же
-   единообразия. Все кнопки экрана (включая `GitHubButton`) рендерятся
-   через общий `ScreenButton(text, onClick)` — единственное место с
-   `contentPadding` (review, 2026-09-30: седьмая копия блока).
+   единообразия. Видимость — `internal`, а не `private`: превью в
+   `MoreScreenPreview.kt` обращается напрямую (по образцу
+   `ExercisesTabToggle`). Все кнопки экрана (включая `GitHubButton`)
+   рендерятся через общий `ScreenButton(text, onClick)` — единственное
+   место с `contentPadding` (review, 2026-09-30: седьмая копия блока).
    Превью — отдельной функцией в `MoreScreenPreview.kt`
    (одно состояние — одно превью, светлая + тёмная, `locale = "ru"`).
 4. **Строка `github_button` = «GitHub» в обеих локалях.** Имя сервиса
