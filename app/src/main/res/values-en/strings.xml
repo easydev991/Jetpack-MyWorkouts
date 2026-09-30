@@ -49,6 +49,9 @@
     <string name="share_the_app">Share app</string>
     <string name="share_text">%1$s - workout tracking app</string>
 
+    <!-- GitHub (both flavors) -->
+    <string name="github_button">GitHub</string>
+
     <!-- Standard exercises (prepopulate catalog, see design.md Decision 4) -->
     <string name="exercise_pullups">Pull-ups</string>
     <string name="exercise_australian_pullups">Australian pull-ups</string>

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.rememberNavController
@@ -46,5 +47,14 @@ internal fun ExercisesTabTogglePreview() {
             ExercisesTabToggle(showExercisesTab = false, onShowExercisesTabChange = {})
             ExercisesTabToggle(showExercisesTab = true, onShowExercisesTabChange = {})
         }
+    }
+}
+
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun GitHubButtonPreview() {
+    JetpackMyWorkoutsTheme {
+        GitHubButton(context = LocalContext.current)
     }
 }

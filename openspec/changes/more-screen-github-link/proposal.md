@@ -36,8 +36,14 @@
 ## Impact
 
 - `app/src/main/java/com/myworkouts/ui/screens/more/MoreScreen.kt` —
-  новая константа URL, private composable `GitHubButton`, private fun
-  `openGitHub`, вызов кнопки в `Column`.
+  новая константа URL, internal composable `GitHubButton`, private fun
+  `openUrl`, вызов кнопки в `Column`; все кнопки экрана переведены на
+  общий `ScreenButton` (review-решение владельца).
+- `app/src/main/java/com/myworkouts/ui/screens/more/ScreenButton.kt` —
+  общий composable кнопки экрана (новый файл).
+- `app/src/main/java/com/myworkouts/ui/screens/more/ExercisesTabToggle.kt`
+  — вынос тоггла из `MoreScreen.kt` (detekt `TooManyFunctions`), переведён
+  на `ScreenButton`.
 - `app/src/main/java/com/myworkouts/ui/screens/more/MoreScreenPreview.kt` —
   превью новой кнопки.
 - `app/src/main/res/values/strings.xml` — строка `github_button` (ru).

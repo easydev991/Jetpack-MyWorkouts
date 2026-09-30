@@ -10,7 +10,6 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -47,16 +45,19 @@ private const val APP_RATE_URL = "https://apps.rustore.ru/app/com.myworkouts/rev
 /** URL страницы приложения в RuStore (ссылка в share-тексте). */
 private const val APP_SHARE_URL = "https://apps.rustore.ru/app/com.myworkouts"
 
+/** URL репозитория проекта на GitHub (кнопка «GitHub»). */
+private const val GITHUB_REPOSITORY_URL = "https://github.com/easydev991/Jetpack-MyWorkouts"
+
 /**
  * Экран «Ещё» — точка входа в дополнительные настройки приложения.
  *
  * Содержит кнопку переключения видимости вкладки «Упражнения»
  * (exercises-tab), кнопки перехода к экрану «Оформление приложения»,
- * «Данные приложения», «Отправить обратную связь», а на flavor rustore
- * — «Оценить приложение» и «Поделиться приложением». По мере появления
- * новых кнопок структура экрана — `Box` + `Column` с единым интервалом
- * через `Arrangement.spacedBy`. Версия приложения прижата к низу через
- * `Box.BottomCenter`.
+ * «Данные приложения», «Отправить обратную связь», кнопку «GitHub», а на
+ * flavor rustore — «Оценить приложение» и «Поделиться приложением». По
+ * мере появления новых кнопок структура экрана — `Box` + `Column` с
+ * единым интервалом через `Arrangement.spacedBy`. Версия приложения
+ * прижата к низу через `Box.BottomCenter`.
  *
  * @implNote NavController обязательный (callback-обёртка — лишний
  * indirection при единственном вызове в RootScreen). Состояние кнопки и
@@ -132,6 +133,8 @@ fun MoreScreen(
                     RateAppButton(context = context)
                     ShareAppButton(context = context)
                 }
+
+                GitHubButton(context = context)
             }
 
             Text(
@@ -150,65 +153,22 @@ fun MoreScreen(
 }
 
 /**
- * Кнопка видимости вкладки «Упражнения» (exercises-tab, design
- * Decision 8): в стиле остальных кнопок экрана, текст зависит от
- * состояния — «Показать вкладку…» при скрытой вкладке, «Скрыть…» при
- * показанной. Тап по кнопке переключает настройку.
- */
-@Composable
-internal fun ExercisesTabToggle(
-    showExercisesTab: Boolean,
-    onShowExercisesTabChange: (Boolean) -> Unit
-) {
-    FilledTonalButton(
-        onClick = { onShowExercisesTabChange(!showExercisesTab) },
-        contentPadding =
-            PaddingValues(
-                horizontal = dimensionResource(R.dimen.button_horizontal_padding)
-            )
-    ) {
-        Text(
-            stringResource(
-                if (showExercisesTab) R.string.more_exercises_tab_hide else R.string.more_exercises_tab_show
-            )
-        )
-    }
-}
-
-/**
  * Кнопки перехода на не-табовые экраны настроек: «Оформление
  * приложения» и «Данные приложения» (app-data-screen, спека
- * more-screen). Без layout-обёртки: интервал между кнопками задаёт
- * родительская `Column` через `spacedBy`.
+ * more-screen).
  */
 @Composable
 private fun NavigationButtons(navController: NavHostController) {
-    FilledTonalButton(
-        onClick = {
-            navController.navigate(Screen.Appearance.route) {
-                popUpTo(Screen.More.route)
-            }
-        },
-        contentPadding =
-            PaddingValues(
-                horizontal = dimensionResource(R.dimen.button_horizontal_padding)
-            )
-    ) {
-        Text(stringResource(R.string.appearance_title))
+    ScreenButton(stringResource(R.string.appearance_title)) {
+        navController.navigate(Screen.Appearance.route) {
+            popUpTo(Screen.More.route)
+        }
     }
 
-    FilledTonalButton(
-        onClick = {
-            navController.navigate(Screen.AppData.route) {
-                popUpTo(Screen.More.route)
-            }
-        },
-        contentPadding =
-            PaddingValues(
-                horizontal = dimensionResource(R.dimen.button_horizontal_padding)
-            )
-    ) {
-        Text(stringResource(R.string.app_data))
+    ScreenButton(stringResource(R.string.app_data)) {
+        navController.navigate(Screen.AppData.route) {
+            popUpTo(Screen.More.route)
+        }
     }
 }
 
@@ -222,19 +182,11 @@ private fun FeedbackButton(
     context: Context,
     analyticsProvider: AnalyticsProvider
 ) {
-    FilledTonalButton(
-        onClick = {
-            analyticsProvider.log(
-                AnalyticsEvent.UserAction(UserActionType.SEND_FEEDBACK)
-            )
-            sendFeedback(context)
-        },
-        contentPadding =
-            PaddingValues(
-                horizontal = dimensionResource(R.dimen.button_horizontal_padding)
-            )
-    ) {
-        Text(stringResource(R.string.feedback_send))
+    ScreenButton(stringResource(R.string.feedback_send)) {
+        analyticsProvider.log(
+            AnalyticsEvent.UserAction(UserActionType.SEND_FEEDBACK)
+        )
+        sendFeedback(context)
     }
 }
 
@@ -270,14 +222,8 @@ private fun sendFeedback(context: Context) {
  */
 @Composable
 private fun RateAppButton(context: Context) {
-    FilledTonalButton(
-        onClick = { rateApp(context) },
-        contentPadding =
-            PaddingValues(
-                horizontal = dimensionResource(R.dimen.button_horizontal_padding)
-            )
-    ) {
-        Text(stringResource(R.string.rate_the_app))
+    ScreenButton(stringResource(R.string.rate_the_app)) {
+        openUrl(context, APP_RATE_URL, "Не удалось открыть страницу приложения")
     }
 }
 
@@ -288,25 +234,8 @@ private fun RateAppButton(context: Context) {
  */
 @Composable
 private fun ShareAppButton(context: Context) {
-    FilledTonalButton(
-        onClick = { shareApp(context) },
-        contentPadding =
-            PaddingValues(
-                horizontal = dimensionResource(R.dimen.button_horizontal_padding)
-            )
-    ) {
-        Text(stringResource(R.string.share_the_app))
-    }
-}
-
-/** Открывает страницу отзывов приложения в RuStore. */
-private fun rateApp(context: Context) {
-    val intent = Intent(Intent.ACTION_VIEW, APP_RATE_URL.toUri())
-
-    try {
-        context.startActivity(intent)
-    } catch (e: ActivityNotFoundException) {
-        Log.e("MoreScreen", "Не удалось открыть страницу приложения", e)
+    ScreenButton(stringResource(R.string.share_the_app)) {
+        shareApp(context)
     }
 }
 
@@ -330,5 +259,34 @@ private fun shareApp(context: Context) {
         )
     } catch (e: ActivityNotFoundException) {
         Log.e("MoreScreen", "Не удалось открыть ShareSheet", e)
+    }
+}
+
+/**
+ * Кнопка «GitHub» (more-screen-github-link): открывает страницу
+ * репозитория проекта в системном браузере. Рисуется на обоих флейворах
+ * — вызов в [MoreScreen] вне гейта `BuildConfig.RUSTORE_FEATURES`.
+ * `internal` (не private): превью в `MoreScreenPreview.kt` обращается
+ * напрямую, по образцу [ExercisesTabToggle].
+ */
+@Composable
+internal fun GitHubButton(context: Context) {
+    ScreenButton(stringResource(R.string.github_button)) {
+        openUrl(context, GITHUB_REPOSITORY_URL, "Не удалось открыть страницу GitHub")
+    }
+}
+
+/** Открывает URL в системном браузере; при отсутствии обработчика логирует ошибку без падения. */
+private fun openUrl(
+    context: Context,
+    url: String,
+    logMessage: String
+) {
+    val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+
+    try {
+        context.startActivity(intent)
+    } catch (e: ActivityNotFoundException) {
+        Log.e("MoreScreen", logMessage, e)
     }
 }

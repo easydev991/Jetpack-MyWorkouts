@@ -49,6 +49,9 @@
     <string name="share_the_app">Поделиться приложением</string>
     <string name="share_text">%1$s — приложение-дневник тренировок</string>
 
+    <!-- GitHub (оба флейвора) -->
+    <string name="github_button">GitHub</string>
+
     <!-- Standard exercises (prepopulate catalog, см. design.md Decision 4) -->
     <string name="exercise_pullups">Подтягивания</string>
     <string name="exercise_australian_pullups">Австралийские подтягивания</string>

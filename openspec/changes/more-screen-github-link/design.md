@@ -15,10 +15,11 @@ dimensionResource(R.dimen.button_horizontal_padding))`. Экран осозна�
 ## Goals / Non-Goals
 
 - Цель: кнопка «GitHub» по существующему шаблону экрана, минимальный дифф.
-- Non-Goals: без нового helper/объекта/UseCase, без ViewModel, без
+- Non-Goals: без нового объекта/UseCase, без ViewModel, без
   изменений навигации (`MoreNavDestination` не трогаем), без
   аналитических событий на тап, без androidTest (кнопка без логики —
-  достаточно превью).
+  достаточно превью). Хелперы `ScreenButton`/`openUrl` введены по
+  решению владельца (review, 2026-09-30) — см. Decision 2.
 
 ## Decisions
 
@@ -30,21 +31,24 @@ dimensionResource(R.dimen.button_horizontal_padding))`. Экран осозна�
    «Поделиться приложением»; порядок в коде един для обоих флейворов.
    Альтернатива (внутрь гейта / между feedback и гейтом) отклонена:
    ссылка на исходники не зависит от канала дистрибуции.
-2. **Копия паттерна `rateApp`, без выноса общего helper.** `openGitHub`
-   — file-private рядом с `rateApp`/`shareApp`; URL — константа
-   `GITHUB_REPOSITORY_URL` на верхнем уровне файла. Два call-site'а
-   одной строки `startActivity(Intent(ACTION_VIEW, url.toUri()))`
-   (`rateApp` и будущий `openGitHub`; `shareApp` запускает
-   `ACTION_SEND` через `createChooser` — другая форма) не оправдывают
-   параметризуемую абстракцию. Лог-сообщение —
-   «Не удалось открыть страницу GitHub» (в стиле существующих
-   русскоязычных сообщений).
+2. **Хелпер `openUrl(context, url, logMessage)` — единый обработчик
+   `ACTION_VIEW` + `try/catch ActivityNotFoundException` + `Log.e`.**
+   Решение пересмотрено при review (2026-09-30): с появлением
+   `openGitHub` скелет стал третьим (`rateApp`, `openGitHub`; прямых
+   call-site'ов два — `shareApp` не подходит: `ACTION_SEND` +
+   `createChooser`), хелпер окупился; `rateApp`/`openGitHub` удалены,
+   `RateAppButton`/`GitHubButton` зовут `openUrl` напрямую. Лог-сообщение
+   — параметр хелпера («Не удалось открыть страницу GitHub» — в стиле
+   существующих русскоязычных сообщений).
 3. **Кнопка без аналитики и без параметров onClick.** `GitHubButton`
-   принимает `context: Context` и сам вызывает `openGitHub` —
+   принимает `context: Context` и сам вызывает `openUrl` —
    сигнатура единообразна с соседними
    `RateAppButton`/`ShareAppButton` (тоже `(context: Context)`); вариант
    `(text: String, onClick: () -> Unit)` отклонён ради этого же
-   единообразия. Превью — отдельной функцией в `MoreScreenPreview.kt`
+   единообразия. Все кнопки экрана (включая `GitHubButton`) рендерятся
+   через общий `ScreenButton(text, onClick)` — единственное место с
+   `contentPadding` (review, 2026-09-30: седьмая копия блока).
+   Превью — отдельной функцией в `MoreScreenPreview.kt`
    (одно состояние — одно превью, светлая + тёмная, `locale = "ru"`).
 4. **Строка `github_button` = «GitHub» в обеих локалях.** Имя сервиса
    не переводится; ключ всё равно заводится (а не литерал в коде) —
@@ -52,11 +56,10 @@ dimensionResource(R.dimen.button_horizontal_padding))`. Экран осозна�
 
 ## Risks / Trade-offs
 
-- [Дублирование шаблона intent-открытия в третьей функции] → Приемлемо:
-  тело — 5 строк, ошибка обрабатывается локально; вынос в util-объект —
-  по факту четвёртого call-site'а. (Каркас try/catch+startActivity
-  общий у всех трёх intent-открытий; точный однострочник `ACTION_VIEW`
-  — у двух, см. Decision 2.)
+- [Дублирование шаблона intent-открытия] → Снято хелпером `openUrl`
+  (review, 2026-09-30); `shareApp` сохраняет свой `try/catch` — intent
+  другой (chooser). Вынос в util-объект — по факту четвёртого
+  call-site'а.
 - [Длинный список кнопок на маленьких экранах: версия прижата к низу
   через `Box.BottomCenter`, кнопки — к верху] → Коллизия при малой
   высоте не нова для экрана и не усугубляется одной кнопкой
