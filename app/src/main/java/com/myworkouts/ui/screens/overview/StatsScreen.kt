@@ -831,7 +831,11 @@ private val demoDrillGroups =
             )
     )
 
-/** Демо-запись drill-down: REPS при [reps], иначе TIME по [durationSec]. */
+/**
+ * Демо-запись drill-down: REPS при [reps], иначе TIME по [durationSec].
+ * Свёртывать параметры в объект не стоит — фабрика демо-данных.
+ */
+@Suppress("LongParameterList")
 private fun previewEntry(
     id: Long,
     name: String,

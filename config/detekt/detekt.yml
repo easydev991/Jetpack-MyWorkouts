@@ -67,7 +67,7 @@ comments:
     endOfSentenceFormat: '([.?!][ \t\n\r\f<])|([.?!:]$)'
   KDocReferencesNonPublicProperty:
     active: false
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt']
+    excludes: ['**/test/**', '**/androidTest/**']
   OutdatedDocumentation:
     active: false
     matchTypeParameters: true
@@ -75,7 +75,7 @@ comments:
     allowParamOnConstructorProperties: false
   UndocumentedPublicClass:
     active: false
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt']
+    excludes: ['**/test/**', '**/androidTest/**']
     searchInNestedClass: true
     searchInInnerClass: true
     searchInInnerObject: true
@@ -83,11 +83,11 @@ comments:
     searchInProtectedClass: false
   UndocumentedPublicFunction:
     active: false
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt']
+    excludes: ['**/test/**', '**/androidTest/**']
     searchProtectedFunction: false
   UndocumentedPublicProperty:
     active: false
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt']
+    excludes: ['**/test/**', '**/androidTest/**']
     searchProtectedProperty: false
 
 complexity:
@@ -160,14 +160,14 @@ complexity:
     active: false
   StringLiteralDuplication:
     active: false
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt']
+    excludes: ['**/test/**', '**/androidTest/**']
     threshold: 3
     ignoreAnnotation: true
     excludeStringsWithLessThan5Characters: true
     ignoreStringsRegex: '$^'
   TooManyFunctions:
     active: true
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt', '**/db/**Dao.kt', '**/viewmodel/**ViewModel.kt']
+    excludes: ['**/test/**', '**/androidTest/**', '**/db/**Dao.kt', '**/viewmodel/**ViewModel.kt']
     thresholdInFiles: 11
     thresholdInClasses: 11
     thresholdInInterfaces: 11
@@ -245,7 +245,7 @@ exceptions:
       - 'toString'
   InstanceOfCheckForException:
     active: true
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt']
+    excludes: ['**/test/**', '**/androidTest/**']
   NotImplementedDeclaration:
     active: false
   ObjectExtendsThrowable:
@@ -271,7 +271,7 @@ exceptions:
     active: false
   ThrowingExceptionsWithoutMessageOrCause:
     active: true
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt']
+    excludes: ['**/test/**', '**/androidTest/**']
     exceptions:
       - 'ArrayIndexOutOfBoundsException'
       - 'Exception'
@@ -286,7 +286,7 @@ exceptions:
     active: true
   TooGenericExceptionCaught:
     active: true
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt']
+    excludes: ['**/test/**', '**/androidTest/**']
     exceptionNames:
       - 'ArrayIndexOutOfBoundsException'
       - 'Error'
@@ -332,7 +332,7 @@ naming:
     minimumFunctionNameLength: 3
   FunctionNaming:
     active: true
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt']
+    excludes: ['**/test/**', '**/androidTest/**']
     # Разрешаем camelCase для всех функций, включая Composable с большой буквы
     functionPattern: '[a-zA-Z][a-zA-Z0-9]*'
     excludeClassPattern: '$^'
@@ -391,10 +391,10 @@ performance:
     threshold: 3
   ForEachOnRange:
     active: true
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt']
+    excludes: ['**/test/**', '**/androidTest/**']
   SpreadOperator:
     active: true
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt']
+    excludes: ['**/test/**', '**/androidTest/**']
   UnnecessaryPartOfBinaryExpression:
     active: false
   UnnecessaryTemporaryInstantiation:
@@ -411,6 +411,9 @@ potential-bugs:
   CastToNullableType:
     active: false
   Deprecation:
+    # Включать бессмысленно: правило требует type resolution, detekt-таск
+    # запущен без него — проверено пробником (Date(99,1,1) не ловится).
+    # Запрет deprecated API живёт текстом в AGENTS.md.
     active: false
   DontDowncastCollectionTypes:
     active: false
@@ -467,7 +470,7 @@ potential-bugs:
     active: true
   LateinitUsage:
     active: false
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt']
+    excludes: ['**/test/**', '**/androidTest/**']
     ignoreOnClassesPattern: ''
   MapGetWithNotNullAssertionOperator:
     active: true
@@ -494,7 +497,7 @@ potential-bugs:
     active: true
   UnsafeCallOnNullableType:
     active: true
-    excludes: ['**/test/**', '**/androidTest/**', '**/data/database/converters/**', '**/domain/model/Item.kt']
+    excludes: ['**/test/**', '**/androidTest/**']
   UnsafeCast:
     active: true
   UnusedUnaryOperator:
@@ -584,8 +587,14 @@ style:
         value: 'TODO:'
     allowedPatterns: ''
   ForbiddenImport:
-    active: false
-    imports: []
+    active: true
+    imports:
+      - reason: 'Offline-only: приложение не ходит в сеть за данными.'
+        value: 'retrofit2.*'
+      - reason: 'Offline-only: приложение не ходит в сеть за данными.'
+        value: 'okhttp3.*'
+      - reason: 'Offline-only: приложение не ходит в сеть за данными.'
+        value: 'io.ktor.*'
     forbiddenPatterns: ''
   ForbiddenMethodCall:
     active: false

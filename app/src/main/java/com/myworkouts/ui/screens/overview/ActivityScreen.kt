@@ -285,17 +285,7 @@ private fun StreakCard(
     state: StreakCardState
 ) {
     val isPending = state == StreakCardState.Pending
-    val backgroundBrush =
-        if (isPending) {
-            Brush.linearGradient(
-                listOf(
-                    StreakOrangeStart.copy(alpha = PENDING_ORANGE_START_ALPHA),
-                    StreakOrangeEnd.copy(alpha = PENDING_ORANGE_END_ALPHA)
-                )
-            )
-        } else {
-            Brush.linearGradient(listOf(StreakOrangeStart, StreakOrangeEnd))
-        }
+    val backgroundBrush = streakBackgroundBrush(isPending)
     // На бледном фоне белый текст не читается — переходим на secondary.
     val primaryText = if (isPending) MaterialTheme.colorScheme.secondary else Color.White
     val secondaryText =
@@ -352,6 +342,19 @@ private fun StreakCard(
         }
     }
 }
+
+/** Фон карточки серии: полупрозрачный градиент в Pending, плотный — в остальных. */
+private fun streakBackgroundBrush(isPending: Boolean): Brush =
+    if (isPending) {
+        Brush.linearGradient(
+            listOf(
+                StreakOrangeStart.copy(alpha = PENDING_ORANGE_START_ALPHA),
+                StreakOrangeEnd.copy(alpha = PENDING_ORANGE_END_ALPHA)
+            )
+        )
+    } else {
+        Brush.linearGradient(listOf(StreakOrangeStart, StreakOrangeEnd))
+    }
 
 /**
  * Карточка хитмапа: сетка «7 дней в высоту, недели в ширину» из

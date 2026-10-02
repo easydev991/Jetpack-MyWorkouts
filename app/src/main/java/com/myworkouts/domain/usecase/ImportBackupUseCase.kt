@@ -195,6 +195,23 @@ internal fun mergeBackup(
             exercisesToInsert.forEach { put(it.name.trim().lowercase(), it.measuredBy) }
         }
     val namesById = existingExercises.associate { it.id to it.name }
+    val entriesToInsert = newFileEntries(existingEntries, fileEntries, measuredByKey, namesById)
+    return Triple(exercisesToInsert, entriesToInsert, idsToArchive)
+}
+
+/**
+ * Отбирает записи файла к вставке (design Decision 4): прошедшие
+ * [EntryValidator] против `measuredBy` упражнения, найденного по имени,
+ * и не дублирующие по содержимому ни текущие записи, ни уже взятые из
+ * этого же файла. «Плохие» записи пропускаются без провала всего
+ * импорта.
+ */
+private fun newFileEntries(
+    existingEntries: List<ExerciseEntry>,
+    fileEntries: List<BackupEntry>,
+    measuredByKey: Map<String, ExerciseMeasuredBy>,
+    namesById: Map<Long, String>
+): List<BackupEntry> {
     val seenEntryKeys = mutableSetOf<EntryContentKey>()
     existingEntries.forEach { entry ->
         val name = namesById[entry.exerciseId] ?: return@forEach
@@ -236,7 +253,7 @@ internal fun mergeBackup(
         }
         entriesToInsert.add(backupEntry)
     }
-    return Triple(exercisesToInsert, entriesToInsert, idsToArchive)
+    return entriesToInsert
 }
 
 private fun ExerciseEntry.contentKey(name: String): EntryContentKey =

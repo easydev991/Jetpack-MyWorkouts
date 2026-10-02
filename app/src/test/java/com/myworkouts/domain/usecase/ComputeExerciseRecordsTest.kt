@@ -27,6 +27,9 @@ class ComputeExerciseRecordsTest {
             .toInstant()
             .toEpochMilli()
 
+    // Тестовая фабрика: параметр на поле записи, дефолты покрывают типовой
+    // случай — свёртывать в объект-параметр не стоит.
+    @Suppress("LongParameterList")
     private fun entry(
         id: Long,
         exerciseId: Long = 1L,

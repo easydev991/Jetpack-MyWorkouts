@@ -47,24 +47,15 @@ detekt-предупреждения исправляются до заверше
 
 ## Tests
 
-Полные руководства — в навыках `kotlin-testing` (unit, JUnit 5) и
-`kotlin-ui-testing` (androidTest, JUnit 4).
-
 `make test` — JVM. `make android-test` — на подключённом устройстве.
-Для ускорения androidTest: `make emulator-fast` — выключает анимации
-эмулятора; применять после каждого старта эмулятора.
+Правила прогонов, отчёты и gotcha — `.opencode/rules/test-execution.md`
+(один прогон → один отчёт); руководства — навыки `kotlin-testing` (unit)
+и `kotlin-ui-testing` (androidTest).
 
 `make screenshots{,-ru,-en}` — скриншоты для маркетплейса: модуль
 `:screenshot-tests` пишет PNG в app-specific external storage, make
 забирает их в `fastlane/metadata/android/<locale>/images/phoneScreenshots/`.
 Нужны эмулятор без google_play-образа (`adb root`) и API 33+.
-
-**Запуск тестов — один прогон → один отчёт**: `make test` / `make android-test`
-уже вызывают `scripts/test_report.py` (статистика + список упавших).
-Повторно гонять `make` или `find … -name 'TEST-*.xml'` ради чтения того
-же отчёта — запрещено (минyты впустую). Перечитать отчёт без повторного
-прогона: `python3 scripts/test_report.py <dir>`. Полные правила —
-`.opencode/rules/test-execution.md`.
 
 **TDD для логики**: use-cases, ViewModel, репозитории, валидация —
 сначала падающий тест, потом реализация (red-green-refactor).
@@ -83,6 +74,10 @@ detekt-предупреждения исправляются до заверше
   `Error(message)` — только когда экран имеет взаимоисключающие
   визуальные состояния (отдельные экраны Loading/Error).
 - `Result<T>` с `try/catch` в use-cases.
+- Не использовать deprecated API — заменять на актуальные альтернативы.
+- Импорт/бэкап JSON: неизвестные поля игнорируются (толерантный парсинг),
+  фильтрация дубликатов при merge — импорт идемпотентен; стримы — через
+  `use {}`; любая ошибка файла — `BackupException(INVALID_FILE)`.
 - StateFlow + `SharingStarted.WhileSubscribed(5000)` в ViewModel.
 - `LazyColumn` с `key = { it.id }`.
 - **Preview обязательны** для всех composable-компонентов: светлая + тёмная
@@ -94,7 +89,9 @@ detekt-предупреждения исправляются до заверше
   или контекстного меню).
   Превью могут жить в соседнем `*Preview.kt`-файле рядом с экраном.
 - **Offline-only**: приложение не ходит в сеть за данными — никаких
-  фича-сетевых библиотек (Retrofit/OkHttp/Ktor). Телеметрия Firebase
+  фича-сетевых библиотек (конкретный запрет пакетов — detekt
+  `ForbiddenImport`; текст правила шире: линтер не покрывает
+  `HttpsURLConnection` и прочий голый `java.net`). Телеметрия Firebase
   (Crashlytics, Analytics) разрешена: SDK ставится как зависимость,
   провайдер выбирается в `MainActivity` по `BuildConfig.DEBUG`
   (Noop в debug, Firebase в release), пакеты `analytics/` и `crash/`
@@ -141,7 +138,16 @@ detekt-предупреждения исправляются до заверше
   экспортированного JSON из `app/schemas/` + `Migration` в
   `addMigrations(...)` (без подходящей миграции Room при открытии
   бросает `IllegalStateException`); prepopulate стандартного набора —
-  при первом создании БД (тот же список используется и в `deleteAllData`)
+  при первом создании БД (тот же список используется и в `deleteAllData`).
+  Правила миграций: пока миграций не было (v1→v3 — bump вместо
+  миграции), `androidx.room:room-testing` не подключён. Первая
+  `Migration` коммитится в паре с `MigrationTest` (androidTest,
+  `MigrationTestHelper` + добавление зависимости `room-testing`) —
+  миграция без теста не принимается; простые изменения (колонка/
+  таблица/индекс без перестройки данных) — предпочитать
+  `@AutoMigration`; мок-юнит-тесты SQL миграций (`verify { execSQL }`
+  с relaxed) запрещены — не ловят синтаксические ошибки, только
+  интеграционный тест через `MigrationTestHelper`
 - `data/preferences/AppSettingsDataStore.kt`
 - `data/repository/` — `WorkoutDataRepository`, `RoomWorkoutDataRepository`,
   `EntryValidator`, `DeletionExceptions`
