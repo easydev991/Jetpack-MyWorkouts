@@ -2,7 +2,7 @@
 
 Ряд пользовательских сценариев **нельзя** проверить инструментированными
 тестами (`androidTest`); единственный способ — ручная проверка на эмуляторе
-или устройстве через MCP `android-debug-bridge` (или fallback на `adb`).
+или устройстве через MCP `mobile-mcp` (или fallback на `adb`).
 
 ## Что НЕ покрывается UI-тестами
 
@@ -22,7 +22,7 @@
 Пункты плановых артефактов (`openspec/changes/<change>/tasks.md`
 или аналогов в проекте) с фразами-маркерами «ручная проверка»,
 «на эмуляторе», «визуальная проверка», «в UI Test не покрывается» —
-закрываются через MCP `android-debug-bridge`, не тестом.
+закрываются через MCP `mobile-mcp`, не тестом.
 
 Пример из практики (для ориентира, привязка к проекту
 необязательна) — workout-трекер Jetpack-MyWorkouts, задача
@@ -33,50 +33,57 @@ long-press → меню в точке нажатия → удаление с а�
 `references/component-testing.md` → Long-press) — закрывалась
 на эмуляторе.
 
-## MCP `android-debug-bridge` — шпаргалка
-
-Инструменты доступны без префикса `mcp_`:
+## MCP `mobile-mcp` — шпаргалка
 
 | Инструмент | Назначение |
 |---|---|
-| `list_devices` | Эмулятор онлайн; если пусто — fallback на `adb devices` |
-| `install_apk` / `reinstall_apk` | Поставить/переустановить APK |
-| `open_app` | Запустить приложение по `packageName` |
-| `create_test_folder` | Собрать скриншоты сценария в папку (test_name, step_name) |
-| `capture_screenshot` | Снимок экрана с возвратом в чат |
-| `capture_ui_dump` | Иерархия UI с координатами кликабельных нод |
-| `input_tap` / `input_long_press` / `input_scroll` / `input_text` | Ввод |
-| `ui_tap` / `ui_find` | Поиск ноды по тексту/id и тап (переживает смену layout'а) |
-| `read_logcat` | Crash'и и исключения |
+| `mobile_list_available_devices` | Эмулятор онлайн — взять `id` со статусом `online`; если пусто — fallback на `adb devices` |
+| `mobile_install_app` | Поставить APK |
+| `mobile_launch_app` | Запустить приложение по `packageName` |
+| `mobile_list_elements_on_screen` | Элементы экрана с `@ref`, координатами и label |
+| `mobile_click_on_screen_at_coordinates` | Тап по `@ref` (предпочтительно) или координатам |
+| `mobile_long_press_on_screen_at_coordinates` | Long-press |
+| `mobile_type_keys` | Ввод текста в фокус |
+| `mobile_swipe_on_screen` / `mobile_press_button` | Жесты и системные кнопки (BACK, HOME, ENTER) |
+| `mobile_take_screenshot` | Быстрая оценка вида (снимок в чат) |
+| `mobile_save_screenshot` | Снимок в файл — затем `Read` файла |
+| `mobile_batch_commands` | Последовательность тап/тип/тап одним вызовом |
+| `mobile_get_device_logs` | logcat: краши и исключения (фильтруй по `process`) |
+| `mobile_get_foreground_app` | Какое приложение на переднем плане |
 
 Правила (из `android-emulator.md`):
-1. Сначала screenshot — потом действия; координаты — из последнего снимка.
-2. Длинные сценарии — `create_test_folder(test_name)`, шаги `step_name`.
-3. Если MCP недоступен — `adb shell input tap X Y`, `adb shell screencap
+1. Сначала элементы (`mobile_list_elements_on_screen`) — потом действия; тап по `@ref`, не по голым координатам.
+2. Refs валидны до навигации — после перехода на другой экран перечитай элементы.
+3. Последовательности (тип/тап/тап) — одним `mobile_batch_commands`; скриншоты шагов — `mobile_save_screenshot` в отдельные файлы.
+4. Если MCP недоступен — `adb shell input tap X Y`, `adb shell screencap
    -p /sdcard/...`, вытянуть через `adb pull`.
 
 ## Минимальная последовательность для проверки сценария
 
 1. Сборка + установка: `make install` (APK на подключённом эмуляторе).
-2. Открыть app (`open_app`).
-3. По сценарию: действия (`input_tap` / `input_long_press` /
-   `input_text`), между ними `capture_screenshot` или `capture_ui_dump`
-   чтобы увидеть состояние.
+2. Открыть app: `mobile_list_available_devices` → `mobile_launch_app`
+   (packageName из `app/build.gradle.kts`).
+3. По сценарию: `mobile_list_elements_on_screen` → действия
+   (`mobile_click_on_screen_at_coordinates` /
+   `mobile_long_press_on_screen_at_coordinates` / `mobile_type_keys`),
+   между ними `mobile_take_screenshot`, чтобы увидеть состояние.
 4. Сравнить результат с ожиданием из задачи.
-5. При наличии нескольких шагов — `create_test_folder(test_name)`
-   с шагами `001_*`, `002_*`, ...
+5. Скриншоты шагов — `mobile_save_screenshot` в отдельные файлы
+   (`001_*.png`, `002_*.png`, ...).
 
 ## Частые сценарии в проекте
 
 - **long-press + DropdownMenu**: установить, открыть app, добавить
-  запись (или через БД/репозиторий), `input_long_press` на строке,
-  screenshot — убедиться, что меню открылось **в точке тача** (не
-  в дефолтном месте под строкой).
+  запись (или через БД/репозиторий), `mobile_long_press_on_screen_at_coordinates`
+  на строке, screenshot — убедиться, что меню открылось **в точке
+  тача** (не в дефолтном месте под строкой).
 - **алерт подтверждения**: продолжение предыдущего — тап по пункту
   меню, screenshot алерта, тап по «Отмена» и проверка, что алерт
   закрыт; повтор — тап по «Удалить» и проверка, что состояние
   изменилось (запись исчезла).
-- **edge-to-edge/insets**: `rotate_screen` 0/90, screenshot в обеих
-  ориентациях, проверить, что системные бары не перекрывают контент.
-- **deferred-эффекты (alarm, notification)**: `read_logcat` + проверка
-  реальных эффектов в системе (`list_notifications`, shell-команды).
+- **edge-to-edge/insets**: `mobile_set_orientation` landscape/portrait,
+  screenshot в обеих ориентациях, проверить, что системные бары не
+  перекрывают контент.
+- **deferred-эффекты (alarm, notification)**: `mobile_get_device_logs`
+  + проверка реальных эффектов в системе (shell-команды `adb`, напр.
+  `dumpsys notification`).

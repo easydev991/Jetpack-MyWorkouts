@@ -109,7 +109,7 @@ python3 scripts/test_report.py app/build/outputs/androidTest-results/connected/d
 ## Эмулятор для androidTest
 
 `make android-test` требует подключённого эмулятора или устройства.
-Проверка — `adb devices` (или `android-debug-bridge_list_devices` через MCP).
+Проверка — `adb devices` (или `mobile_list_available_devices` через MCP).
 Без девайса androidTest не запустятся — это ожидаемо, не повторять попытки.
 
 ## Полные руководства

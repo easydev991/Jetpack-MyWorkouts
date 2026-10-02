@@ -228,7 +228,7 @@ reference: `references/screenshot-tests.md`.
   маппинг → `references/room-repository.md`
 - Запуск `make android-test`, отчёт, фильтрация одного класса →
   `references/running-tests.md`
-- Ручная проверка на эмуляторе, `android-debug-bridge`, что UI-тесты
+- Ручная проверка на эмуляторе, `mobile-mcp`, что UI-тесты
   не покрывают → `references/manual-verification.md`
 - Поиск иконки упражнения (`testTag` + unmerged-дерево), проверка
   тёмного/светлого варианта по яркости →
