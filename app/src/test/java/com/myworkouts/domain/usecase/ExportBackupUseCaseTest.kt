@@ -88,8 +88,9 @@ class ExportBackupUseCaseTest {
         // When
         val json = JSONObject(buildBackupJson(exercises, entries))
 
-        // Then — формат v2: настройки вкладок обзора пишутся всегда (design D8)
-        assertEquals(2, json.getInt("version"), "Версия формата — 2")
+        // Then — формат v1: settings и categories — обратно совместимые
+        // расширения, версию не поднимают (канон custom-categories, Decision 9)
+        assertEquals(1, json.getInt("version"), "Версия формата — 1")
         assertEquals(2, json.getJSONArray("exercises").length(), "Все упражнения каталога в файле")
         assertEquals(2, json.getJSONArray("entries").length(), "Все записи в файле")
         val settingsJson = checkNotNull(json.optJSONObject("settings")) { "Блок settings присутствует" }
@@ -218,7 +219,7 @@ class ExportBackupUseCaseTest {
 
         // Then
         assertTrue(
-            raw.contains("\n  \"version\": 2"),
+            raw.contains("\n  \"version\": 1"),
             "Файл человекочитаем: отступ 2 (JSONObject.toString(2))"
         )
     }
@@ -278,7 +279,7 @@ class ExportBackupUseCaseTest {
         val json = JSONObject(buildBackupJson(exercises, entries))
 
         // Then
-        assertEquals(2, json.getInt("version"), "Пустой экспорт — тоже версия 2")
+        assertEquals(1, json.getInt("version"), "Пустой экспорт — тоже версия 1")
         assertEquals(0, json.getJSONArray("exercises").length(), "Пустой каталог — пустой массив")
         assertEquals(0, json.getJSONArray("entries").length(), "Нет записей — пустой массив")
     }
@@ -349,7 +350,7 @@ class ExportBackupUseCaseTest {
         val json = JSONObject(buildBackupJson(listOf(pullUps), listOf(repsEntry), settings))
 
         // Then
-        assertEquals(2, json.getInt("version"), "Настройки вкладок поднимают версию формата до 2")
+        assertEquals(1, json.getInt("version"), "Настройки вкладок — расширение без подъёма версии")
         val settingsJson =
             checkNotNull(json.optJSONObject("settings")) { "Блок settings присутствует" }
         val visibility =
@@ -367,7 +368,7 @@ class ExportBackupUseCaseTest {
         val json = JSONObject(buildBackupJson(emptyList(), emptyList(), BackupSettings.defaults()))
 
         // Then
-        assertEquals(2, json.getInt("version"))
+        assertEquals(1, json.getInt("version"))
         val visibility =
             checkNotNull(
                 json.optJSONObject("settings")?.optJSONObject("overviewTabVisibility")

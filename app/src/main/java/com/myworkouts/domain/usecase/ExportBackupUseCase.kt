@@ -157,7 +157,7 @@ internal fun buildBackupJson(
             .put("overviewTabVisibility", settingsVisibility)
             .put("lastOverviewTab", settings.lastOverviewTab.name)
     return JSONObject()
-        .put("version", 2)
+        .put("version", 1)
         .put("exercises", fileExercises)
         .put("entries", fileEntries)
         .put("settings", settingsJson)
