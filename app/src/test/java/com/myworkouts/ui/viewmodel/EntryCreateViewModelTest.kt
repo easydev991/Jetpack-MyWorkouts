@@ -6,11 +6,11 @@ import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryField
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import io.mockk.every
@@ -141,6 +141,7 @@ private class FakeWorkoutDataRepository(
     }
 
     override suspend fun importData(
+        categories: List<Category>,
         exercises: List<Exercise>,
         entries: List<BackupEntry>
     ): Result<Unit> = Result.success(Unit)
@@ -169,7 +170,33 @@ private class FakeWorkoutDataRepository(
             all.filter { archived.contains(it.id) }
         }
 
-    override fun archivedCount(): Flow<Int> = archivedIds.map { it.size }
+    override fun hasArchived(): Flow<Boolean> = archivedIds.map { it.isNotEmpty() }
+
+    // Новый контракт категорий (custom-categories, этап 2): заглушки —
+    // EntryCreateViewModel их не вызывает.
+
+    override suspend fun addCategory(name: String): Result<Category> =
+        Result.success(Category(id = 0L, name = name.trim(), colorArgb = 0, isCustom = true))
+
+    override suspend fun renameCategory(
+        id: Long,
+        newName: String
+    ): Result<Unit> = Result.success(Unit)
+
+    override suspend fun deleteCategory(id: Long): Result<Unit> = Result.success(Unit)
+
+    override suspend fun setCategoryArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Result<Unit> = Result.success(Unit)
+
+    override fun categories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+    override fun archivedCategories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+    override fun categoryNamesWithLinkedExercises(): Flow<Set<String>> = MutableStateFlow(emptySet())
+
+    override suspend fun getAllCategories(): Result<List<Category>> = Result.success(emptyList())
 }
 
 /**
@@ -189,7 +216,7 @@ class EntryCreateViewModelTest {
         Exercise(
             id = 1L,
             name = "Подтягивания",
-            category = ExerciseCategory.PULL,
+            category = "PULL",
             isCustom = false,
             comment = null,
             createdAt = 0L,
@@ -200,7 +227,7 @@ class EntryCreateViewModelTest {
         Exercise(
             id = 2L,
             name = "Планка",
-            category = ExerciseCategory.CORE,
+            category = "CORE",
             isCustom = false,
             comment = null,
             createdAt = 0L,
@@ -212,7 +239,7 @@ class EntryCreateViewModelTest {
         Exercise(
             id = 3L,
             name = "Отжимания",
-            category = ExerciseCategory.PUSH,
+            category = "PUSH",
             isCustom = false,
             comment = null,
             createdAt = 0L,

@@ -2,22 +2,28 @@ package com.myworkouts.data.repository
 
 import android.database.sqlite.SQLiteConstraintException
 import androidx.room.withTransaction
+import com.myworkouts.data.db.CategoryDao
+import com.myworkouts.data.db.CategoryEntity
 import com.myworkouts.data.db.ExerciseDao
 import com.myworkouts.data.db.ExerciseEntryDao
 import com.myworkouts.data.db.ExerciseEntryEntity
 import com.myworkouts.data.db.StandardExercise
 import com.myworkouts.data.db.WorkoutDatabase
+import com.myworkouts.data.db.standardCategories
 import com.myworkouts.data.db.toDomain
 import com.myworkouts.data.db.toEntity
 import com.myworkouts.data.db.toEntryWithExercise
 import com.myworkouts.data.db.toListItem
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlin.random.Random
 
 /**
  * Room-реализация [WorkoutDataRepository]: каталог упражнений и записи
@@ -34,18 +40,25 @@ import kotlinx.coroutines.flow.map
  * @property standardExercises стандартный набор для восстановления в
  *   [deleteAllData] — тот же список, что передаётся в
  *   [com.myworkouts.data.db.WorkoutDatabase.create]
+ * @property colorGenerator генератор цвета новой категории — по умолчанию
+ *   [generateCategoryColor]; `internal`-шов для JVM-тестов: подмена
+ *   стабом, т.к. `android.graphics.Color` на JVM недоступен
+ *   (custom-categories, design Decision 3)
  *
- * `TooManyFunctions` подавлен осознанно: 18 методов — единый контракт
- * [WorkoutDataRepository] (app-data-screen, exercises-archive); дробить
- * реализацию на части хуже подавления.
+ * `TooManyFunctions` подавлен осознанно: методы — единый контракт
+ * [WorkoutDataRepository] (app-data-screen, exercises-archive,
+ * custom-categories); дробить реализацию на части хуже подавления.
  */
 @Suppress("TooManyFunctions")
 class RoomWorkoutDataRepository(
     private val database: WorkoutDatabase,
-    private val standardExercises: List<StandardExercise>
+    private val standardExercises: List<StandardExercise>,
+    internal val colorGenerator: (existingColors: List<Int>, random: Random) -> Int =
+        ::generateCategoryColor
 ) : WorkoutDataRepository {
     private val exerciseDao: ExerciseDao = database.exerciseDao()
     private val exerciseEntryDao: ExerciseEntryDao = database.exerciseEntryDao()
+    private val categoryDao: CategoryDao = database.categoryDao()
 
     /**
      * Возвращает реактивный список упражнений каталога, отфильтрованный
@@ -86,10 +99,16 @@ class RoomWorkoutDataRepository(
             .map { entities -> entities.map { it.toDomain() } }
 
     /**
-     * Реактивный счётчик архивных упражнений (exercises-archive, design
-     * Decision 2) — условная видимость кнопки архива в `TopAppBar`.
+     * Реактивный признак «в архиве есть упражнения или категории»
+     * (exercises-archive, design Decision 2 + custom-categories, spec
+     * «Кнопка архива в TopAppBar») — combine двух существующих
+     * счётчиков DAO: интерфейсу не нужен третий SQL-запрос.
      */
-    override fun archivedCount(): Flow<Int> = exerciseDao.observeArchivedCount()
+    override fun hasArchived(): Flow<Boolean> =
+        combine(
+            exerciseDao.observeArchivedCount(),
+            categoryDao.observeArchivedCount()
+        ) { exercises, categories -> exercises > 0 || categories > 0 }
 
     /**
      * Вставляет новое упражнение в каталог. Возвращает id вставленной записи
@@ -285,12 +304,170 @@ class RoomWorkoutDataRepository(
             exerciseEntryDao.historyForExercise(exerciseId).map { it.toDomain() }
         }
 
+    /**
+     * Создаёт кастомную категорию (custom-categories, design Decision 3).
+     * Проверки до записи в БД: непустое после `trim()` имя и уникальность
+     * по `name.trim().lowercase()` среди всех категорий (снимок
+     * [CategoryDao.getAll] — активные и архивные); unique-индекс БД —
+     * запасная страховка по точному совпадению. Цвет генерируется от
+     * цветов всех существующих категорий.
+     */
+    override suspend fun addCategory(name: String): Result<Category> =
+        runCatching {
+            val trimmedName = name.trim()
+            if (trimmedName.isEmpty()) {
+                error("Имя категории не может быть пустым")
+            }
+            val existingCategories = categoryDao.getAll()
+            val normalizedName = trimmedName.lowercase()
+            if (existingCategories.any { existing ->
+                    existing.name.trim().lowercase() == normalizedName
+                }
+            ) {
+                error("Категория «$trimmedName» уже существует")
+            }
+            val colorArgb =
+                colorGenerator(
+                    existingCategories.map { existing -> existing.colorArgb },
+                    Random.Default
+                )
+            val entity =
+                CategoryEntity(
+                    name = trimmedName,
+                    colorArgb = colorArgb,
+                    isCustom = true,
+                    isArchived = false,
+                    createdAt = System.currentTimeMillis()
+                )
+            entity.copy(id = categoryDao.insert(entity)).toDomain()
+        }
+
+    /**
+     * Переименовывает кастомную категорию одной транзакцией
+     * (custom-categories, design Decision 1): [CategoryDao.updateName] +
+     * [ExerciseDao.updateCategoryName] — активные и архивные упражнения
+     * одним UPDATE без фильтра архива. Проверки — как в [addCategory]
+     * (дубль исключает саму переименуемую категорию); при любой ошибке
+     * транзакция откатывается. Стандартная категория —
+     * [StandardCategoryDeletionException]; in-use-блокировка для rename
+     * не применима — ссылки упражнений обновляются той же транзакцией.
+     */
+    override suspend fun renameCategory(
+        id: Long,
+        newName: String
+    ): Result<Unit> =
+        runCatching {
+            database.withTransaction {
+                val category =
+                    categoryDao.getById(id)
+                        ?: error("Категория не найдена")
+                if (!category.isCustom) {
+                    throw StandardCategoryDeletionException()
+                }
+                val trimmedName = newName.trim()
+                if (trimmedName.isEmpty()) {
+                    error("Имя категории не может быть пустым")
+                }
+                val normalizedName = trimmedName.lowercase()
+                val hasDuplicate =
+                    categoryDao
+                        .getAll()
+                        .any { existing ->
+                            existing.id != id &&
+                                existing.name.trim().lowercase() == normalizedName
+                        }
+                if (hasDuplicate) {
+                    error("Категория «$trimmedName» уже существует")
+                }
+                categoryDao.updateName(id, trimmedName)
+                exerciseDao.updateCategoryName(category.name, trimmedName)
+            }
+        }
+
+    /**
+     * Удаляет категорию — pre-check внутри транзакции (custom-categories,
+     * design Decision 4): отсутствующий id, стандартная категория,
+     * ссылающиеся упражнения (активные или архивные) — типизированные
+     * ошибки; VM маппит их в sealed `DeleteCategoryError`. Ссылок по
+     * имени без FK нет — целостность держит порядок проверок в
+     * транзакции.
+     */
+    override suspend fun deleteCategory(id: Long): Result<Unit> =
+        runCatching {
+            database.withTransaction {
+                val category =
+                    categoryDao.getById(id)
+                        ?: error("Категория не найдена")
+                if (!category.isCustom) {
+                    throw StandardCategoryDeletionException()
+                }
+                if (exerciseDao.countByCategoryName(category.name) > 0) {
+                    throw CategoryInUseDeletionException()
+                }
+                categoryDao.deleteById(id)
+            }
+        }
+
+    /**
+     * Архивация/восстановление категории (custom-categories, spec
+     * «Архивация и восстановление категории»): один SQL round-trip через
+     * [CategoryDao.updateArchived] — паттерн [setArchived]. Упражнения
+     * категории не трогаются; отсутствующий id —
+     * `Result.failure(IllegalStateException("Категория не найдена"))` —
+     * race между сбором списка и подтверждением.
+     */
+    override suspend fun setCategoryArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Result<Unit> =
+        runCatching {
+            if (categoryDao.updateArchived(id, isArchived) == 0) {
+                error("Категория не найдена")
+            }
+        }
+
+    /** Реактивный список активных категорий — маппинг [CategoryEntity.toDomain]. */
+    override fun categories(): Flow<List<Category>> =
+        categoryDao
+            .observeCategories()
+            .map { entities -> entities.map { it.toDomain() } }
+
+    /** Реактивный список архивных категорий — тот же контракт, что в [categories]. */
+    override fun archivedCategories(): Flow<List<Category>> =
+        categoryDao
+            .observeArchivedCategories()
+            .map { entities -> entities.map { it.toDomain() } }
+
+    /**
+     * Реактивный набор имён категорий с упражнениями (custom-categories,
+     * design Decision 4): `SELECT DISTINCT` схлопывает дубли множеством.
+     */
+    override fun categoryNamesWithLinkedExercises(): Flow<Set<String>> =
+        exerciseDao
+            .observeCategoryNamesInUse()
+            .map { names -> names.toSet() }
+
+    /** Разовый снимок всех категорий — по образцу [getAllExercises]. */
+    override suspend fun getAllCategories(): Result<List<Category>> =
+        runCatching {
+            categoryDao.getAll().map { it.toDomain() }
+        }
+
     override suspend fun importData(
+        categories: List<Category>,
         exercises: List<Exercise>,
         entries: List<BackupEntry>
     ): Result<Unit> =
         runCatching {
             database.withTransaction {
+                val now = System.currentTimeMillis()
+                // 1. Категории (custom-categories, design D9): вставка до
+                // упражнений — их категории резолвятся именем. `createdAt` —
+                // момент импорта: в файле его нет, сортировка списков — по
+                // нему.
+                categories.forEach { category ->
+                    categoryDao.insert(category.toEntity(createdAt = now))
+                }
                 // Карта «ключ имени → id» поверх текущего каталога и
                 // вставленных упражнений (design Decision 6). Вставка —
                 // одиночными insert: нужен возвращённый id для связей.
@@ -304,7 +481,6 @@ class RoomWorkoutDataRepository(
                             put(exercise.name.trim().lowercase(), id)
                         }
                     }
-                val now = System.currentTimeMillis()
                 val entities =
                     entries.map { backup ->
                         val exerciseId =
@@ -337,8 +513,10 @@ class RoomWorkoutDataRepository(
             database.withTransaction {
                 exerciseEntryDao.deleteAll()
                 exerciseDao.deleteAll()
+                categoryDao.deleteAll()
                 // Восстановление стандартного набора тем же маппингом, что
-                // и prepopulate: isCustom = false, честный createdAt = now.
+                // и prepopulate: isCustom = false, честный createdAt = now;
+                // у категорий — единый now на набор (стабильная сортировка).
                 val now = System.currentTimeMillis()
                 standardExercises.forEach { standard ->
                     exerciseDao.insert(
@@ -354,6 +532,108 @@ class RoomWorkoutDataRepository(
                         ).toEntity()
                     )
                 }
+                standardCategories.forEach { standard ->
+                    categoryDao.insert(
+                        CategoryEntity(
+                            name = standard.name,
+                            colorArgb = standard.colorArgb,
+                            isCustom = false,
+                            isArchived = false,
+                            createdAt = now
+                        )
+                    )
+                }
             }
         }
+}
+
+/** Полное кольцо hue в модели HSV (custom-categories, design Decision 3). */
+private const val DEGREES_IN_HUE_RING = 360f
+
+/**
+ * Минимальный угловой отступ hue новой категории от существующих
+ * (custom-categories, design Decision 3): гарантирован, пока наибольший
+ * зазор кольца не меньше `2 × MIN_HUE_OFFSET`.
+ */
+private const val MIN_HUE_OFFSET = 15f
+
+/** Фиксированные насыщенность/яркость — визуально согласованы с палитрой категорий. */
+private const val CATEGORY_COLOR_SATURATION = 0.55f
+private const val CATEGORY_COLOR_VALUE = 0.55f
+
+/** Число компонент HSV-массива `android.graphics.Color` (hue, saturation, value). */
+private const val HSV_COMPONENTS = 3
+
+/**
+ * Выбирает hue для новой категории на hue-кольце (custom-categories,
+ * design Decision 3) — чистая функция, детерминизм через injectable
+ * [random] для JVM-тестов.
+ *
+ * Наибольший зазор кольца `gap ≥ 2 × MIN_HUE_OFFSET` (30°) — случайный
+ * hue внутри центрального участка зазора, до обоих соседних hue остаётся
+ * ≥ 15°; все зазоры меньше 30° — центр наибольшего зазора (отступ может
+ * нарушаться — повторы допустимы). Гарантия отступа держит до 12
+ * категорий: максимальный зазор ≥ среднего `360/n` ≥ 30°.
+ *
+ * @param existingHues hue существующих категорий (активных и архивных)
+ * @param random injectable источник случайности
+ * @return hue новой категории в градусах
+ */
+internal fun pickCategoryHue(
+    existingHues: List<Float>,
+    random: Random
+): Float {
+    if (existingHues.isEmpty()) {
+        return random.nextFloat() * DEGREES_IN_HUE_RING
+    }
+    val sortedHues = existingHues.map { it.mod(DEGREES_IN_HUE_RING) }.sorted()
+    var largestGap = -1f
+    var gapStart = 0f
+    for (index in sortedHues.indices) {
+        val start = sortedHues[index]
+        val end =
+            if (index == sortedHues.lastIndex) {
+                sortedHues[0] + DEGREES_IN_HUE_RING
+            } else {
+                sortedHues[index + 1]
+            }
+        val gap = end - start
+        if (gap > largestGap) {
+            largestGap = gap
+            gapStart = start
+        }
+    }
+    return if (largestGap >= 2 * MIN_HUE_OFFSET) {
+        gapStart + MIN_HUE_OFFSET + random.nextFloat() * (largestGap - 2 * MIN_HUE_OFFSET)
+    } else {
+        gapStart + largestGap / 2f
+    }
+}
+
+/**
+ * Генерирует ARGB-цвет новой категории (custom-categories, design
+ * Decision 3): существующие цвета → hue через `Color.colorToHSV`
+ * (единая модель HSV во всех расчётах), hue — [pickCategoryHue],
+ * S/V фиксированные. По умолчанию подставляется в
+ * [RoomWorkoutDataRepository.colorGenerator]; JVM-тесты подменяют шов
+ * целиком — `android.graphics.Color` на JVM недоступен.
+ *
+ * @param existingColors ARGB-цвета существующих категорий
+ * @param random injectable источник случайности
+ * @return ARGB-цвет новой категории
+ */
+private fun generateCategoryColor(
+    existingColors: List<Int>,
+    random: Random
+): Int {
+    val hsv = FloatArray(HSV_COMPONENTS)
+    val hues =
+        existingColors.map { color ->
+            android.graphics.Color.colorToHSV(color, hsv)
+            hsv[0]
+        }
+    val hue = pickCategoryHue(hues, random)
+    return android.graphics.Color.HSVToColor(
+        floatArrayOf(hue, CATEGORY_COLOR_SATURATION, CATEGORY_COLOR_VALUE)
+    )
 }

@@ -5,10 +5,10 @@ import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.navigation.Screen
@@ -102,6 +102,7 @@ private class FakeExerciseRepository : WorkoutDataRepository {
     override suspend fun exerciseHistory(exerciseId: Long): Result<List<ExerciseEntry>> = Result.success(emptyList())
 
     override suspend fun importData(
+        categories: List<Category>,
         exercises: List<Exercise>,
         entries: List<BackupEntry>
     ): Result<Unit> = Result.success(Unit)
@@ -118,7 +119,36 @@ private class FakeExerciseRepository : WorkoutDataRepository {
 
     override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
 
-    override fun archivedCount(): Flow<Int> = MutableStateFlow(0)
+    // Новый контракт категорий (custom-categories, этап 2): заглушки —
+    // ExerciseCreateViewModel их не вызывает.
+
+    override suspend fun addCategory(name: String): Result<Category> =
+        Result.success(Category(id = 0L, name = name.trim(), colorArgb = 0, isCustom = true))
+
+    override suspend fun renameCategory(
+        id: Long,
+        newName: String
+    ): Result<Unit> = Result.success(Unit)
+
+    override suspend fun deleteCategory(id: Long): Result<Unit> = Result.success(Unit)
+
+    override suspend fun setCategoryArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Result<Unit> = Result.success(Unit)
+
+    /** Активные категории; VM подписывается на этот поток реактивно. */
+    val categoriesFlow = MutableStateFlow<List<Category>>(emptyList())
+
+    override fun categories(): Flow<List<Category>> = categoriesFlow
+
+    override fun archivedCategories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+    override fun hasArchived(): Flow<Boolean> = MutableStateFlow(false)
+
+    override fun categoryNamesWithLinkedExercises(): Flow<Set<String>> = MutableStateFlow(emptySet())
+
+    override suspend fun getAllCategories(): Result<List<Category>> = Result.success(emptyList())
 }
 
 /**
@@ -161,7 +191,7 @@ class ExerciseCreateViewModelTest {
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             viewModel.onNameChange("Жим")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             advanceUntilIdle()
 
             // When
@@ -208,7 +238,7 @@ class ExerciseCreateViewModelTest {
         Exercise(
             id = 5L,
             name = "Жим лёжа",
-            category = ExerciseCategory.PUSH,
+            category = "PUSH",
             isCustom = true,
             comment = "узкий хват",
             createdAt = 1_234_567_890L,
@@ -277,7 +307,7 @@ class ExerciseCreateViewModelTest {
 
             // When
             viewModel.onNameChange("Жим")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             advanceUntilIdle()
 
             // Then
@@ -319,7 +349,7 @@ class ExerciseCreateViewModelTest {
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             viewModel.onNameChange("Жим")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             advanceUntilIdle()
             assertTrue(viewModel.uiState.value.canSave, "Пре-условие: canSave = true")
 
@@ -400,7 +430,7 @@ class ExerciseCreateViewModelTest {
             backgroundScope.launch { viewModel.uiState.collect { } }
 
             // When — категория без имени/комментария
-            viewModel.onCategoryChange(ExerciseCategory.PULL)
+            viewModel.onCategoryChange("PULL")
             advanceUntilIdle()
 
             // Then
@@ -498,7 +528,7 @@ class ExerciseCreateViewModelTest {
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             viewModel.onNameChange("Жим")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             advanceUntilIdle()
 
             // When
@@ -510,7 +540,7 @@ class ExerciseCreateViewModelTest {
             val exercise = repository.addedExercises.single()
             assertEquals(0L, exercise.id, "id = 0 для нового упражнения")
             assertEquals("Жим", exercise.name, "name из формы")
-            assertEquals(ExerciseCategory.PUSH, exercise.category, "category из формы")
+            assertEquals("PUSH", exercise.category, "category из формы")
             assertTrue(exercise.isCustom, "isCustom = true — пользовательское упражнение")
             assertNull(exercise.comment, "comment = null — поле не заполнялось")
             assertEquals(
@@ -532,7 +562,7 @@ class ExerciseCreateViewModelTest {
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             viewModel.onNameChange("  Жим  ")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             advanceUntilIdle()
 
             // When
@@ -554,7 +584,7 @@ class ExerciseCreateViewModelTest {
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             viewModel.onNameChange("Жим")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             viewModel.onCommentChange("  узкий хват  ")
             advanceUntilIdle()
 
@@ -577,7 +607,7 @@ class ExerciseCreateViewModelTest {
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             viewModel.onNameChange("Жим")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             viewModel.onCommentChange("   ")
             advanceUntilIdle()
 
@@ -600,7 +630,7 @@ class ExerciseCreateViewModelTest {
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             viewModel.onNameChange("Жим")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             advanceUntilIdle()
             var onSavedCalled = false
 
@@ -625,7 +655,7 @@ class ExerciseCreateViewModelTest {
             val actions: List<Pair<String, (ExerciseCreateViewModel) -> Unit>> =
                 listOf(
                     "onNameChange" to { it.onNameChange("Тяга") },
-                    "onCategoryChange" to { it.onCategoryChange(ExerciseCategory.LEGS) },
+                    "onCategoryChange" to { it.onCategoryChange("LEGS") },
                     "onMeasuredByChange" to { it.onMeasuredByChange(ExerciseMeasuredBy.TIME) },
                     "onCommentChange" to { it.onCommentChange("коммент") }
                 )
@@ -636,7 +666,7 @@ class ExerciseCreateViewModelTest {
                 val viewModel = createViewModel()
                 backgroundScope.launch { viewModel.uiState.collect { } }
                 viewModel.onNameChange("Жим")
-                viewModel.onCategoryChange(ExerciseCategory.PUSH)
+                viewModel.onCategoryChange("PUSH")
                 advanceUntilIdle()
                 viewModel.save { }
                 advanceUntilIdle()
@@ -664,7 +694,7 @@ class ExerciseCreateViewModelTest {
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             viewModel.onNameChange("Жим")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             advanceUntilIdle()
             var onSavedCalls = 0
 
@@ -696,7 +726,7 @@ class ExerciseCreateViewModelTest {
             val state = viewModel.uiState.value
             assertTrue(state.isEditMode, "Экран открыт с exerciseId — isEditMode = true")
             assertEquals(editExercise.name, state.name, "name предзаполнен из БД")
-            assertEquals(editExercise.category, state.category, "category предзаполнена из БД")
+            assertEquals(editExercise.category, state.categoryName, "categoryName предзаполнен из БД")
             assertEquals(editExercise.measuredBy, state.measuredBy, "measuredBy предзаполнен из БД")
             assertEquals(editExercise.comment, state.comment, "comment предзаполнен из БД")
             assertFalse(state.isExerciseMissing, "Упражнение найдено — isExerciseMissing = false")
@@ -825,7 +855,7 @@ class ExerciseCreateViewModelTest {
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             viewModel.onNameChange("Жим")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             advanceUntilIdle()
 
             // When
@@ -854,7 +884,7 @@ class ExerciseCreateViewModelTest {
 
             // When — форма заполнена, нажато «Сохранить»
             viewModel.onNameChange("Жим")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             advanceUntilIdle()
             var onSavedCalls = 0
             viewModel.save { onSavedCalls++ }
@@ -885,7 +915,7 @@ class ExerciseCreateViewModelTest {
 
             // When — форма заполнена, нажато «Сохранить»
             viewModel.onNameChange("Жим")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             advanceUntilIdle()
             var onSavedCalls = 0
             viewModel.save { onSavedCalls++ }
@@ -908,7 +938,7 @@ class ExerciseCreateViewModelTest {
         Exercise(
             id = 7L,
             name = "Подтягивания",
-            category = ExerciseCategory.PULL,
+            category = "PULL",
             isCustom = true,
             comment = "широкий хват",
             createdAt = 1_700_000_000_000L,
@@ -924,7 +954,7 @@ class ExerciseCreateViewModelTest {
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             viewModel.onNameChange("Жим")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             advanceUntilIdle()
             viewModel.save { }
             advanceUntilIdle()
@@ -1037,7 +1067,7 @@ class ExerciseCreateViewModelTest {
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             viewModel.onNameChange("Жим")
-            viewModel.onCategoryChange(ExerciseCategory.PUSH)
+            viewModel.onCategoryChange("PUSH")
             viewModel.onIconNumberChange(7)
             advanceUntilIdle()
 
@@ -1069,5 +1099,124 @@ class ExerciseCreateViewModelTest {
             val updated = repository.updatedExercises.single()
             assertEquals(exerciseWithIcon.id, updated.id, "id из оригинала")
             assertEquals(9, updated.iconNumber, "iconNumber = 9 (новая выбранная)")
+        }
+
+    // ===== custom-categories, этап 8: дропдаун категорий из БД =====
+
+    /** Активные категории: две стандартные + одна кастомная. */
+    private val activeCategories =
+        listOf(
+            Category(id = 1L, name = "PUSH", colorArgb = 1, isCustom = false),
+            Category(id = 2L, name = "PULL", colorArgb = 2, isCustom = false),
+            Category(id = 3L, name = "Спина", colorArgb = 3, isCustom = true)
+        )
+
+    /**
+     * `availableCategories` наполняется реактивной подпиской на
+     * `categories()`: категории, созданные в другой сессии, появляются
+     * без пересоздания ViewModel.
+     */
+    @Test
+    fun categories_flow_updates_available_categories_reactively() =
+        runTest(testDispatcher) {
+            // Given — VM создан до появления категорий в БД
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            assertTrue(
+                viewModel.uiState.value.availableCategories
+                    .isEmpty(),
+                "Старт: в БД нет категорий — список пуст"
+            )
+
+            // When — категории появились (созданы в другой сессии)
+            repository.categoriesFlow.value = activeCategories
+            advanceUntilIdle()
+
+            // Then — список обновился без пересоздания VM
+            assertEquals(
+                activeCategories,
+                viewModel.uiState.value.availableCategories,
+                "availableCategories = активные категории из БД"
+            )
+
+            // When — ещё одна категория добавлена
+            repository.categoriesFlow.value =
+                activeCategories + Category(id = 4L, name = "Гантельная", colorArgb = 4, isCustom = true)
+            advanceUntilIdle()
+
+            // Then — реактивное пополнение списка
+            assertEquals(
+                4,
+                viewModel.uiState.value.availableCategories.size,
+                "Новая категория появляется в availableCategories без пересоздания VM"
+            )
+        }
+
+    /**
+     * Create-режим: `dropdownCategories` = активные категории (архивные
+     * приходят отдельным потоком и в `categories()` не попадают).
+     */
+    @Test
+    fun dropdown_categories_in_create_mode_equals_available_categories() =
+        runTest(testDispatcher) {
+            // Given — create-режим с категориями в БД
+            repository.categoriesFlow.value = activeCategories
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then — без выбранной категории список не расширяется
+            assertEquals(
+                activeCategories,
+                viewModel.uiState.value.dropdownCategories,
+                "Create-режим: dropdownCategories = активные, архивных нет"
+            )
+        }
+
+    /**
+     * Edit-режим с архивной текущей категорией: она добавляется в список
+     * дропдауна (spec «Текущая архивная категория видна при редактировании»),
+     * прочие архивные остаются скрытыми, дублей активной нет.
+     */
+    @Test
+    fun dropdown_categories_in_edit_mode_includes_archived_current_only() =
+        runTest(testDispatcher) {
+            // Given — упражнение архивной категории «Плечи» (нет среди активных)
+            val exercise =
+                editExercise.copy(category = "Плечи")
+            repository.exerciseById = exercise
+            repository.categoriesFlow.value = activeCategories
+            val viewModel = createViewModel(exerciseId = exercise.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then — активные + текущая архивная в конце
+            assertEquals(
+                listOf("PUSH", "PULL", "Спина", "Плечи"),
+                viewModel.uiState.value.dropdownCategories
+                    .map { it.name },
+                "Edit: активные категории + текущая архивная «Плечи»"
+            )
+        }
+
+    /** Edit-режим с активной текущей категорией — без дубля в списке. */
+    @Test
+    fun dropdown_categories_in_edit_mode_does_not_duplicate_active_current() =
+        runTest(testDispatcher) {
+            // Given — упражнение активной категории PUSH
+            repository.exerciseById = editExercise // category = "PUSH"
+            repository.categoriesFlow.value = activeCategories
+            val viewModel = createViewModel(exerciseId = editExercise.id)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then — PUSH один раз
+            assertEquals(
+                listOf("PUSH", "PULL", "Спина"),
+                viewModel.uiState.value.dropdownCategories
+                    .map { it.name },
+                "Edit: активная текущая категория не дублируется"
+            )
         }
 }

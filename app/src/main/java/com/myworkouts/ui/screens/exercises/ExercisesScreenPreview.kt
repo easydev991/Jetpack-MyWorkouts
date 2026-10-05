@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.ExercisesUiState
@@ -53,7 +52,7 @@ private val previewPullups =
     Exercise(
         id = 1L,
         name = "Подтягивания",
-        category = ExerciseCategory.PULL,
+        category = "PULL",
         isCustom = false,
         comment = "широкий хват",
         createdAt = 1_721_000_000_000L,
@@ -65,7 +64,7 @@ private val previewPlank =
     Exercise(
         id = 2L,
         name = "Планка",
-        category = ExerciseCategory.CORE,
+        category = "CORE",
         isCustom = false,
         comment = null,
         createdAt = 1_721_100_000_000L,
@@ -77,7 +76,7 @@ private val previewRunning =
     Exercise(
         id = 3L,
         name = "Бег",
-        category = ExerciseCategory.CARDIO,
+        category = "CARDIO",
         isCustom = false,
         comment = null,
         createdAt = 1_721_200_000_000L,
@@ -89,7 +88,7 @@ private val previewBench =
     Exercise(
         id = 100L,
         name = "Жим",
-        category = ExerciseCategory.PUSH,
+        category = "PUSH",
         isCustom = true,
         comment = null,
         createdAt = 1_721_300_000_000L,
@@ -165,9 +164,8 @@ internal fun ExerciseContextMenuPreview() {
                 Text(text = "Кастомное (3 пункта): ${previewBench.name}")
                 Box {
                     Text(text = previewBench.name)
-                    ExerciseContextMenu(
+                    ActiveContextMenu(
                         offset = DpOffset.Zero,
-                        mode = ExerciseMenuMode.Active,
                         isCustom = true,
                         onMenuDismiss = {},
                         onEditClick = {},
@@ -178,9 +176,8 @@ internal fun ExerciseContextMenuPreview() {
                 Text(text = "Стандартное (1 пункт): ${previewRunning.name}")
                 Box {
                     Text(text = previewRunning.name)
-                    ExerciseContextMenu(
+                    ActiveContextMenu(
                         offset = DpOffset.Zero,
-                        mode = ExerciseMenuMode.Active,
                         isCustom = false,
                         onMenuDismiss = {},
                         onEditClick = {},
@@ -327,7 +324,7 @@ internal fun ExerciseArchiveDialogWithSuppressPreviewChecked() {
 }
 
 /**
- * §9.5 exercises-archive: состояние `archivedCount = 0` — кнопка
+ * §9.5 exercises-archive: состояние `hasArchived = false` — кнопка
  * архива в TopAppBar скрыта.
  */
 @Preview(showBackground = true, locale = "ru")
@@ -342,7 +339,7 @@ internal fun ExercisesScreenContentArchivedCountHiddenPreview() {
                         uiState =
                             ExercisesUiState.Success(
                                 exercises = listOf(previewPullups, previewPlank),
-                                archivedCount = 0
+                                hasArchived = false
                             )
                     )
             )
@@ -351,7 +348,7 @@ internal fun ExercisesScreenContentArchivedCountHiddenPreview() {
 }
 
 /**
- * §9.5 exercises-archive: состояние `archivedCount = 1` — кнопка
+ * §9.5 exercises-archive: состояние `hasArchived = true` — кнопка
  * архива в TopAppBar видна (Icons.Filled.Archive).
  */
 @Preview(showBackground = true, locale = "ru")
@@ -366,7 +363,7 @@ internal fun ExercisesScreenContentArchivedCountVisiblePreview() {
                         uiState =
                             ExercisesUiState.Success(
                                 exercises = listOf(previewPullups, previewPlank),
-                                archivedCount = 1
+                                hasArchived = true
                             )
                     )
             )

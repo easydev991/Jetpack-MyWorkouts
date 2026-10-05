@@ -11,7 +11,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.ExerciseCreateUiState
@@ -66,7 +65,7 @@ internal fun ExerciseCreateScreenContentFilledPreview() {
                 previewScreenState(
                     ExerciseCreateUiState(
                         name = "Жим лёжа",
-                        category = ExerciseCategory.PUSH
+                        categoryName = "PUSH"
                     )
                 )
         )
@@ -84,7 +83,7 @@ internal fun ExerciseCreateScreenContentWithCommentPreview() {
                 previewScreenState(
                     ExerciseCreateUiState(
                         name = "Жим лёжа",
-                        category = ExerciseCategory.PUSH,
+                        categoryName = "PUSH",
                         comment = "узкий хват"
                     )
                 )
@@ -103,7 +102,7 @@ internal fun ExerciseCreateScreenContentTimePreview() {
                 previewScreenState(
                     ExerciseCreateUiState(
                         name = "Планка",
-                        category = ExerciseCategory.CORE,
+                        categoryName = "CORE",
                         measuredBy = ExerciseMeasuredBy.TIME
                     )
                 )
@@ -123,7 +122,7 @@ internal fun ExerciseCreateScreenContentEditUnchangedPreview() {
                 previewScreenState(
                     ExerciseCreateUiState(
                         name = "Жим лёжа",
-                        category = ExerciseCategory.PUSH,
+                        categoryName = "PUSH",
                         comment = "узкий хват",
                         isEditMode = true
                     )
@@ -143,7 +142,7 @@ internal fun ExerciseCreateScreenContentEditChangedPreview() {
                 previewScreenState(
                     ExerciseCreateUiState(
                         name = "Жим лёжа под углом",
-                        category = ExerciseCategory.PUSH,
+                        categoryName = "PUSH",
                         comment = "узкий хват",
                         isEditMode = true,
                         hasChanges = true
@@ -206,7 +205,7 @@ internal fun ExerciseCreateScreenContentWithIconSectionPreview() {
                     uiState =
                         ExerciseCreateUiState(
                             name = "Жим лёжа",
-                            category = ExerciseCategory.PUSH,
+                            categoryName = "PUSH",
                             iconNumber = ExerciseIcons.PULLUPS
                         )
                 )

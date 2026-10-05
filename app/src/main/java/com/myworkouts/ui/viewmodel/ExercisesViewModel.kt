@@ -12,11 +12,16 @@ import com.myworkouts.analytics.AppErrorOperation
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.crash.CrashlyticsHelper
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.repository.CategoryInUseDeletionException
 import com.myworkouts.data.repository.LinkedEntriesDeletionException
+import com.myworkouts.data.repository.StandardCategoryDeletionException
 import com.myworkouts.data.repository.StandardExerciseDeletionException
 import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.model.Category
+import com.myworkouts.domain.model.DeleteCategoryError
 import com.myworkouts.domain.model.DeleteExerciseError
 import com.myworkouts.domain.model.Exercise
+import com.myworkouts.ui.state.ExercisesTab
 import com.myworkouts.ui.state.ExercisesUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -82,21 +87,53 @@ class ExercisesViewModel(
      */
     private val pendingArchiveId: MutableStateFlow<Long?> = MutableStateFlow(null)
 
+    // ---------- Категории (custom-categories, этап 5) ----------
+
     /**
-     * Реактивный счётчик архивных упражнений (exercises-archive design
-     * Decision 2): значение попадает в
-     * [ExercisesUiState.Success.archivedCount] для условной видимости
+     * Выбранная вкладка экрана (custom-categories, design Decision 6):
+     * переживает поворот экрана (ViewModel), НЕ персистится между
+     * запусками.
+     */
+    private val selectedTab: MutableStateFlow<ExercisesTab> =
+        MutableStateFlow(ExercisesTab.EXERCISES)
+
+    /**
+     * Id категории, для которой открыт алерт подтверждения удаления;
+     * `null` — алерт закрыт (spec «Алерт удаления категории и пре-чек
+     * использования»).
+     */
+    private val pendingCategoryDeleteId: MutableStateFlow<Long?> = MutableStateFlow(null)
+
+    /**
+     * One-shot причина ошибки удаления категории для снекбара; `null` —
+     * нет ошибки. Сбрасывается через [onCategoryErrorShown] (паттерн
+     * [deleteError]).
+     */
+    private val categoryDeleteError: MutableStateFlow<DeleteCategoryError?> =
+        MutableStateFlow(null)
+
+    /**
+     * Id категории, для которой открыт алерт подтверждения архивации;
+     * `null` — алерт закрыт (custom-categories, design Decision 8).
+     */
+    private val pendingCategoryArchiveId: MutableStateFlow<Long?> = MutableStateFlow(null)
+
+    /**
+     * Реактивный признак «в архиве есть упражнения или категории»
+     * (exercises-archive design Decision 2 + custom-categories, spec
+     * «Кнопка архива в TopAppBar»): значение попадает в
+     * [ExercisesUiState.Success.hasArchived] для условной видимости
      * кнопки архива в `TopAppBar`. `WhileSubscribed(defaultSubscriptionTimeoutMs())`
      * — прецедент `MainViewModel`: подписка живёт 5 секунд после отписки,
      * повторные открытия экрана не дёргают SQL.
      */
-    private val archivedCount =
+    private val hasArchived =
         repository
-            .archivedCount()
+            .hasArchived()
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(defaultSubscriptionTimeoutMs()),
-                initialValue = 0
+                initialValue = false
             )
 
     /**
@@ -122,33 +159,64 @@ class ExercisesViewModel(
             )
 
     /**
-     * UI State экрана: `Loading` до первой эмиссии репозитория,
-     * затем `Success` со списком каталога, состоянием подтверждения
-     * удаления ([ExercisesUiState.Success.pendingDeleteId]), one-shot
-     * ошибкой ([ExercisesUiState.Success.deleteError]), состоянием
-     * подтверждения архивации ([ExercisesUiState.Success.pendingArchiveId])
-     * и реактивным счётчиком архивных
-     * ([ExercisesUiState.Success.archivedCount]).
+     * Реактивный набор имён категорий с упражнениями для pre-check в
+     * [requestCategoryDelete] (custom-categories, design Decision 4).
+     * Паттерн — [exerciseIdsWithLinkedEntries]: `Eagerly` + синхронное
+     * чтение `value` на тапе.
+     */
+    private val categoryNamesWithLinkedExercises =
+        repository
+            .categoryNamesWithLinkedExercises()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.Eagerly,
+                initialValue = emptySet()
+            )
+
+    /**
+     * UI State экрана: `Loading` до первой эмиссии репозитория, затем
+     * `Success` со списками упражнений и категорий, выбранной вкладкой,
+     * pending-состояниями подтверждений, one-shot ошибками и признаком
+     * непустого архива.
      *
-     * Пять потоков в `combine` — на пределе типизированного overload
-     * (exercises-archive design.md Risks: «5 streams в `combine` —
-     * на пределе overload»). Если добавится шестой поток — переход на
-     * vararg-форму или каскад `combine`.
+     * 10 потоков — выше типизированного overload `combine`, поэтому
+     * группировка в каскад (design Decision 6, Risks): списочные данные
+     * ([ExercisesCatalog]) и диалоговые состояния ([ExercisesDialogs])
+     * собираются типизированными `combine(5)`, финальный vararg-`combine`
+     * склеивает их с [pendingCategoryArchiveId] в один `stateIn`.
      */
     val uiState: StateFlow<ExercisesUiState> =
         combine(
-            repository.exercises(""),
-            pendingDeleteId,
-            deleteError,
-            pendingArchiveId,
-            archivedCount
-        ) { exercises, pendingId, error, pendingArchive, archived ->
+            combine(
+                repository.exercises(""),
+                repository.categories(),
+                hasArchived,
+                selectedTab
+            ) { exercises, categories, archived, tab ->
+                ExercisesCatalog(exercises, categories, archived, tab)
+            },
+            combine(
+                pendingDeleteId,
+                deleteError,
+                pendingArchiveId,
+                pendingCategoryDeleteId,
+                categoryDeleteError
+            ) { pendingId, error, pendingArchive, pendingCategoryId, categoryError ->
+                ExercisesDialogs(pendingId, error, pendingArchive, pendingCategoryId, categoryError)
+            },
+            pendingCategoryArchiveId
+        ) { catalog, dialogs, pendingCategoryArchive ->
             ExercisesUiState.Success(
-                exercises = exercises,
-                pendingDeleteId = pendingId,
-                deleteError = error,
-                pendingArchiveId = pendingArchive,
-                archivedCount = archived
+                exercises = catalog.exercises,
+                categories = catalog.categories,
+                selectedTab = catalog.selectedTab,
+                pendingDeleteId = dialogs.pendingDeleteId,
+                deleteError = dialogs.deleteError,
+                pendingArchiveId = dialogs.pendingArchiveId,
+                pendingCategoryDeleteId = dialogs.pendingCategoryDeleteId,
+                categoryDeleteError = dialogs.categoryDeleteError,
+                pendingCategoryArchiveId = pendingCategoryArchive,
+                hasArchived = catalog.hasArchived
             )
         }.stateIn(
             scope = viewModelScope,
@@ -295,6 +363,144 @@ class ExercisesViewModel(
         }
     }
 
+    // ---------- Категории: вкладка, удаление, архивация (этап 5) ----------
+
+    /**
+     * Выбирает вкладку экрана (custom-categories, spec «Выбор вкладки
+     * отражается в Success»). Выбор не персистится. Аналитика — имя вкладки
+     * в `value` (канон [OverviewViewModel.selectTab], design D11).
+     */
+    fun selectTab(tab: ExercisesTab) {
+        analyticsProvider.log(
+            AnalyticsEvent.UserAction(UserActionType.SELECT_CATEGORIES_TAB, tab.name.lowercase())
+        )
+        selectedTab.value = tab
+    }
+
+    /**
+     * Запрашивает удаление категории: если на неё ссылается хотя бы
+     * одно упражнение (активное или архивное) — сразу снекбар
+     * [DeleteCategoryError.UsedByExercises] без открытия алерта; иначе
+     * открывает алерт через [pendingCategoryDeleteId] (spec «Алерт
+     * удаления категории и пре-чек использования», design Decision 4).
+     * Решение синхронное по кешу [categoryNamesWithLinkedExercises].
+     *
+     * @param category Категория из списка вкладки «Категории»
+     */
+    fun requestCategoryDelete(category: Category) {
+        if (category.name in categoryNamesWithLinkedExercises.value) {
+            categoryDeleteError.value = DeleteCategoryError.UsedByExercises
+            return
+        }
+        pendingCategoryDeleteId.value = category.id
+    }
+
+    /** Закрывает алерт удаления категории без удаления. */
+    fun cancelCategoryDelete() {
+        pendingCategoryDeleteId.value = null
+    }
+
+    /**
+     * Подтверждает удаление категории из алерта: вызывает
+     * [WorkoutDataRepository.deleteCategory]; при `success` сбрасывает
+     * pending (список обновится реактивно), при `failure` маппит
+     * исключение в [DeleteCategoryError] (design Decision 4):
+     * - [CategoryInUseDeletionException] → `UsedByExercises` (safety net
+     *   после пре-чека);
+     * - [StandardCategoryDeletionException] → `StandardCategory`
+     *   (safety net — UI не предлагает удаление стандартных);
+     * - прочее — `Other`.
+     *
+     * Каждая failure-ветка логирует текст исключения через [Log.e].
+     */
+    fun confirmCategoryDelete() {
+        val id = pendingCategoryDeleteId.value ?: return
+        // На вызове операции, до/независимо от исхода (design D10 — канон confirmDelete)
+        analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.DELETE_CATEGORY))
+        viewModelScope.launch {
+            val result = repository.deleteCategory(id)
+            pendingCategoryDeleteId.value = null
+            result
+                .onSuccess {
+                    categoryDeleteError.value = null
+                }.onFailure { error ->
+                    val mapped: DeleteCategoryError =
+                        when (error) {
+                            is CategoryInUseDeletionException -> DeleteCategoryError.UsedByExercises
+                            is StandardCategoryDeletionException -> DeleteCategoryError.StandardCategory
+                            else -> DeleteCategoryError.Other
+                        }
+                    CrashlyticsHelper.logException(error, "Удаление категории")
+                    analyticsProvider.log(
+                        AnalyticsEvent.AppError(AppErrorOperation.CATEGORY_DELETE, error)
+                    )
+                    Log.e(LOG_TAG, "deleteCategory failed for id=$id: ${error.message}", error)
+                    categoryDeleteError.value = mapped
+                }
+        }
+    }
+
+    /**
+     * Сбрасывает [ExercisesUiState.Success.categoryDeleteError] после
+     * показа снекбара — one-shot семантика (паттерн [onErrorShown]).
+     */
+    fun onCategoryErrorShown() {
+        categoryDeleteError.value = null
+    }
+
+    /**
+     * Запрашивает архивацию категории: при
+     * `dataStore.dontShowCategoryArchiveDialog == true` — немедленно
+     * `repository.setCategoryArchived(id, true)` без алерта; иначе
+     * открывает алерт через [pendingCategoryArchiveId] (custom-categories,
+     * design Decision 8, паттерн [requestArchive]). Флаг упражнений
+     * [AppSettingsDataStore.dontShowArchiveDialog] НЕ читается — ключи
+     * независимы.
+     *
+     * @param id Идентификатор категории из списка вкладки «Категории»
+     */
+    fun requestCategoryArchive(id: Long) {
+        viewModelScope.launch {
+            val dontShow = dataStore.dontShowCategoryArchiveDialog.first()
+            if (dontShow) {
+                // Диалог не показывается: фактическое действие — здесь
+                // (design D10 — канон requestArchive)
+                analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.ARCHIVE_CATEGORY))
+                repository.setCategoryArchived(id, true)
+            } else {
+                pendingCategoryArchiveId.value = id
+            }
+        }
+    }
+
+    /** Закрывает алерт архивации категории без архивации. */
+    fun cancelCategoryArchive() {
+        pendingCategoryArchiveId.value = null
+    }
+
+    /**
+     * Подтверждает архивацию категории из алерта: вызывает
+     * [WorkoutDataRepository.setCategoryArchived] с `isArchived = true`.
+     * При любом исходе pending сбрасывается — failure не показывается
+     * (архивация обратима, паттерн [confirmArchive]).
+     *
+     * @param suppress `true` — вместе с архивацией записать отдельный
+     *   категорийный флаг «больше не показывать»
+     *   ([AppSettingsDataStore.setDontShowCategoryArchiveDialog]).
+     */
+    fun confirmCategoryArchive(suppress: Boolean = false) {
+        val id = pendingCategoryArchiveId.value ?: return
+        // На вызове операции, до/независимо от исхода (design D10 — канон confirmArchive)
+        analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.ARCHIVE_CATEGORY))
+        viewModelScope.launch {
+            repository.setCategoryArchived(id, true)
+            pendingCategoryArchiveId.value = null
+            if (suppress) {
+                dataStore.setDontShowCategoryArchiveDialog(true)
+            }
+        }
+    }
+
     companion object {
         /**
          * Factory для создания [ExercisesViewModel]. Ручной DI вместо Hilt,
@@ -316,3 +522,27 @@ class ExercisesViewModel(
             }
     }
 }
+
+/**
+ * Списочные данные Success для каскада [ExercisesViewModel.uiState]
+ * (design Decision 6 — группировка потоков): каталог, категории,
+ * признак непустого архива и выбранная вкладка.
+ */
+private data class ExercisesCatalog(
+    val exercises: List<Exercise>,
+    val categories: List<Category>,
+    val hasArchived: Boolean,
+    val selectedTab: ExercisesTab
+)
+
+/**
+ * Диалоговые состояния Success для каскада [ExercisesViewModel.uiState]:
+ * pending-подтверждения и one-shot ошибки удаления упражнений и категорий.
+ */
+private data class ExercisesDialogs(
+    val pendingDeleteId: Long?,
+    val deleteError: DeleteExerciseError?,
+    val pendingArchiveId: Long?,
+    val pendingCategoryDeleteId: Long?,
+    val categoryDeleteError: DeleteCategoryError?
+)

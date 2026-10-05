@@ -150,6 +150,7 @@ private class SectionsFakeRepository(
     override suspend fun getAllExercises(): Result<List<Exercise>> = error("Не используется в этом тесте")
     override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = error("Не используется в этом тесте")
     override suspend fun importData(
+        categories: List<Category>,
         exercises: List<Exercise>,
         entries: List<BackupEntry>
     ): Result<Unit> = error("Не используется в этом тесте")

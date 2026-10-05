@@ -91,6 +91,35 @@ interface ExerciseDao {
     suspend fun deleteById(id: Long)
 
     /**
+     * Переименовывает категорию во всём каталоге упражнений — активных
+     * и архивных (custom-categories, design Decision 1): без FK
+     * целостность имён держит транзакция вместе с
+     * [CategoryDao.updateName].
+     */
+    @Query("UPDATE exercises SET category = :newName WHERE category = :oldName")
+    suspend fun updateCategoryName(
+        oldName: String,
+        newName: String
+    )
+
+    /**
+     * Число упражнений — активных и архивных — ссылающихся на категорию
+     * `name`: pre-check удаления внутри транзакции (custom-categories,
+     * design Decision 4).
+     */
+    @Query("SELECT COUNT(*) FROM exercises WHERE category = :name")
+    suspend fun countByCategoryName(name: String): Int
+
+    /**
+     * Реактивный список различных имён категорий, на которые ссылается
+     * хотя бы одно упражнение (активное или архивное) — пре-чек удаления
+     * категории (custom-categories, design Decision 4): VM держит
+     * подписку и открывает алерт только для свободного имени.
+     */
+    @Query("SELECT DISTINCT category FROM exercises")
+    fun observeCategoryNamesInUse(): Flow<List<String>>
+
+    /**
      * Разовый снимок всего каталога без поискового фильтра и сортировки —
      * для экспорта и дедупликации импорта (app-data-screen, design
      * Decision 6).

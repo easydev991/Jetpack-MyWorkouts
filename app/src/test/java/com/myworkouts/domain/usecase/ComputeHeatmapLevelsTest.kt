@@ -36,7 +36,7 @@ class ComputeHeatmapLevelsTest {
             id = id,
             exerciseId = 1L,
             exerciseName = "Подтягивания",
-            category = com.myworkouts.domain.model.ExerciseCategory.PULL,
+            category = "PULL",
             measuredBy = com.myworkouts.domain.model.ExerciseMeasuredBy.REPS,
             sets = 3,
             reps = 10,

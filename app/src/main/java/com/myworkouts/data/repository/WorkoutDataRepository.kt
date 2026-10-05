@@ -1,6 +1,7 @@
 package com.myworkouts.data.repository
 
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
@@ -81,11 +82,12 @@ interface WorkoutDataRepository {
     fun archivedExercises(): Flow<List<Exercise>>
 
     /**
-     * Реактивный счётчик архивных упражнений (exercises-archive, design
-     * Decision 2) — условная видимость кнопки архива в `TopAppBar`
-     * каталога.
+     * Реактивный признак «в архиве есть упражнения или категории» —
+     * условная видимость кнопки архива в `TopAppBar` каталога
+     * (exercises-archive design Decision 2; custom-categories, spec
+     * «Кнопка архива в TopAppBar»).
      */
-    fun archivedCount(): Flow<Int>
+    fun hasArchived(): Flow<Boolean>
 
     /**
      * Вставляет новую запись о выполнении с валидацией [EntryValidator].
@@ -148,15 +150,94 @@ interface WorkoutDataRepository {
     suspend fun exerciseHistory(exerciseId: Long): Result<List<ExerciseEntry>>
 
     /**
+     * Создаёт кастомную категорию с сгенерированным цветом
+     * (custom-categories, spec «Создание категории с генерацией цвета»).
+     * Имя — непустое после `trim()` и уникальное по
+     * `name.trim().lowercase()` среди всех категорий (активных и
+     * архивных); пустое или дублирующее — `Result.failure`.
+     * Созданная категория: `isCustom = true`, `isArchived = false`.
+     */
+    suspend fun addCategory(name: String): Result<Category>
+
+    /**
+     * Переименовывает кастомную категорию одной транзакцией
+     * (custom-categories, design Decision 1): обновляет
+     * `categories.name` и `category` всех ссылающихся упражнений —
+     * активных и архивных. Стандартная категория
+     * ([StandardCategoryDeletionException]), пустое или дублирующее имя,
+     * отсутствующий id — `Result.failure`; при любой ошибке транзакция
+     * откатывается целиком.
+     */
+    suspend fun renameCategory(
+        id: Long,
+        newName: String
+    ): Result<Unit>
+
+    /**
+     * Удаляет категорию: только кастомную (`isCustom = true`) и только
+     * если на неё не ссылается ни одно упражнение (custom-categories,
+     * spec «Удаление категории»). Ошибки — типизированными исключениями
+     * в `Result.failure` ([StandardCategoryDeletionException],
+     * [CategoryInUseDeletionException]) — по образцу [deleteExercise].
+     */
+    suspend fun deleteCategory(id: Long): Result<Unit>
+
+    /**
+     * Архивация/восстановление категории (custom-categories, spec
+     * «Архивация и восстановление категории») — по образцу [setArchived]:
+     * `isArchived = true` — в архив, `false` — вернуть. Доступно и для
+     * стандартных, и для кастомных; упражнения категории не меняются.
+     * Отсутствующий id — `Result.failure`.
+     */
+    suspend fun setCategoryArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Result<Unit>
+
+    /**
+     * Реактивный список активных категорий (`isArchived = false`),
+     * стандартных и кастомных; сортировка `is_custom DESC, created_at
+     * DESC, name COLLATE NOCASE`. Источник вкладки «Категории» и
+     * дропдауна выбора категории (custom-categories, spec «Реактивные
+     * списки и счётчики категорий»).
+     */
+    fun categories(): Flow<List<Category>>
+
+    /**
+     * Реактивный список архивных категорий; сортировка — та же, что в
+     * [categories]. Источник вкладки «Категории» архива
+     * (custom-categories, spec «Вкладка „Категории“ в архиве»).
+     */
+    fun archivedCategories(): Flow<List<Category>>
+
+    /**
+     * Реактивный набор имён категорий, на которые ссылается хотя бы одно
+     * упражнение (активное или архивное) — пре-чек удаления категории
+     * (custom-categories, design Decision 4): VM открывает алерт только
+     * для свободного имени; исключение из репозитория после
+     * подтверждения — safety net.
+     */
+    fun categoryNamesWithLinkedExercises(): Flow<Set<String>>
+
+    /**
+     * Разовый снимок всех категорий — активных и архивных — по образцу
+     * [getAllExercises]. Для экспорта резервной копии и дедупликации
+     * импорта (custom-categories, spec «Снимок всех категорий»).
+     */
+    suspend fun getAllCategories(): Result<List<Category>>
+
+    /**
      * Транзакционная вставка подготовленных use-case'ом данных
-     * (app-data-screen, design Decision 6): дедупликация и валидация —
-     * задача use-case, репозиторий отвечает только за хранение. Внутри
-     * той же транзакции разрешает `exerciseName` в id (вставленные
-     * упражнения — одиночными insert с возвратом id); неразрешимое имя —
-     * защита от бага use-case. При любой ошибке — откат без частичных
-     * вставок.
+     * (app-data-screen, design Decision 6; custom-categories, design
+     * Decision 9): дедупликация и валидация — задача use-case,
+     * репозиторий отвечает только за хранение. Внутри одной транзакции
+     * вставляет категории, затем упражнения (разрешая `exerciseName`
+     * в id — вставленные упражнения одиночными insert с возвратом id;
+     * неразрешимое имя — защита от бага use-case), затем записи.
+     * При любой ошибке — откат без частичных вставок.
      */
     suspend fun importData(
+        categories: List<Category>,
         exercises: List<Exercise>,
         entries: List<BackupEntry>
     ): Result<Unit>

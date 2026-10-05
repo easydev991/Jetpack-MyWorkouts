@@ -1,7 +1,6 @@
 package com.myworkouts.ui.state
 
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -22,7 +21,7 @@ class EntryCreateUiStateTest {
         Exercise(
             id = 1L,
             name = "Подтягивания",
-            category = ExerciseCategory.PULL,
+            category = "PULL",
             isCustom = false,
             comment = null,
             createdAt = 0L,

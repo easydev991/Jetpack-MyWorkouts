@@ -276,9 +276,10 @@ WindowInsetsSides.Horizontal)` — симметрично `MainScreen` и `MoreS
 `deleteCategory(id)`); `pendingCategoryArchiveId:
 MutableStateFlow<Long?>` (алерт архивации категории),
 `selectedTab: MutableStateFlow<ExercisesTab>`
-(выбранная вкладка), на `archivedCount: Flow<Int>` и
-`archivedCategoriesCount(): Flow<Int>` (реактивные счётчики архивных
-упражнений и категорий для кнопки в `TopAppBar`), объединяя потоки через
+(выбранная вкладка), на `repository.hasArchived(): Flow<Boolean>`
+(реактивный признак непустого архива — упражнений или категорий — для
+кнопки в `TopAppBar`; репозиторий собирает его `combine`'ом двух
+DAO-счётчиков, интерфейсу отдельные счётчики не нужны), объединяя потоки через
 `combine` (при числе потоков больше 5 — группировкой в несколько
 `combine` либо vararg-вариантом; способ группировки — на усмотрение
 реализации) в единый `StateFlow<ExercisesUiState>` (`stateIn(viewModelScope,
@@ -290,7 +291,7 @@ List<Exercise>` (только активные — фильтрация в SQL
 DeleteExerciseError? = null`, `pendingArchiveId: Long?`,
 `pendingCategoryDeleteId: Long?`, `categoryDeleteError:
 DeleteCategoryError? = null`, `pendingCategoryArchiveId: Long?`,
-`archivedCount: Int`, `archivedCategoriesCount: Int`. Sealed-иерархия —
+`hasArchived: Boolean = false`. Sealed-иерархия —
 `Loading` / `Success(...)` без `Error`-ветки (единственный источник —
 офлайн Room-Flow; ошибки доводятся до пользователя снекбаром или тихо).
 Сортировка SHALL быть на стороне SQL (DAO `observeExercises` / DAO-запрос
@@ -361,9 +362,9 @@ FAB экрана упражнений SHALL действовать по акти
 этой дельте объединяет архивы упражнений и категорий, отдельный ключ
 `exercises_archive_button` («Архив упражнений») удаляется из строковых
 ресурсов), ЕСЛИ в архиве есть хотя бы
-один объект любого типа: `archivedCount > 0` ИЛИ `archivedCategoriesCount >
-0` (реактивные счётчики из репозитория). Если архив пуст (обе величины
-равны 0) — кнопка скрыта. Тап по кнопке SHALL инициировать навигацию на
+один объект любого типа: `hasArchived == true` (реактивный признак из
+репозитория; объединяет оба типа объектов). Если архив пуст
+(`hasArchived == false`) — кнопка скрыта. Тап по кнопке SHALL инициировать навигацию на
 `Screen.ArchivedExercises.route` через колбэк `onArchivedExercisesClick`,
 прокидываемый из `RootScreen`. Видимость кнопки SHALL быть реактивной:
 при архивации первого объекта кнопка появляется, при восстановлении
@@ -373,19 +374,19 @@ FAB экрана упражнений SHALL действовать по акти
 
 #### Scenario: Архив пуст — кнопка скрыта
 
-- **WHEN** `archivedCount == 0` AND `archivedCategoriesCount == 0`
+- **WHEN** `hasArchived == false`
 - **THEN** `TopAppBar.actions` НЕ содержит `IconButton` с иконкой Archive
 
 #### Scenario: Архив не пуст — кнопка отображается
 
-- **WHEN** `archivedCount > 0` (например, 1 заархивированное упражнение)
-  OR `archivedCategoriesCount > 0`
+- **WHEN** `hasArchived == true` (например, 1 заархивированное упражнение)
 - **THEN** `TopAppBar.actions` содержит `IconButton` с иконкой
   `Icons.Filled.Archive` и `contentDescription = archive_title` («Архив»)
 
 #### Scenario: Архивны только категории — кнопка отображается
 
-- **WHEN** `archivedCount == 0` AND `archivedCategoriesCount == 2`
+- **WHEN** в архиве только 2 категории (упражнений нет) AND
+  `hasArchived == true`
 - **THEN** `TopAppBar.actions` содержит `IconButton` с иконкой Archive
 
 #### Scenario: Тап кнопки архива навигирует на ArchivedExercisesScreen
@@ -398,13 +399,13 @@ FAB экрана упражнений SHALL действовать по акти
 
 - **WHEN** архив пуст AND пользователь архивирует первый объект
   (упражнение или категорию)
-- **THEN** после закрытия алерта соответствующий счётчик становится > 0
+- **THEN** после закрытия алерта `hasArchived` становится `true`
 - **AND** `IconButton` с иконкой Archive появляется в `TopAppBar.actions`
 
 #### Scenario: Реактивное исчезновение кнопки при восстановлении
 
-- **WHEN** восстановлен последний архивный объект AND счётчики обоих типов
-  равны 0
+- **WHEN** восстановлен последний архивный объект AND `hasArchived`
+  становится `false`
 - **THEN** `IconButton` с иконкой Archive скрывается из `TopAppBar.actions`
 
 ### Requirement: Сигнатура ExercisesScreen принимает колбэк архива

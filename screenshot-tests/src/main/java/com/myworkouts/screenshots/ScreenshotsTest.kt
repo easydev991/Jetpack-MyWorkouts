@@ -329,6 +329,7 @@ class ScreenshotsTest {
         runBlocking {
             val imported =
                 app.repository.importData(
+                    categories = emptyList(),
                     exercises = emptyList(),
                     entries = entries
                 )

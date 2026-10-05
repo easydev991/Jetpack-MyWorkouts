@@ -16,7 +16,6 @@ import com.myworkouts.data.db.StandardExercise
 import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -120,7 +119,7 @@ class ExerciseCreateLiveUpdateIntegrationTest {
         val repository =
             RoomWorkoutDataRepository(
                 database = database,
-                standardExercises = listOf(StandardExercise(name = "Отжимания", category = ExerciseCategory.PUSH))
+                standardExercises = listOf(StandardExercise(name = "Отжимания", category = "PUSH"))
             )
         runBlocking {
             repository
@@ -128,7 +127,7 @@ class ExerciseCreateLiveUpdateIntegrationTest {
                     Exercise(
                         id = 0L,
                         name = exerciseName,
-                        category = ExerciseCategory.PUSH,
+                        category = "PUSH",
                         isCustom = true,
                         comment = null,
                         createdAt = 1L,

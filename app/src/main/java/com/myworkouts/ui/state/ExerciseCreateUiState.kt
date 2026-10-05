@@ -1,6 +1,6 @@
 package com.myworkouts.ui.state
 
-import com.myworkouts.domain.model.ExerciseCategory
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 
 /**
@@ -11,7 +11,10 @@ import com.myworkouts.domain.model.ExerciseMeasuredBy
  * create/addExercise и edit/updateExercise с popBackStack»).
  *
  * @property name Название упражнения — сырой ввод (`null` — не тронуто)
- * @property category Выбранная категория (`null` — не выбрана)
+ * @property categoryName Имя выбранной категории (`null` — не выбрана;
+ *   ссылка по имени — custom-categories, design Decision 1)
+ * @property availableCategories Активные категории из БД — реактивная
+ *   подписка VM на `categories()` репозитория (custom-categories, этап 8)
  * @property measuredBy Тип измерения; по умолчанию REPS — большинство
  *   упражнений на повторы
  * @property comment Комментарий — сырой ввод (`null` — не тронут)
@@ -28,7 +31,8 @@ import com.myworkouts.domain.model.ExerciseMeasuredBy
  */
 data class ExerciseCreateUiState(
     val name: String? = null,
-    val category: ExerciseCategory? = null,
+    val categoryName: String? = null,
+    val availableCategories: List<Category> = emptyList(),
     val measuredBy: ExerciseMeasuredBy = ExerciseMeasuredBy.REPS,
     val comment: String? = null,
     val iconNumber: Int? = null,
@@ -37,6 +41,20 @@ data class ExerciseCreateUiState(
     val hasChanges: Boolean = false,
     val isExerciseMissing: Boolean = false
 ) {
+    /**
+     * Список категорий для дропдауна: активные из БД; в edit-режиме
+     * архивная текущая категория упражнения добавляется в конец (spec
+     * «Текущая архивная категория видна при редактировании»), прочие
+     * архивные остаются скрытыми — их нет в [availableCategories].
+     * Активная текущая категория не дублируется.
+     */
+    val dropdownCategories: List<Category>
+        get() =
+            categoryName
+                ?.takeIf { current -> availableCategories.none { it.name == current } }
+                ?.let { current -> availableCategories + Category(name = current, colorArgb = 0, isCustom = false) }
+                ?: availableCategories
+
     /**
      * Вычисляемая доступность сохранения: название непустое (после `trim()`)
      * и категория выбрана; в edit-режиме дополнительно требуются изменения
@@ -48,7 +66,7 @@ data class ExerciseCreateUiState(
     val canSave: Boolean
         get() =
             !name.isNullOrBlank() &&
-                category != null &&
+                categoryName != null &&
                 (!isEditMode || hasChanges) &&
                 !isExerciseMissing
 
@@ -68,7 +86,7 @@ data class ExerciseCreateUiState(
                 hasChanges
             } else {
                 !name.isNullOrBlank() ||
-                    category != null ||
+                    categoryName != null ||
                     !comment.isNullOrBlank() ||
                     iconNumber != null
             }

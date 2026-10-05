@@ -1,6 +1,5 @@
 package com.myworkouts.ui.screens.overview
 
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.usecase.ActivityPeriod
 import com.myworkouts.domain.usecase.StatsPeriod
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -38,7 +37,7 @@ class PreviewDemoDataTest {
     @Test
     fun demo_stats_state_when_category_selected_then_drill_groups_exist() {
         // When
-        val state = demoStatsState(period = StatsPeriod.WEEK, selected = ExerciseCategory.PUSH)
+        val state = demoStatsState(period = StatsPeriod.WEEK, selected = "PUSH")
 
         // Then
         assertTrue(

@@ -1,7 +1,6 @@
 package com.myworkouts.domain.usecase
 
 import com.myworkouts.domain.model.EntryWithExercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -46,7 +45,7 @@ class ComputeExerciseRecordsTest {
             id = id,
             exerciseId = exerciseId,
             exerciseName = exerciseName,
-            category = ExerciseCategory.PULL,
+            category = "PULL",
             measuredBy = measuredBy,
             exerciseComment = exerciseComment,
             sets = sets,

@@ -10,7 +10,6 @@ import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.OverviewTab
 import com.myworkouts.domain.usecase.ActivityPeriod
 import com.myworkouts.domain.usecase.RecordsMode
@@ -27,6 +26,7 @@ import com.myworkouts.ui.state.OverviewUiState
 import com.myworkouts.ui.state.RecordsUiState
 import com.myworkouts.ui.state.StatsUiState
 import com.myworkouts.ui.state.StreakCardState
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -44,23 +44,23 @@ import java.time.ZoneId
  * `LongParameterList`). Не персистятся — переживают поворот через VM.
  *
  * @property statsPeriod Период доната/легенды «Статистики»
- * @property selectedCategory Категория drill-down; `null` — обзор
+ * @property selectedCategory Имя категории drill-down; `null` — обзор
  * @property recordsMode Режим значения рекордов
  * @property activityPeriod Окно хитмапа
  */
 private data class OverviewUserState(
     val statsPeriod: StatsPeriod = StatsPeriod.WEEK,
-    val selectedCategory: ExerciseCategory? = null,
+    val selectedCategory: String? = null,
     val recordsMode: RecordsMode = RecordsMode.PER_SET,
     val activityPeriod: ActivityPeriod = ActivityPeriod.MONTH
 )
 
 /**
  * ViewModel экрана обзора (overview-screen, design D9): внешний `combine`
- * четырёх потоков — видимость вкладок, сохранённая вкладка, записи с
- * данными упражнений и [OverviewUserState] — в единый [OverviewUiState].
- * Валидация вкладки: сохранённая, если видима, иначе первая видимая
- * (spec «Сохранённая вкладка скрыта настройками»).
+ * пяти потоков — видимость вкладок, сохранённая вкладка, записи с
+ * данными упражнений, цвета категорий и [OverviewUserState] — в единый
+ * [OverviewUiState]. Валидация вкладки: сохранённая, если видима, иначе
+ * первая видимая (spec «Сохранённая вкладка скрыта настройками»).
  *
  * @property repository Репозиторий данных тренировок
  * @property dataStore DataStore настроек приложения
@@ -97,6 +97,20 @@ class OverviewViewModel(
     private val today: LocalDate = LocalDate.now()
 
     /**
+     * Имя категории → `colorArgb` (custom-categories design Decision 10):
+     * объединение активных и архивных категорий — архивная остаётся
+     * в статистике, цвет нужен и ей. Отсутствующее имя (упражнение
+     * ссылается на категорию мимо каталога) — UI берёт нейтральный цвет.
+     */
+    private val categoryColors: Flow<Map<String, Int>> =
+        combine(
+            repository.categories(),
+            repository.archivedCategories()
+        ) { active, archived ->
+            (active + archived).associate { it.name to it.colorArgb }
+        }
+
+    /**
      * Единое состояние экрана: [OverviewUiState] со всеми тремя вкладками
      * (пересчёт на каждую эмиссию — расчёты дешёвые, design D9).
      */
@@ -105,8 +119,9 @@ class OverviewViewModel(
             dataStore.overviewTabVisibility,
             dataStore.lastOverviewTab,
             repository.entriesWithExercise(),
+            categoryColors,
             userState
-        ) { visibility, savedTab, entries, user ->
+        ) { visibility, savedTab, entries, colors, user ->
             val visibleTabs = OverviewTab.entries.filter { visibility[it] ?: true }
             val selectedTab =
                 if (savedTab in visibleTabs) {
@@ -137,6 +152,7 @@ class OverviewViewModel(
                         categoryTotals = stats.categoryTotals,
                         exerciseTotals = stats.exerciseTotals,
                         drillGroups = stats.drillGroups,
+                        categoryColors = colors,
                         isEmpty = stats.drillGroups.isEmpty()
                     ),
                 records =
@@ -189,14 +205,14 @@ class OverviewViewModel(
     }
 
     /**
-     * Выбирает категорию drill-down (`null` — выход): аналитика — имя
-     * категории или `back` (design D11).
+     * Выбирает категорию drill-down по имени (`null` — выход): аналитика —
+     * имя категории или `back` (design D11).
      */
-    fun selectStatsCategory(category: ExerciseCategory?) {
+    fun selectStatsCategory(category: String?) {
         analyticsProvider.log(
             AnalyticsEvent.UserAction(
                 UserActionType.SELECT_STATS_CATEGORY,
-                category?.name?.lowercase() ?: "back"
+                category?.lowercase() ?: "back"
             )
         )
         userState.update { it.copy(selectedCategory = category) }

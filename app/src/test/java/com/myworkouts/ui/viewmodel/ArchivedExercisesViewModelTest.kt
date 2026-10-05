@@ -5,13 +5,14 @@ import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.ui.state.ArchivedExercisesUiState
+import com.myworkouts.ui.state.ArchivedTab
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -31,21 +32,29 @@ import org.junit.jupiter.api.Test
 
 /**
  * Fake [WorkoutDataRepository] для JVM-тестов
- * [ArchivedExercisesViewModel]: реактивный `archivedExercises()` — на
- * `MutableStateFlow` (тесты управляют списком), `setArchived` —
+ * [ArchivedExercisesViewModel]: реактивные `archivedExercises()` /
+ * `archivedCategories()` — на `MutableStateFlow` (тесты управляют
+ * списками), `setArchived` / `setCategoryArchived` —
  * `Result.success(Unit)` с записью вызова.
  */
 private class ArchivedExercisesFakeRepository(
-    initialArchived: List<Exercise> = emptyList()
+    initialArchived: List<Exercise> = emptyList(),
+    initialArchivedCategories: List<Category> = emptyList()
 ) : WorkoutDataRepository {
     val archived: MutableStateFlow<List<Exercise>> = MutableStateFlow(initialArchived)
+
+    val archivedCategories: MutableStateFlow<List<Category>> =
+        MutableStateFlow(initialArchivedCategories)
 
     /** Вызовы `setArchived` в порядке обращений. */
     val setArchivedCalls = mutableListOf<Pair<Long, Boolean>>()
 
+    /** Вызовы `setCategoryArchived` в порядке обращений. */
+    val setCategoryArchivedCalls = mutableListOf<Pair<Long, Boolean>>()
+
     override fun archivedExercises(): Flow<List<Exercise>> = archived
 
-    override fun archivedCount(): Flow<Int> = MutableStateFlow(archived.value.size)
+    override fun hasArchived(): Flow<Boolean> = MutableStateFlow(archived.value.isNotEmpty())
 
     override suspend fun setArchived(
         id: Long,
@@ -88,11 +97,42 @@ private class ArchivedExercisesFakeRepository(
     override suspend fun exerciseHistory(exerciseId: Long): Result<List<ExerciseEntry>> = Result.success(emptyList())
 
     override suspend fun importData(
+        categories: List<Category>,
         exercises: List<Exercise>,
         entries: List<BackupEntry>
     ): Result<Unit> = Result.success(Unit)
 
     override suspend fun deleteAllData(): Result<Unit> = Result.success(Unit)
+
+    // Новый контракт категорий (custom-categories, этап 2): заглушки —
+    // категорийные поведения экрана архива и расширение fake приходят
+    // в этапе 7.
+
+    override suspend fun addCategory(name: String): Result<Category> =
+        Result.success(Category(id = 0L, name = name.trim(), colorArgb = 0, isCustom = true))
+
+    override suspend fun renameCategory(
+        id: Long,
+        newName: String
+    ): Result<Unit> = Result.success(Unit)
+
+    override suspend fun deleteCategory(id: Long): Result<Unit> = Result.success(Unit)
+
+    override suspend fun setCategoryArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Result<Unit> {
+        setCategoryArchivedCalls.add(id to isArchived)
+        return Result.success(Unit)
+    }
+
+    override fun categories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+    override fun archivedCategories(): Flow<List<Category>> = archivedCategories
+
+    override fun categoryNamesWithLinkedExercises(): Flow<Set<String>> = MutableStateFlow(emptySet())
+
+    override suspend fun getAllCategories(): Result<List<Category>> = Result.success(emptyList())
 }
 
 /**
@@ -110,7 +150,7 @@ class ArchivedExercisesViewModelTest {
         Exercise(
             id = 1L,
             name = "Подтягивания",
-            category = ExerciseCategory.PULL,
+            category = "PULL",
             isCustom = false,
             comment = null,
             createdAt = 1_721_000_000_000L,
@@ -121,11 +161,29 @@ class ArchivedExercisesViewModelTest {
         Exercise(
             id = 2L,
             name = "Планка",
-            category = ExerciseCategory.CORE,
+            category = "CORE",
             isCustom = false,
             comment = null,
             createdAt = 1_721_100_000_000L,
             measuredBy = ExerciseMeasuredBy.TIME
+        )
+
+    private val archivedCore =
+        Category(
+            id = 10L,
+            name = "CORE",
+            colorArgb = 0xFF4CAF50.toInt(),
+            isCustom = false,
+            isArchived = true
+        )
+
+    private val archivedCustom =
+        Category(
+            id = 11L,
+            name = "Дома",
+            colorArgb = 0xFF9C27B0.toInt(),
+            isCustom = true,
+            isArchived = true
         )
 
     @BeforeEach
@@ -158,7 +216,7 @@ class ArchivedExercisesViewModelTest {
             advanceUntilIdle()
 
             // When
-            viewModel.unarchive(pullups)
+            viewModel.unarchive(pullups.id)
             advanceUntilIdle()
 
             // Then
@@ -262,7 +320,7 @@ class ArchivedExercisesViewModelTest {
             advanceUntilIdle()
 
             // When
-            viewModel.unarchive(pullups)
+            viewModel.unarchive(pullups.id)
             advanceUntilIdle()
 
             // Then — репозиторию передан id и направление false
@@ -270,6 +328,237 @@ class ArchivedExercisesViewModelTest {
                 listOf(pullups.id to false),
                 repository.setArchivedCalls,
                 "unarchive(item) вызвал setArchived(item.id, false)"
+            )
+        }
+
+    /**
+     * custom-categories, tasks 7.1: после эмиссии обоих источников —
+     * `Success(exercises, categories, selectedTab)`; вкладка по
+     * умолчанию — «Упражнения».
+     */
+    @Test
+    fun state_when_subscribed_then_success_with_exercises_categories_and_default_tab() =
+        runTest(testDispatcher) {
+            // Given — в архиве оба типа
+            val repository =
+                ArchivedExercisesFakeRepository(
+                    initialArchived = listOf(pullups),
+                    initialArchivedCategories = listOf(archivedCore)
+                )
+            val viewModel = createViewModel(repository)
+
+            // When
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then
+            val state = viewModel.uiState.value
+            assertTrue(state is ArchivedExercisesUiState.Success, "После эмиссии — Success")
+            state as ArchivedExercisesUiState.Success
+            assertEquals(listOf(pullups), state.exercises, "Список архивных упражнений")
+            assertEquals(listOf(archivedCore), state.categories, "Список архивных категорий")
+            assertEquals(
+                ArchivedTab.EXERCISES,
+                state.selectedTab,
+                "Вкладка по умолчанию — «Упражнения»"
+            )
+        }
+
+    /**
+     * custom-categories, tasks 7.1: `selectTab(CATEGORIES)` отражается в
+     * `Success.selectedTab` (выбранная вкладка хранится в ViewModel и
+     * переживает поворот) и логирует `UserAction(SELECT_CATEGORIES_TAB)`
+     * с именем вкладки в `value` (design D11).
+     */
+    @Test
+    fun selectTab_then_reflected_in_success() =
+        runTest(testDispatcher) {
+            // Given — в архиве оба типа
+            val repository =
+                ArchivedExercisesFakeRepository(
+                    initialArchived = listOf(pullups),
+                    initialArchivedCategories = listOf(archivedCore)
+                )
+            val viewModel = createViewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.selectTab(ArchivedTab.CATEGORIES)
+            advanceUntilIdle()
+
+            // Then
+            val state = viewModel.uiState.value
+            assertTrue(state is ArchivedExercisesUiState.Success)
+            assertEquals(
+                ArchivedTab.CATEGORIES,
+                (state as ArchivedExercisesUiState.Success).selectedTab,
+                "selectTab(CATEGORIES) отражается в Success.selectedTab"
+            )
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.SELECT_CATEGORIES_TAB, "categories")),
+                fakeAnalytics.events,
+                "selectTab(CATEGORIES) логирует UserAction(SELECT_CATEGORIES_TAB) с value=categories"
+            )
+        }
+
+    /**
+     * custom-categories, tasks 7.1 + spec «Восстановление последнего
+     * упражнения переключает вкладку»: опустошение вкладки «Упражнения»
+     * при непустых категориях — автовыбор «Категорий».
+     */
+    @Test
+    fun state_when_exercises_emptied_then_auto_switch_to_categories() =
+        runTest(testDispatcher) {
+            // Given — в архиве оба типа, выбрана вкладка «Упражнения»
+            val repository =
+                ArchivedExercisesFakeRepository(
+                    initialArchived = listOf(pullups),
+                    initialArchivedCategories = listOf(archivedCore)
+                )
+            val viewModel = createViewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — последнее упражнение восстановлено (репозиторий
+            // эмитит пустой список упражнений)
+            repository.archived.value = emptyList()
+            advanceUntilIdle()
+
+            // Then
+            val state = viewModel.uiState.value
+            assertTrue(state is ArchivedExercisesUiState.Success)
+            assertEquals(
+                ArchivedTab.CATEGORIES,
+                (state as ArchivedExercisesUiState.Success).selectedTab,
+                "Опустошение вкладки упражнений — автовыбор «Категорий»"
+            )
+        }
+
+    /**
+     * custom-categories, tasks 7.1: опустошение вкладки «Категории»
+     * при непустых упражнениях — автовыбор «Упражнений».
+     */
+    @Test
+    fun state_when_categories_emptied_then_auto_switch_to_exercises() =
+        runTest(testDispatcher) {
+            // Given — в архиве оба типа, выбрана вкладка «Категории»
+            val repository =
+                ArchivedExercisesFakeRepository(
+                    initialArchived = listOf(pullups),
+                    initialArchivedCategories = listOf(archivedCore)
+                )
+            val viewModel = createViewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.selectTab(ArchivedTab.CATEGORIES)
+            advanceUntilIdle()
+
+            // When — последняя категория восстановлена
+            repository.archivedCategories.value = emptyList()
+            advanceUntilIdle()
+
+            // Then
+            val state = viewModel.uiState.value
+            assertTrue(state is ArchivedExercisesUiState.Success)
+            assertEquals(
+                ArchivedTab.EXERCISES,
+                (state as ArchivedExercisesUiState.Success).selectedTab,
+                "Опустошение вкладки категорий — автовыбор «Упражнений»"
+            )
+        }
+
+    /**
+     * custom-categories, spec «Пустое состояние списка»: опустошение
+     * обеих вкладок — заглушка без закрытия экрана; автовыбора нет
+     * (непустой вкладки не осталось), выбранная вкладка сохраняется.
+     */
+    @Test
+    fun state_when_both_emptied_then_tab_kept() =
+        runTest(testDispatcher) {
+            // Given — в архиве оба типа, выбрана вкладка «Категории»
+            val repository =
+                ArchivedExercisesFakeRepository(
+                    initialArchived = listOf(pullups),
+                    initialArchivedCategories = listOf(archivedCore)
+                )
+            val viewModel = createViewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.selectTab(ArchivedTab.CATEGORIES)
+            advanceUntilIdle()
+
+            // When — архив опустел целиком
+            repository.archivedCategories.value = emptyList()
+            repository.archived.value = emptyList()
+            advanceUntilIdle()
+
+            // Then — вкладка не переключилась, списки пусты (заглушка —
+            // вычисляется на use site из пустых списков)
+            val state = viewModel.uiState.value
+            assertTrue(state is ArchivedExercisesUiState.Success)
+            state as ArchivedExercisesUiState.Success
+            assertEquals(ArchivedTab.CATEGORIES, state.selectedTab, "Непустой вкладки нет — таб сохранён")
+            assertTrue(state.exercises.isEmpty())
+            assertTrue(state.categories.isEmpty())
+        }
+
+    /**
+     * custom-categories, tasks 7.1 + spec «Восстановление категории
+     * обновляет список»: `unarchiveCategory(category)` вызывает
+     * `repository.setCategoryArchived(category.id, false)`.
+     */
+    @Test
+    fun unarchive_category_calls_setCategoryArchived_with_false() =
+        runTest(testDispatcher) {
+            // Given
+            val repository =
+                ArchivedExercisesFakeRepository(
+                    initialArchivedCategories = listOf(archivedCore)
+                )
+            val viewModel = createViewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.unarchiveCategory(archivedCore.id)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(archivedCore.id to false),
+                repository.setCategoryArchivedCalls,
+                "unarchiveCategory(category) вызвал setCategoryArchived(category.id, false)"
+            )
+        }
+
+    /**
+     * custom-categories, design D11: восстановление категории логирует
+     * `UserAction(UNARCHIVE_CATEGORY)` — на вызове операции,
+     * до/независимо от исхода (зеркально `unarchive` упражнения, но
+     * отдельный тип события под категорию).
+     */
+    @Test
+    fun unarchive_category_logs_user_action_unarchive_category() =
+        runTest(testDispatcher) {
+            // Given
+            val repository =
+                ArchivedExercisesFakeRepository(
+                    initialArchivedCategories = listOf(archivedCustom)
+                )
+            val viewModel = createViewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.unarchiveCategory(archivedCustom.id)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.UNARCHIVE_CATEGORY)),
+                fakeAnalytics.events,
+                "unarchiveCategory логирует UserAction(UNARCHIVE_CATEGORY)"
             )
         }
 }

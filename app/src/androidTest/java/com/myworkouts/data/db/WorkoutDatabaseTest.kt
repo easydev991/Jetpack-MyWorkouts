@@ -6,7 +6,6 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.ui.icons.ExerciseIcons
 import kotlinx.coroutines.flow.first
@@ -158,15 +157,15 @@ class WorkoutDatabaseTest {
     fun createDatabase_thenExercisesAssignedToExpectedCategories() =
         runBlocking {
             // Given — полное покрытие категорий (PUSH/PULL/LEGS/CORE/CARDIO)
-            // проверяется в ExerciseCategoryTest, здесь — что состав упражнений
+            // состав имён-ключей фиксируется StandardCategoriesTest, здесь — что состав упражнений
             // реально попадает в нужные категории.
             val expectedByCategory =
                 mapOf(
-                    ExerciseCategory.PULL to setOf("Подтягивания", "Австралийские подтягивания"),
-                    ExerciseCategory.LEGS to setOf("Приседания", "Выпады", "Приседания пистолетиком"),
-                    ExerciseCategory.PUSH to setOf("Отжимания", "Отжимания на коленях", "Отжимания на брусьях"),
-                    ExerciseCategory.CORE to setOf("Планка", "Скручивания", "Подъёмы ног в висе"),
-                    ExerciseCategory.CARDIO to setOf("Бег", "Скакалка")
+                    "PULL" to setOf("Подтягивания", "Австралийские подтягивания"),
+                    "LEGS" to setOf("Приседания", "Выпады", "Приседания пистолетиком"),
+                    "PUSH" to setOf("Отжимания", "Отжимания на коленях", "Отжимания на брусьях"),
+                    "CORE" to setOf("Планка", "Скручивания", "Подъёмы ног в висе"),
+                    "CARDIO" to setOf("Бег", "Скакалка")
                 )
 
             // When
@@ -174,7 +173,7 @@ class WorkoutDatabaseTest {
 
             // Then
             expectedByCategory.forEach { (category, names) ->
-                val actualNames = all.filter { it.category == category.name }.map { it.name }.toSet()
+                val actualNames = all.filter { it.category == category }.map { it.name }.toSet()
                 assertEquals(
                     "Category $category: expected $names, got $actualNames",
                     names,
@@ -222,6 +221,30 @@ class WorkoutDatabaseTest {
         // Then
         assertNotNull(dao)
     }
+
+    @Test
+    fun createDatabase_thenFiveStandardCategoriesPrepopulated() =
+        runBlocking {
+            // Given — prepopulate категорий из setUp (custom-categories,
+            // спека category-data, сценарий «Первый запуск содержит
+            // стандартные категории»)
+            // When
+            val categories = database.categoryDao().observeCategories().first()
+
+            // Then — ровно 5 стандартных, все активные, цвета из
+            // StandardCategories
+            assertEquals(5, categories.size)
+            assertTrue(categories.none { it.isCustom })
+            assertTrue(categories.none { it.isArchived })
+            standardCategories.forEach { standard ->
+                val found = categories.single { it.name == standard.name }
+                assertEquals(
+                    "Цвет «${standard.name}» — из StandardCategories",
+                    standard.colorArgb,
+                    found.colorArgb
+                )
+            }
+        }
 
     @Test
     fun createDatabase_thenNoEntriesExist() =
@@ -277,7 +300,7 @@ class WorkoutDatabaseTest {
                 database.exerciseDao().insert(
                     ExerciseEntity(
                         name = "Тестовые подтягивания",
-                        category = ExerciseCategory.PULL.name,
+                        category = "PULL",
                         isCustom = true,
                         comment = "широкий хват",
                         createdAt = 1L
@@ -306,7 +329,7 @@ class WorkoutDatabaseTest {
             val row = rows.first()
             assertEquals(exerciseId, row.exerciseId)
             assertEquals("Тестовые подтягивания", row.exerciseName)
-            assertEquals(ExerciseCategory.PULL.name, row.category)
+            assertEquals("PULL", row.category)
             assertEquals(ExerciseMeasuredBy.REPS.name, row.measuredBy)
             assertEquals("широкий хват", row.exerciseComment)
 

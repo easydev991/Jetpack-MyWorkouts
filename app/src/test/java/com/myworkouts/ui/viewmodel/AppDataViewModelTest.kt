@@ -8,10 +8,10 @@ import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.domain.usecase.BackupError
@@ -55,10 +55,14 @@ import org.junit.jupiter.api.Test
  */
 private class AppDataViewModelFakeRepository(
     entries: List<EntryListItem> = emptyList(),
-    private val exercises: List<Exercise> = emptyList()
+    private val exercises: List<Exercise> = emptyList(),
+    categories: List<Category> = emptyList(),
+    archivedCategories: List<Category> = emptyList()
 ) : WorkoutDataRepository {
     private val entriesFlow = MutableStateFlow(entries)
     private val catalogFlow = MutableStateFlow(exercises)
+    private val categoriesFlow = MutableStateFlow(categories)
+    private val archivedCategoriesFlow = MutableStateFlow(archivedCategories)
 
     var deleteAllDataResult: Result<Unit> = Result.success(Unit)
 
@@ -77,6 +81,7 @@ private class AppDataViewModelFakeRepository(
     override suspend fun exerciseHistory(exerciseId: Long): Result<List<ExerciseEntry>> = Result.success(emptyList())
 
     override suspend fun importData(
+        categories: List<Category>,
         exercises: List<Exercise>,
         entries: List<BackupEntry>
     ): Result<Unit> = Result.success(Unit)
@@ -112,7 +117,33 @@ private class AppDataViewModelFakeRepository(
 
     override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
 
-    override fun archivedCount(): Flow<Int> = MutableStateFlow(0)
+    // Новый контракт категорий (custom-categories, этап 2): заглушки —
+    // AppDataViewModel их не вызывает.
+
+    override suspend fun addCategory(name: String): Result<Category> =
+        Result.success(Category(id = 0L, name = name.trim(), colorArgb = 0, isCustom = true))
+
+    override suspend fun renameCategory(
+        id: Long,
+        newName: String
+    ): Result<Unit> = Result.success(Unit)
+
+    override suspend fun deleteCategory(id: Long): Result<Unit> = Result.success(Unit)
+
+    override suspend fun setCategoryArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Result<Unit> = Result.success(Unit)
+
+    override fun categories(): Flow<List<Category>> = categoriesFlow
+
+    override fun archivedCategories(): Flow<List<Category>> = archivedCategoriesFlow
+
+    override fun hasArchived(): Flow<Boolean> = MutableStateFlow(false)
+
+    override fun categoryNamesWithLinkedExercises(): Flow<Set<String>> = MutableStateFlow(emptySet())
+
+    override suspend fun getAllCategories(): Result<List<Category>> = Result.success(emptyList())
 }
 
 /**
@@ -139,7 +170,7 @@ class AppDataViewModelTest {
         Exercise(
             id = 1L,
             name = "Подтягивания",
-            category = ExerciseCategory.PULL,
+            category = "PULL",
             isCustom = false,
             comment = null,
             createdAt = 0L,
@@ -150,7 +181,7 @@ class AppDataViewModelTest {
         Exercise(
             id = 2L,
             name = "Бёрпи",
-            category = ExerciseCategory.PUSH,
+            category = "PUSH",
             isCustom = true,
             comment = null,
             createdAt = 0L,
@@ -256,6 +287,96 @@ class AppDataViewModelTest {
             assertTrue(
                 viewModel.uiState.value.hasData,
                 "Пользовательское упражнение — это данные пользователя"
+            )
+        }
+
+    // ---------- Кастомные категории — данные пользователя (custom-categories, задача 4.5) ----------
+
+    @Test
+    fun hasData_true_when_only_custom_categories() =
+        runTest(testDispatcher) {
+            // Given — записей и кастомных упражнений нет, но есть активная
+            // кастомная категория (spec-сценарий «Только кастомная категория
+            // — экспорт доступен»)
+            val repository =
+                AppDataViewModelFakeRepository(
+                    categories =
+                        listOf(
+                            Category(id = 10L, name = "Спина", colorArgb = 1, isCustom = true)
+                        )
+                )
+            val viewModel = viewModel(repository)
+
+            // When
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // Then
+            assertTrue(
+                viewModel.uiState.value.hasData,
+                "Пользовательская категория — это данные пользователя"
+            )
+        }
+
+    @Test
+    fun hasData_true_when_archived_custom_category() =
+        runTest(testDispatcher) {
+            // Given — единственная кастомная категория в архиве: экспорт
+            // включает архивные категории, кнопка не должна прятаться
+            val repository =
+                AppDataViewModelFakeRepository(
+                    archivedCategories =
+                        listOf(
+                            Category(
+                                id = 10L,
+                                name = "Спина",
+                                colorArgb = 1,
+                                isCustom = true,
+                                isArchived = true
+                            )
+                        )
+                )
+            val viewModel = viewModel(repository)
+
+            // When
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // Then
+            assertTrue(
+                viewModel.uiState.value.hasData,
+                "Архивная кастомная категория — тоже данные пользователя"
+            )
+        }
+
+    @Test
+    fun hasData_false_when_archived_standard_category() =
+        runTest(testDispatcher) {
+            // Given — архивирована стандартная категория: стандартный набор
+            // данными пользователя не считается даже из архива
+            val repository =
+                AppDataViewModelFakeRepository(
+                    archivedCategories =
+                        listOf(
+                            Category(
+                                id = 11L,
+                                name = "PUSH",
+                                colorArgb = 1,
+                                isCustom = false,
+                                isArchived = true
+                            )
+                        )
+                )
+            val viewModel = viewModel(repository)
+
+            // When
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // Then
+            assertFalse(
+                viewModel.uiState.value.hasData,
+                "Архивная стандартная категория — не данные пользователя"
             )
         }
 

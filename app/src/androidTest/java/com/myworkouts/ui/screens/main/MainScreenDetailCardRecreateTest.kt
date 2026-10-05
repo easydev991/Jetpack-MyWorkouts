@@ -17,7 +17,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.MyWorkoutsApplication
 import com.myworkouts.R
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import kotlinx.coroutines.runBlocking
@@ -69,7 +68,7 @@ class MainScreenDetailCardRecreateTest {
                         Exercise(
                             id = 0L,
                             name = entryName,
-                            category = ExerciseCategory.PULL,
+                            category = "PULL",
                             isCustom = true,
                             comment = null,
                             createdAt = System.currentTimeMillis(),

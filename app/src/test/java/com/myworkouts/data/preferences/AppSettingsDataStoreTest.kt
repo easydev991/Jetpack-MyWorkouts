@@ -127,6 +127,73 @@ class AppSettingsDataStoreTest {
             )
         }
 
+    // ---------- custom-categories: opt-out диалога архивации категории ----------
+
+    /**
+     * Spec scenario (custom-categories, «Тап „Архивировать“ открывает
+     * алерт»): без записи [AppSettingsDataStore.dontShowCategoryArchiveDialog]
+     * эмитит default `false`.
+     */
+    @Test
+    fun dontShowCategoryArchiveDialog_first_collect_returns_false() =
+        runTest {
+            // Given
+            val dataStore = newDataStore()
+
+            // When — первый сбор Flow без записи
+            val value = dataStore.dontShowCategoryArchiveDialog.first()
+
+            // Then
+            assertFalse(value, "До первой записи dontShowCategoryArchiveDialog == false")
+        }
+
+    /**
+     * Spec scenario «Подтверждение с чекбоксом пишет отдельный pref»:
+     * после `setDontShowCategoryArchiveDialog(true)` Flow эмитит `true`,
+     * а флаг упражнений остаётся `false` (отдельные ключи).
+     */
+    @Test
+    fun setDontShowCategoryArchiveDialog_true_then_collect_returns_true_and_exerciseFlag_stays_false() =
+        runTest {
+            // Given
+            val dataStore = newDataStore()
+
+            // When
+            dataStore.setDontShowCategoryArchiveDialog(true)
+
+            // Then
+            assertTrue(
+                dataStore.dontShowCategoryArchiveDialog.first(),
+                "После setDontShowCategoryArchiveDialog(true) Flow эмитит true"
+            )
+            assertFalse(
+                dataStore.dontShowArchiveDialog.first(),
+                "Флаг упражнений не затронут (отдельный ключ, spec «Флаг упражнений не влияет на категории»)"
+            )
+        }
+
+    /**
+     * Spec scenario «Флаг упражнений не влияет на категории» (обратная
+     * сторона): включённый флаг упражнений при первом чтении категорийного
+     * флага не влияет — тот остаётся `false`.
+     */
+    @Test
+    fun dontShowCategoryArchiveDialog_when_exerciseFlagSet_then_stays_false() =
+        runTest {
+            // Given
+            val dataStore = newDataStore()
+            dataStore.setDontShowArchiveDialog(true)
+
+            // When
+            val categoryFlag = dataStore.dontShowCategoryArchiveDialog.first()
+
+            // Then
+            assertFalse(
+                categoryFlag,
+                "dont_show_archive_dialog (упражнения) не влияет на категорийный флаг"
+            )
+        }
+
     // ---------- entry-settings-screen: видимость опциональных полей формы записи ----------
 
     /**

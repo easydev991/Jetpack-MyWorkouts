@@ -2,6 +2,7 @@ package com.myworkouts.ui.screens.exercises
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -21,7 +22,6 @@ import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
@@ -75,7 +75,7 @@ class ExercisesLiveUpdateTest {
                 database = database,
                 standardExercises =
                     listOf(
-                        StandardExercise(name = "Подтягивания", category = ExerciseCategory.PULL)
+                        StandardExercise(name = "Подтягивания", category = "PULL")
                     )
             )
     }
@@ -92,7 +92,7 @@ class ExercisesLiveUpdateTest {
                     Exercise(
                         id = 0L,
                         name = "Жим",
-                        category = ExerciseCategory.PUSH,
+                        category = "PUSH",
                         isCustom = true,
                         comment = null,
                         createdAt = 1L,
@@ -131,6 +131,7 @@ class ExercisesLiveUpdateTest {
                                         )
                                 ),
                             onAddExerciseClick = { navController.navigate("stub") },
+                            onAddCategoryClick = {},
                             onArchivedExercisesClick = {},
                             analyticsProvider = NoopAnalyticsProvider()
                         )
@@ -142,8 +143,10 @@ class ExercisesLiveUpdateTest {
             }
         }
         composeTestRule.waitForIdle()
+        // «Упражнения» — два узла (TopAppBar + вкладка таб-бара):
+        // проверяем первый отображённый.
         composeTestRule
-            .onNodeWithText(context.getString(R.string.exercises_title))
+            .onAllNodesWithText(context.getString(R.string.exercises_title))[0]
             .assertIsDisplayed()
 
         // When — уход, вставка, быстрый возврат (< таймаута подписки)
@@ -192,6 +195,7 @@ class ExercisesLiveUpdateTest {
                                         )
                                 ),
                             onAddExerciseClick = { navController.navigate("stub") },
+                            onAddCategoryClick = {},
                             onArchivedExercisesClick = {},
                             analyticsProvider = NoopAnalyticsProvider()
                         )
@@ -212,8 +216,10 @@ class ExercisesLiveUpdateTest {
             }
         }
         composeTestRule.waitForIdle()
+        // «Упражнения» — два узла (TopAppBar + вкладка таб-бара):
+        // проверяем первый отображённый.
         composeTestRule
-            .onNodeWithText(context.getString(R.string.exercises_title))
+            .onAllNodesWithText(context.getString(R.string.exercises_title))[0]
             .assertIsDisplayed()
 
         // When — уход на «форму», пауза больше таймаута подписки,
@@ -260,6 +266,7 @@ class ExercisesLiveUpdateTest {
                                         )
                                 ),
                             onAddExerciseClick = {},
+                            onAddCategoryClick = {},
                             onArchivedExercisesClick = {},
                             analyticsProvider = NoopAnalyticsProvider()
                         )

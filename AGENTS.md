@@ -78,7 +78,10 @@ detekt-предупреждения исправляются до заверше
 - Импорт/бэкап JSON: неизвестные поля игнорируются (толерантный парсинг),
   фильтрация дубликатов при merge — импорт идемпотентен; стримы — через
   `use {}`; любая ошибка файла — `BackupException(INVALID_FILE)`.
-- StateFlow + `SharingStarted.WhileSubscribed(5000)` в ViewModel.
+- StateFlow + `SharingStarted.WhileSubscribed(5000)` в ViewModel — для
+  холодных потоков из репозитория/DataStore. Для UiState на собственном
+  `MutableStateFlow` это не применяется: `mutableUiState.asStateFlow()`
+  без sharing-слоя (`save()` читает всегда свежий `.value`).
 - `LazyColumn` с `key = { it.id }`.
 - **Preview обязательны** для всех composable-компонентов: светлая + тёмная
   (`UI_MODE_NIGHT_YES`), `showBackground = true, locale = "ru"`, обёртка в

@@ -19,7 +19,7 @@ package com.myworkouts.data.db
  * @property exerciseId Идентификатор упражнения каталога
  * @property exerciseName Название упражнения каталога
  * @property iconNumber Номер иконки упражнения (`null` — не назначена)
- * @property category Категория упражнения (имя константы [com.myworkouts.domain.model.ExerciseCategory])
+ * @property category Имя категории упражнения (стандартный ключ или кастомное имя)
  * @property measuredBy Тип измерения (имя константы [com.myworkouts.domain.model.ExerciseMeasuredBy])
  * @property exerciseComment Комментарий упражнения из каталога (`null` — без комментария)
  * @property sets Количество подходов

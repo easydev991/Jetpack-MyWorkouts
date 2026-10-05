@@ -3,12 +3,14 @@ package com.myworkouts.data.repository
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.myworkouts.data.db.CategoryEntity
 import com.myworkouts.data.db.ExerciseEntity
 import com.myworkouts.data.db.StandardExercise
 import com.myworkouts.data.db.WorkoutDatabase
+import com.myworkouts.data.db.standardCategories
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -47,12 +49,12 @@ class RoomWorkoutDataRepositoryDataManagementTest {
         listOf(
             StandardExercise(
                 name = "Подтягивания",
-                category = ExerciseCategory.PULL,
+                category = "PULL",
                 iconNumber = 3
             ),
             StandardExercise(
                 name = "Планка",
-                category = ExerciseCategory.CORE,
+                category = "CORE",
                 measuredBy = ExerciseMeasuredBy.TIME,
                 iconNumber = 8
             )
@@ -125,15 +127,23 @@ class RoomWorkoutDataRepositoryDataManagementTest {
         }
 
     @Test
-    fun importData_insertsExercisesAndEntries_withResolvedIds() =
+    fun importData_insertsCategoriesExercisesAndEntries_withResolvedIds() =
         runBlocking {
-            // Given — новое упражнение из копии и две записи: одна на новое,
-            // другая на существующее из каталога
+            // Given — категория, новое упражнение из копии и две записи:
+            // одна на новое, другая на существующее из каталога
+            // (custom-categories, design D9: категории — в одной транзакции)
+            val spine =
+                Category(
+                    id = 0L,
+                    name = "Спина",
+                    colorArgb = 0xFF4E6EF2.toInt(),
+                    isCustom = true
+                )
             val burpee =
                 Exercise(
                     id = 0L,
                     name = "Бёрпи",
-                    category = ExerciseCategory.PUSH,
+                    category = "PUSH",
                     isCustom = true,
                     comment = null,
                     createdAt = 99L,
@@ -163,7 +173,7 @@ class RoomWorkoutDataRepositoryDataManagementTest {
                 )
 
             val before = System.currentTimeMillis()
-            val result = repository.importData(listOf(burpee), listOf(onBurpee, onPullups))
+            val result = repository.importData(listOf(spine), listOf(burpee), listOf(onBurpee, onPullups))
             val after = System.currentTimeMillis()
 
             // Then — успех; упражнение вставлено с сохранением полей
@@ -173,6 +183,16 @@ class RoomWorkoutDataRepositoryDataManagementTest {
             val inserted = catalog.single { it.name == "Бёрпи" }
             assertTrue("Вставленное из копии должно быть isCustom=true", inserted.isCustom)
             assertEquals(99L, inserted.createdAt)
+
+            // Then — категория вставлена в ту же транзакцию: цвет из файла,
+            // createdAt — момент импорта (в файле поля нет)
+            val categories = database.categoryDao().getAll()
+            val insertedCategory = categories.single { it.name == "Спина" }
+            assertEquals(0xFF4E6EF2.toInt(), insertedCategory.colorArgb)
+            assertTrue(
+                "createdAt категории должен быть в [$before, $after]",
+                insertedCategory.createdAt in before..after
+            )
 
             // Then — записи вставлены с разрешёнными id и метками времени
             val entries = repository.getAllEntries().getOrThrow()
@@ -192,13 +212,20 @@ class RoomWorkoutDataRepositoryDataManagementTest {
     @Test
     fun importData_withUnresolvedName_fails_andRollsBackEverything() =
         runBlocking {
-            // Given — упражнение вставляется, но запись ссылается на
-            // имя, которого нет ни в файле, ни в каталоге
+            // Given — категория и упражнение вставляются, но запись
+            // ссылается на имя, которого нет ни в файле, ни в каталоге
+            val spine =
+                Category(
+                    id = 0L,
+                    name = "Спина",
+                    colorArgb = 0xFF4E6EF2.toInt(),
+                    isCustom = true
+                )
             val burpee =
                 Exercise(
                     id = 0L,
                     name = "Бёрпи",
-                    category = ExerciseCategory.PUSH,
+                    category = "PUSH",
                     isCustom = true,
                     comment = null,
                     createdAt = 99L
@@ -216,7 +243,7 @@ class RoomWorkoutDataRepositoryDataManagementTest {
                 )
 
             // When
-            val result = repository.importData(listOf(burpee), listOf(ghost))
+            val result = repository.importData(listOf(spine), listOf(burpee), listOf(ghost))
 
             // Then — отказ: IllegalArgumentException не подходит — репозиторий
             // защищается IllegalStateException (design Decision 6)
@@ -226,7 +253,12 @@ class RoomWorkoutDataRepositoryDataManagementTest {
                 result.exceptionOrNull() is IllegalStateException
             )
 
-            // Then — транзакция откатилась целиком: ни упражнения, ни записи
+            // Then — транзакция откатилась целиком: ни категории, ни
+            // упражнения, ни записи
+            assertTrue(
+                "Категория должна быть откачена вместе с транзакцией",
+                database.categoryDao().getAll().none { it.name == "Спина" }
+            )
             assertTrue(
                 "Упражнение должно быть откачено вместе с транзакцией",
                 repository.getAllExercises().getOrThrow().none { it.name == "Бёрпи" }
@@ -240,14 +272,15 @@ class RoomWorkoutDataRepositoryDataManagementTest {
     @Test
     fun deleteAllData_clearsEverything_andRestoresStandardSet() =
         runBlocking {
-            // Given — стандартное из setUp, пользовательское и запись
+            // Given — стандартное из setUp, пользовательское, запись и
+            // кастомная категория
             val customId =
                 repository
                     .addExercise(
                         Exercise(
                             id = 0L,
                             name = "Бёрпи",
-                            category = ExerciseCategory.PUSH,
+                            category = "PUSH",
                             isCustom = true,
                             comment = null,
                             createdAt = 99L
@@ -269,6 +302,14 @@ class RoomWorkoutDataRepositoryDataManagementTest {
                         modifiedAt = 1L
                     )
                 ).getOrThrow()
+            database.categoryDao().insert(
+                CategoryEntity(
+                    name = "Спина",
+                    colorArgb = 0xFF448AFF.toInt(),
+                    isCustom = true,
+                    createdAt = 5L
+                )
+            )
 
             // When
             val result = repository.deleteAllData()
@@ -298,6 +339,18 @@ class RoomWorkoutDataRepositoryDataManagementTest {
             assertEquals(
                 8,
                 catalog.single { it.name == "Планка" }.iconNumber
+            )
+            // Then — категории: ровно стандартный набор из 5, кастомных нет
+            // (custom-categories, спека workout-data «Массовый сброс данных»)
+            val categories = database.categoryDao().observeCategories().first()
+            assertEquals(standardCategories.size, categories.size)
+            assertEquals(
+                standardCategories.map { it.name }.toSet(),
+                categories.map { it.name }.toSet()
+            )
+            assertTrue(
+                "Восстановленный набор — только стандартные категории",
+                categories.none { it.isCustom }
             )
             // Реактивный список тоже пуст
             assertTrue(repository.entries().first().isEmpty())

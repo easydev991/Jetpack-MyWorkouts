@@ -15,6 +15,7 @@ enum class AppScreen {
     EntryCreateScreen,
     EntrySettingsScreen,
     ExerciseCreateScreen,
+    CategoryCreateScreen,
     OverviewScreen,
     OverviewSettingsScreen
 }
@@ -30,11 +31,17 @@ enum class UserActionType {
     DELETE,
     ARCHIVE,
     UNARCHIVE,
+    CREATE_CATEGORY,
+    EDIT_CATEGORY,
+    DELETE_CATEGORY,
+    ARCHIVE_CATEGORY,
+    UNARCHIVE_CATEGORY,
     CREATE_BACKUP,
     RESTORE_BACKUP,
     DELETE_ALL_DATA,
     OPEN_ENTRY_CREATE,
     OPEN_EXERCISE_CREATE,
+    OPEN_CATEGORY_CREATE,
     OPEN_OVERVIEW,
     SELECT_THEME,
     TOGGLE_DYNAMIC_COLORS,
@@ -42,6 +49,7 @@ enum class UserActionType {
     TOGGLE_ENTRY_FIELD_VISIBILITY,
     ENABLE_ALL_ENTRY_FIELDS,
     SELECT_OVERVIEW_TAB,
+    SELECT_CATEGORIES_TAB,
     SELECT_STATS_PERIOD,
     SELECT_STATS_CATEGORY,
     SELECT_RECORDS_MODE,
@@ -59,7 +67,8 @@ enum class AppErrorOperation {
     CREATE_BACKUP,
     RESTORE_BACKUP,
     DELETE_ALL_DATA,
-    DELETE_EXERCISE
+    DELETE_EXERCISE,
+    CATEGORY_DELETE
 }
 
 /**

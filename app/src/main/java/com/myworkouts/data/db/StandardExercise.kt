@@ -1,6 +1,5 @@
 package com.myworkouts.data.db
 
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 
 /**
@@ -15,7 +14,8 @@ import com.myworkouts.domain.model.ExerciseMeasuredBy
  * первого запуска (см. Risks в design.md).
  *
  * @property name Локализованное название упражнения
- * @property category Категория упражнения
+ * @property category Имя-ключ категории (те же ключи, что в
+ *   [standardCategories]; ссылка по имени — custom-categories, Decision 1)
  * @property measuredBy Тип измерения; дефолт `REPS` — большинство
  *   стандартных упражнений на повторы, `TIME` задают явно
  *   (планка, скакалка)
@@ -26,7 +26,7 @@ import com.myworkouts.domain.model.ExerciseMeasuredBy
  */
 data class StandardExercise(
     val name: String,
-    val category: ExerciseCategory,
+    val category: String,
     val measuredBy: ExerciseMeasuredBy = ExerciseMeasuredBy.REPS,
     val iconNumber: Int? = null
 )

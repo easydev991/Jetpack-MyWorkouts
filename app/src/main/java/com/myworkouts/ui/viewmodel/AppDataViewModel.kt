@@ -90,17 +90,25 @@ class AppDataViewModel(
     private val result = MutableStateFlow<AppDataResult?>(null)
 
     /**
-     * UI State экрана. `hasData` — есть записи или пользовательские
-     * упражнения; оба потока репозитория уже существуют (design
-     * Decision 7), отдельных снимков не требуется.
+     * UI State экрана. `hasData` — есть записи, пользовательские
+     * упражнения или пользовательские категории (активные и архивные —
+     * архивация не отменяет «данных пользователя» и попадает в экспорт,
+     * custom-categories, spec «Создание резервной копии»); потоки
+     * репозитория уже существуют (design Decision 7), отдельных снимков
+     * не требуется.
      */
     val uiState: StateFlow<AppDataUiState> =
         combine(
             combine(
                 repository.entries(),
-                repository.exercises("")
-            ) { entries, exercises ->
-                entries.isNotEmpty() || exercises.any { it.isCustom }
+                repository.exercises(""),
+                repository.categories(),
+                repository.archivedCategories()
+            ) { entries, exercises, categories, archivedCategories ->
+                entries.isNotEmpty() ||
+                    exercises.any { it.isCustom } ||
+                    categories.any { it.isCustom } ||
+                    archivedCategories.any { it.isCustom }
             },
             isBusy,
             result

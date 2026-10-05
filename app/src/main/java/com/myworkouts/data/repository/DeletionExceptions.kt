@@ -24,3 +24,22 @@ class StandardExerciseDeletionException : IllegalStateException("Стандар�
  * (design Decision 8).
  */
 class LinkedEntriesDeletionException : IllegalStateException("У этого упражнения есть записи, удалите их сначала")
+
+/**
+ * Операция с категорией отклонена дизайном: категория стандартная
+ * (custom-categories, design Decision 4). Бросается и удалением
+ * ([WorkoutDataRepository.deleteCategory]), и переименованием
+ * ([WorkoutDataRepository.renameCategory]) — стандартные имена-ключи
+ * `PUSH`/`PULL`/… хранятся в БД и бэкапах и не меняются.
+ */
+class StandardCategoryDeletionException :
+    IllegalStateException("Стандартную категорию нельзя удалить или переименовать")
+
+/**
+ * Удаление категории отклонено: на неё ссылаются упражнения — активные
+ * или архивные (custom-categories, design Decision 4). Pre-check через
+ * [com.myworkouts.data.db.ExerciseDao.countByCategoryName] внутри
+ * транзакции; в rename не возникает — ссылки упражнений обновляются
+ * той же транзакцией.
+ */
+class CategoryInUseDeletionException : IllegalStateException("Эту категорию используют упражнения, удалите их сначала")

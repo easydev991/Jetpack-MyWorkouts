@@ -489,6 +489,7 @@ private class AppDataViewModelFakeRepository(
     override suspend fun getAllExercises(): Result<List<Exercise>> = Result.success(catalogFlow.value)
     override suspend fun getAllEntries(): Result<List<ExerciseEntry>> = Result.success(emptyList())
     override suspend fun importData(
+        categories: List<Category>,
         exercises: List<Exercise>,
         entries: List<BackupEntry>
     ): Result<Unit> = Result.success(Unit)

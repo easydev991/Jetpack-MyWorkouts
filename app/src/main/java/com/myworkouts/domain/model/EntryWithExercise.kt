@@ -15,7 +15,8 @@ package com.myworkouts.domain.model
  * @property exerciseId Идентификатор упражнения каталога
  * @property exerciseName Название упражнения каталога
  * @property iconNumber Номер иконки упражнения (`null` — не назначена)
- * @property category Категория упражнения (суммы доната — по ней)
+ * @property category Имя категории упражнения (суммы доната — по ней;
+ *   ссылка по имени — custom-categories, design Decision 1)
  * @property measuredBy Тип измерения: REPS — в донат и рекорды значением
  *   повтора, TIME — длительность подхода
  * @property exerciseComment Комментарий упражнения из каталога (`null` —
@@ -32,7 +33,7 @@ data class EntryWithExercise(
     val exerciseId: Long,
     val exerciseName: String,
     val iconNumber: Int? = null,
-    val category: ExerciseCategory,
+    val category: String,
     val measuredBy: ExerciseMeasuredBy,
     val exerciseComment: String? = null,
     val sets: Int,

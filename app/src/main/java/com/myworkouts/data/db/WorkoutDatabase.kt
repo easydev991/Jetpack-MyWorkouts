@@ -4,17 +4,20 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
- * Room-база данных приложения: каталог упражнений и записи о выполнении.
+ * Room-база данных приложения: каталог упражнений, записи о выполнении
+ * и категории.
  *
- * Версия `3` (в `2` добавилась колонка `exercises.is_archived` —
+ * Версия `4` (в `2` добавилась колонка `exercises.is_archived` —
  * exercises-archive Decision 1: bump вместо миграции; в `3` — колонка
- * `exercises.icon_number`, exercise-icon-mvp Decision 1), экспорт схемы
- * в `app/schemas/` включён через `ksp { arg("room.schemaLocation", ...) }` —
- * JSON-схема коммитится в репо
- * (`workouts` появится отдельным изменением схемы, design.md Decision 7).
+ * `exercises.icon_number`, exercise-icon-mvp Decision 1; в `4` — таблица
+ * `categories` с prepopulate пяти стандартных, custom-categories
+ * Decision 5), экспорт схемы в `app/schemas/` включён через
+ * `ksp { arg("room.schemaLocation", ...) }` — JSON-схема коммитится
+ * в репо.
  *
  * Изменения схемы — через `Migration`, зарегистрированные в
  * `addMigrations(...)`: при расхождении версий файла и схемы без
@@ -25,8 +28,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * конфигурации, в т.ч. prepopulate через callback.
  */
 @Database(
-    entities = [ExerciseEntity::class, ExerciseEntryEntity::class],
-    version = 3,
+    entities = [ExerciseEntity::class, ExerciseEntryEntity::class, CategoryEntity::class],
+    version = 4,
     exportSchema = true
 )
 abstract class WorkoutDatabase : RoomDatabase() {
@@ -34,11 +37,47 @@ abstract class WorkoutDatabase : RoomDatabase() {
 
     abstract fun exerciseEntryDao(): ExerciseEntryDao
 
+    abstract fun categoryDao(): CategoryDao
+
     companion object {
         /**
          * Имя файла БД в директории приложения.
          */
         const val DATABASE_NAME: String = "workout_database"
+
+        /**
+         * Миграция v3 → v4 (custom-categories, design Decision 5): таблица
+         * `categories` (DDL — копия createSql из экспортированной схемы
+         * `app/schemas/…/4.json`, включая DEFAULT 0 у флагов), unique-индекс
+         * `name` + индекс `created_at`, INSERT пяти стандартных категорий из
+         * [standardCategories] с единым `created_at` — стабильная сортировка
+         * по `name COLLATE NOCASE`. Рукописная, а не `@AutoMigration`:
+         * требуется INSERT данных стандартного набора.
+         */
+        val MIGRATION_3_4: Migration =
+            object : Migration(3, 4) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE IF NOT EXISTS `categories` (" +
+                            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "`name` TEXT NOT NULL, " +
+                            "`color_argb` INTEGER NOT NULL, " +
+                            "`is_custom` INTEGER NOT NULL DEFAULT 0, " +
+                            "`is_archived` INTEGER NOT NULL DEFAULT 0, " +
+                            "`created_at` INTEGER NOT NULL)"
+                    )
+                    db.execSQL(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS `index_categories_name` " +
+                            "ON `categories` (`name`)"
+                    )
+                    db.execSQL(
+                        "CREATE INDEX IF NOT EXISTS `index_categories_created_at` " +
+                            "ON `categories` (`created_at`)"
+                    )
+                    val now = System.currentTimeMillis()
+                    insertStandardCategories(db, now)
+                }
+            }
 
         /**
          * Создаёт БД и регистрирует prepopulate 13 стандартных упражнений.
@@ -64,6 +103,7 @@ abstract class WorkoutDatabase : RoomDatabase() {
                     WorkoutDatabase::class.java,
                     DATABASE_NAME
                 ).addCallback(seedCallback(standardExercises))
+                .addMigrations(MIGRATION_3_4)
                 .build()
 
         /**
@@ -91,15 +131,18 @@ abstract class WorkoutDatabase : RoomDatabase() {
             object : Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
-                    seedStandardExercises(db)
+                    seedStandardData(db)
                 }
 
                 /**
-                 * Вставляет стандартный набор одной транзакцией. Имена
-                 * резолвятся до регистрации callback'а (замыкание на
-                 * [standardExercises]) — callback не имеет доступа к Context.
+                 * Вставляет стандартный набор — 13 упражнений и 5 категорий —
+                 * одной транзакцией. Имена упражнений резолвятся до
+                 * регистрации callback'а (замыкание на [standardExercises]) —
+                 * callback не имеет доступа к Context; категории — константы
+                 * [standardCategories] (custom-categories, спека
+                 * category-data: предзаполнение в той же транзакции).
                  */
-                private fun seedStandardExercises(db: SupportSQLiteDatabase) {
+                private fun seedStandardData(db: SupportSQLiteDatabase) {
                     val now = System.currentTimeMillis()
                     db.beginTransaction()
                     try {
@@ -107,7 +150,7 @@ abstract class WorkoutDatabase : RoomDatabase() {
                             val args: Array<Any?> =
                                 arrayOf(
                                     exercise.name,
-                                    exercise.category.name,
+                                    exercise.category,
                                     now,
                                     exercise.measuredBy.name,
                                     exercise.iconNumber
@@ -119,11 +162,33 @@ abstract class WorkoutDatabase : RoomDatabase() {
                                 args
                             )
                         }
+                        insertStandardCategories(db, now)
                         db.setTransactionSuccessful()
                     } finally {
                         db.endTransaction()
                     }
                 }
             }
+
+        /**
+         * Вставляет пять стандартных категорий с единым `created_at` —
+         * стабильная сортировка по `name COLLATE NOCASE`. Общий код для
+         * prepopulate (callback создания) и [MIGRATION_3_4].
+         */
+        private fun insertStandardCategories(
+            db: SupportSQLiteDatabase,
+            now: Long
+        ) {
+            standardCategories.forEach { category ->
+                val args: Array<Any?> =
+                    arrayOf(category.name, category.colorArgb, now)
+                db.execSQL(
+                    "INSERT INTO categories " +
+                        "(name, color_argb, is_custom, is_archived, created_at) " +
+                        "VALUES (?, ?, 0, 0, ?)",
+                    args
+                )
+            }
+        }
     }
 }

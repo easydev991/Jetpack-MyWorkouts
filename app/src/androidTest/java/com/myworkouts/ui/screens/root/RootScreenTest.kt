@@ -17,7 +17,6 @@ import com.myworkouts.data.db.StandardExercise
 import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.navigation.BottomTabs
@@ -85,7 +84,7 @@ class RootScreenTest {
                         Exercise(
                             id = 0L,
                             name = uniqueName,
-                            category = ExerciseCategory.PUSH,
+                            category = "PUSH",
                             isCustom = true,
                             comment = null,
                             createdAt = now,
@@ -185,7 +184,7 @@ class RootScreenTest {
         val repository =
             RoomWorkoutDataRepository(
                 database = database,
-                standardExercises = listOf(StandardExercise(name = "Отжимания", category = ExerciseCategory.PUSH))
+                standardExercises = listOf(StandardExercise(name = "Отжимания", category = "PUSH"))
             )
         runBlocking { insert(repository) }
         database.close()

@@ -31,7 +31,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.OverviewTab
 import com.myworkouts.domain.usecase.ActivityPeriod
 import com.myworkouts.domain.usecase.RecordsMode
@@ -51,7 +50,7 @@ import com.myworkouts.ui.viewmodel.OverviewViewModel
 internal data class OverviewScreenActions(
     val onTabSelect: (OverviewTab) -> Unit,
     val onStatsPeriodChange: (StatsPeriod) -> Unit,
-    val onStatsCategorySelect: (ExerciseCategory?) -> Unit,
+    val onStatsCategorySelect: (String?) -> Unit,
     val onRecordsModeChange: (RecordsMode) -> Unit,
     val onActivityPeriodChange: (ActivityPeriod) -> Unit
 )

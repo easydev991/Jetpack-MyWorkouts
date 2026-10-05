@@ -9,7 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
@@ -26,7 +25,7 @@ private val previewPullups =
     Exercise(
         id = 1L,
         name = "Подтягивания",
-        category = ExerciseCategory.PULL,
+        category = "PULL",
         isCustom = false,
         comment = "широкий хват",
         createdAt = 1_721_000_000_000L,
@@ -38,7 +37,7 @@ private val previewPlank =
     Exercise(
         id = 2L,
         name = "Планка",
-        category = ExerciseCategory.CORE,
+        category = "CORE",
         isCustom = false,
         comment = null,
         createdAt = 1_721_100_000_000L,
@@ -50,7 +49,7 @@ private val previewAustralianPullups =
     Exercise(
         id = 3L,
         name = "Австралийские подтягивания",
-        category = ExerciseCategory.PULL,
+        category = "PULL",
         isCustom = false,
         comment = "ноги на опоре, тело в прямой линии",
         createdAt = 1_721_200_000_000L,

@@ -5,7 +5,6 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -146,11 +145,11 @@ class StandardExercisesLocalizationTest {
         val categories = standardExercises(ru).map { it.category }
 
         // Then — все 5 категорий представлены, каждая как минимум один раз
-        assertEquals(true, categories.contains(ExerciseCategory.PUSH))
-        assertEquals(true, categories.contains(ExerciseCategory.PULL))
-        assertEquals(true, categories.contains(ExerciseCategory.LEGS))
-        assertEquals(true, categories.contains(ExerciseCategory.CORE))
-        assertEquals(true, categories.contains(ExerciseCategory.CARDIO))
+        assertEquals(true, categories.contains("PUSH"))
+        assertEquals(true, categories.contains("PULL"))
+        assertEquals(true, categories.contains("LEGS"))
+        assertEquals(true, categories.contains("CORE"))
+        assertEquals(true, categories.contains("CARDIO"))
     }
 
     @Test

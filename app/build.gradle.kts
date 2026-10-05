@@ -99,6 +99,13 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Схемы Room из app/schemas — в assets androidTest: без них
+    // MigrationTestHelper не найдёт JSON для createDatabase/runMigrationsAndValidate
+    // (custom-categories, задача 1.3)
+    sourceSets {
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    }
 }
 
 dependencies {
@@ -135,8 +142,19 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.room.testing)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    constraints {
+        // room-testing (androidTest) требует kotlinx-serialization >= 1.8.1
+        // (иначе AbstractMethodError в MigrationTestHelper), но consistent
+        // resolution AGP подтягивает версии из main-графа, где
+        // lifecycle-viewmodel-savedstate резолвит 1.7.3. Constraint в main
+        // поднимает согласованную версию; сами библиотеки в main не попадают.
+        implementation(libs.kotlinx.serialization.json)
+        implementation(libs.kotlinx.serialization.core)
+    }
 }
 
 detekt {

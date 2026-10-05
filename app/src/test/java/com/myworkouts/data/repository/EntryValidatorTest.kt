@@ -1,6 +1,6 @@
 package com.myworkouts.data.repository
 
-import com.myworkouts.domain.model.ExerciseCategory
+import com.myworkouts.data.db.standardCategories
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -283,7 +283,7 @@ class EntryValidatorTest {
         // контракт «запись валидна» не должен зависеть от типа упражнения.
         // Здесь просто проверяем, что валидатор не смотрит на категорию —
         // она живёт в Exercise, а не в ExerciseEntry.
-        ExerciseCategory.values().forEach { _ ->
+        standardCategories.forEach { _ ->
             val entry = baseEntry()
             assertTrue(EntryValidator.validate(entry, ExerciseMeasuredBy.REPS).isSuccess)
         }

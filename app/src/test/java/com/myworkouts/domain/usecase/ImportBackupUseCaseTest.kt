@@ -3,11 +3,12 @@ package com.myworkouts.domain.usecase
 import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
+import com.myworkouts.data.db.standardCategories
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.domain.model.OverviewTab
@@ -43,7 +44,7 @@ class ImportBackupUseCaseTest {
         Exercise(
             id = 1L,
             name = "Подтягивания",
-            category = ExerciseCategory.PULL,
+            category = "PULL",
             isCustom = false,
             comment = null,
             createdAt = 1_757_371_100_000L
@@ -112,14 +113,32 @@ class ImportBackupUseCaseTest {
         }
         """.trimIndent()
 
+    /**
+     * Снимок стандартного набора категорий: БД всегда предзаполняется
+     * пятью стандартными (custom-categories, spec «Предзаполнение
+     * стандартных категорий»), поэтому дефолтный снимок репозитория
+     * в тестах — они же; упражнения файлов с "PULL"/"CORE" резолвятся.
+     */
+    private fun standardDomainCategories(): List<Category> =
+        standardCategories.map { standard ->
+            Category(
+                id = 0L,
+                name = standard.name,
+                colorArgb = standard.colorArgb,
+                isCustom = false
+            )
+        }
+
     private fun repository(
         exercises: List<Exercise> = emptyList(),
-        entries: List<ExerciseEntry> = emptyList()
+        entries: List<ExerciseEntry> = emptyList(),
+        categories: List<Category> = standardDomainCategories()
     ): WorkoutDataRepository =
         mockk<WorkoutDataRepository>(relaxed = true).also { repo ->
             coEvery { repo.getAllExercises() } returns Result.success(exercises)
             coEvery { repo.getAllEntries() } returns Result.success(entries)
-            coEvery { repo.importData(any(), any()) } returns Result.success(Unit)
+            coEvery { repo.getAllCategories() } returns Result.success(categories)
+            coEvery { repo.importData(any(), any(), any()) } returns Result.success(Unit)
         }
 
     private fun useCase(
@@ -151,7 +170,7 @@ class ImportBackupUseCaseTest {
             assertTrue(result.isSuccess, "Новое упражнение и запись добавлены")
             val exercisesSlot = slot<List<Exercise>>()
             val entriesSlot = slot<List<BackupEntry>>()
-            coVerify { repository.importData(capture(exercisesSlot), capture(entriesSlot)) }
+            coVerify { repository.importData(any(), capture(exercisesSlot), capture(entriesSlot)) }
             val inserted = exercisesSlot.captured.single()
             assertTrue(inserted.isCustom, "Вставленному из файла всегда isCustom = true")
             assertEquals(0L, inserted.id, "id присвоит БД — в файле его нет")
@@ -191,7 +210,7 @@ class ImportBackupUseCaseTest {
             assertTrue(result.isSuccess, "Упражнение не дублируется, запись добавляется")
             val exercisesSlot = slot<List<Exercise>>()
             val entriesSlot = slot<List<BackupEntry>>()
-            coVerify { repository.importData(capture(exercisesSlot), capture(entriesSlot)) }
+            coVerify { repository.importData(any(), capture(exercisesSlot), capture(entriesSlot)) }
             assertTrue(exercisesSlot.captured.isEmpty(), "Дубликат имени не создаёт новое упражнение")
             assertEquals(
                 "ПОДТЯГИВАНИЯ",
@@ -233,7 +252,7 @@ class ImportBackupUseCaseTest {
                 "Дубликат содержимого не вставляется (createdAt не входит в ключ)"
             )
             val entriesSlot = slot<List<BackupEntry>>()
-            coVerify { repository.importData(any(), capture(entriesSlot)) }
+            coVerify { repository.importData(any(), any(), capture(entriesSlot)) }
             assertTrue(entriesSlot.captured.isEmpty(), "Дубликат записи не доходит до репозитория")
         }
 
@@ -266,7 +285,7 @@ class ImportBackupUseCaseTest {
             // Then
             assertTrue(result.isSuccess, "Импорт не падает, вставлена одна запись")
             val entriesSlot = slot<List<BackupEntry>>()
-            coVerify { repository.importData(any(), capture(entriesSlot)) }
+            coVerify { repository.importData(any(), any(), capture(entriesSlot)) }
             assertFalse(
                 entriesSlot.captured.any { it.exerciseName == "Несуществующее" },
                 "Неразрешимое имя не доходит до importData"
@@ -304,7 +323,7 @@ class ImportBackupUseCaseTest {
                 "Невалидная запись пропущена, валидная вставлена"
             )
             val entriesSlot = slot<List<BackupEntry>>()
-            coVerify { repository.importData(any(), capture(entriesSlot)) }
+            coVerify { repository.importData(any(), any(), capture(entriesSlot)) }
             assertEquals(5, entriesSlot.captured.single().sets, "Вставлена только валидная запись")
         }
 
@@ -318,7 +337,7 @@ class ImportBackupUseCaseTest {
                 Exercise(
                     id = 100L,
                     name = "Планка",
-                    category = ExerciseCategory.CORE,
+                    category = "CORE",
                     isCustom = true,
                     comment = "Держать ровно",
                     createdAt = 1_757_371_150_000L
@@ -354,12 +373,438 @@ class ImportBackupUseCaseTest {
             val exercisesSlots = mutableListOf<List<Exercise>>()
             val entriesSlots = mutableListOf<List<BackupEntry>>()
             coVerify(exactly = 2) {
-                repository.importData(capture(exercisesSlots), capture(entriesSlots))
+                repository.importData(any(), capture(exercisesSlots), capture(entriesSlots))
             }
             assertEquals(1, exercisesSlots[0].size, "Первый импорт вставляет упражнение файла")
             assertEquals(1, entriesSlots[0].size, "Первый импорт вставляет запись файла")
             assertTrue(exercisesSlots[1].isEmpty(), "Повторный импорт не дублирует упражнение")
             assertTrue(entriesSlots[1].isEmpty(), "Повторный импорт того же файла ничего не добавляет")
+        }
+
+    @Test
+    fun import_when_exercise_category_unknown_then_exercise_and_entries_skipped() =
+        runTest {
+            // Given: упражнение ссылается на категорию, которой нет ни в
+            // categories[] файла, ни в БД — упражнение пропускается вместе
+            // со своими записями, файл не отвергается (spec-сценарии
+            // «Упражнение с неизвестной категорией пропускается» и
+            // «Категория упражнения с произвольной строкой»)
+            val repository = repository()
+            val file =
+                """
+                {
+                  "version": 1,
+                  "exercises": [
+                    {"name": "X", "category": "STRENGTH", "measuredBy": "REPS",
+                     "isCustom": true, "createdAt": 1}
+                  ],
+                  "entries": [
+                    {"exerciseName": "X", "date": 1757371200000, "sets": 4,
+                     "reps": 10, "weightKg": null, "durationSec": null,
+                     "comment": null, "createdAt": 1757371200000}
+                  ]
+                }
+                """.trimIndent()
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then
+            assertTrue(result.isSuccess, "Неизвестное имя категории не отвергает файл")
+            val exercisesSlot = slot<List<Exercise>>()
+            val entriesSlot = slot<List<BackupEntry>>()
+            coVerify {
+                repository.importData(any(), capture(exercisesSlot), capture(entriesSlot))
+            }
+            assertTrue(
+                exercisesSlot.captured.isEmpty(),
+                "Упражнение с неразрешимой категорией пропускается"
+            )
+            assertTrue(
+                entriesSlot.captured.isEmpty(),
+                "Записи пропущенного упражнения тоже пропускаются"
+            )
+        }
+
+    // ---------- custom-categories: секция categories[] (design D9) ----------
+
+    @Test
+    fun import_when_new_category_then_inserted_with_fileColorArchive_and_isCustom_true() =
+        runTest {
+            // Given: файл содержит две отсутствующие в БД категории —
+            // активную и архивную; isCustom в файле (false) — недоверенное
+            // значение (spec-сценарий «Категория из файла создаётся при
+            // отсутствии»)
+            val repository = repository()
+            val file =
+                """
+                {
+                  "version": 1,
+                  "exercises": [],
+                  "entries": [],
+                  "categories": [
+                    {"name": "Спина", "colorArgb": -11637006, "isArchived": false,
+                     "isCustom": false},
+                    {"name": "Руки", "colorArgb": -6501275, "isArchived": true,
+                     "isCustom": true}
+                  ]
+                }
+                """.trimIndent()
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then — вставленные: цвет и архив из файла, isCustom всегда true
+            assertTrue(result.isSuccess, "Категории файла вставляются")
+            val categoriesSlot = slot<List<Category>>()
+            coVerify { repository.importData(capture(categoriesSlot), any(), any()) }
+            val spine = categoriesSlot.captured.single { it.name == "Спина" }
+            assertEquals(0xFF4E6EF2.toInt(), spine.colorArgb, "Цвет категории — из файла")
+            assertFalse(spine.isArchived, "Активная категория из файла")
+            assertTrue(spine.isCustom, "Вставленной категории всегда isCustom = true")
+            assertEquals(0L, spine.id, "id присвоит БД — в файле его нет")
+            val arms = categoriesSlot.captured.single { it.name == "Руки" }
+            assertTrue(arms.isArchived, "Архивная категория вставляется архивной")
+        }
+
+    @Test
+    fun import_when_category_duplicate_by_key_then_not_duplicated_and_existing_untouched() =
+        runTest {
+            // Given: в БД категория «Спина», файл содержит « спина » (тот же
+            // ключ name.trim().lowercase()) с другим цветом — дедуп, цвет
+            // существующей не меняется (spec-сценарии «Дубликаты
+            // пропускаются» и «Цвет существующей категории не меняется»)
+            val existing = Category(id = 7L, name = "Спина", colorArgb = 1, isCustom = true)
+            val repository = repository(categories = listOf(existing))
+            val file =
+                """
+                {
+                  "version": 1,
+                  "exercises": [],
+                  "entries": [],
+                  "categories": [
+                    {"name": " спина ", "colorArgb": 999, "isArchived": false}
+                  ]
+                }
+                """.trimIndent()
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then
+            assertTrue(result.isSuccess, "Дедуп не ломает импорт")
+            val categoriesSlot = slot<List<Category>>()
+            coVerify { repository.importData(capture(categoriesSlot), any(), any()) }
+            assertTrue(
+                categoriesSlot.captured.isEmpty(),
+                "Дубликат по name.trim().lowercase() не создаёт категорию"
+            )
+            coVerify(exactly = 0) { repository.setCategoryArchived(any(), any()) }
+        }
+
+    @Test
+    fun import_when_duplicate_categories_within_file_then_single_insert() =
+        runTest {
+            // Given: в файле «Спина» и «СПИНА» — один и тот же ключ дедупа
+            val repository = repository()
+            val file =
+                """
+                {
+                  "version": 1,
+                  "exercises": [],
+                  "entries": [],
+                  "categories": [
+                    {"name": "Спина", "colorArgb": 1, "isArchived": false},
+                    {"name": "СПИНА", "colorArgb": 2, "isArchived": false}
+                  ]
+                }
+                """.trimIndent()
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then
+            assertTrue(result.isSuccess, "Импорт успешен")
+            val categoriesSlot = slot<List<Category>>()
+            coVerify { repository.importData(capture(categoriesSlot), any(), any()) }
+            assertEquals(
+                listOf("Спина"),
+                categoriesSlot.captured.map { it.name },
+                "Дубликаты внутри файла схлопываются в одну вставку"
+            )
+        }
+
+    @Test
+    fun import_when_file_category_archived_then_existing_archived() =
+        runTest {
+            // Given: в БД активная «Спина», файл дублирует имя с
+            // isArchived = true — односторонняя архивация (spec-сценарий
+            // «Архивация существующей категории из файла применяется»)
+            val existing = Category(id = 7L, name = "Спина", colorArgb = 1, isCustom = true)
+            val repository = repository(categories = listOf(existing))
+            val file =
+                """
+                {
+                  "version": 1,
+                  "exercises": [],
+                  "entries": [],
+                  "categories": [
+                    {"name": "Спина", "colorArgb": 999, "isArchived": true}
+                  ]
+                }
+                """.trimIndent()
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then
+            assertTrue(result.isSuccess, "Дедуп не ломает импорт")
+            coVerify(exactly = 1) {
+                repository.setCategoryArchived(existing.id, true)
+            }
+        }
+
+    @Test
+    fun import_when_file_category_active_and_existing_archived_then_no_unarchive() =
+        runTest {
+            // Given: в БД архивная «Спина», файл содержит её с
+            // isArchived = false — обратная разархивация не выполняется
+            // (spec-сценарий «Разархивация существующей категории из файла
+            // не выполняется»)
+            val existing =
+                Category(id = 7L, name = "Спина", colorArgb = 1, isCustom = true, isArchived = true)
+            val repository = repository(categories = listOf(existing))
+            val file =
+                """
+                {
+                  "version": 1,
+                  "exercises": [],
+                  "entries": [],
+                  "categories": [
+                    {"name": "Спина", "colorArgb": 999, "isArchived": false}
+                  ]
+                }
+                """.trimIndent()
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then
+            assertTrue(result.isSuccess, "Дедуп не ломает импорт")
+            coVerify(exactly = 0) { repository.setCategoryArchived(any(), any()) }
+        }
+
+    @Test
+    fun import_when_exercise_category_resolved_from_file_then_inserted() =
+        runTest {
+            // Given: категории «Спина» нет в БД, но она есть в categories[]
+            // файла — упражнение вставляется и ссылается на категорию файла
+            val repository = repository()
+            val file =
+                """
+                {
+                  "version": 1,
+                  "exercises": [
+                    {"name": "Гиперэкстензия", "category": "Спина",
+                     "measuredBy": "REPS", "isCustom": true, "createdAt": 1}
+                  ],
+                  "entries": [],
+                  "categories": [
+                    {"name": "Спина", "colorArgb": -11637006, "isArchived": false}
+                  ]
+                }
+                """.trimIndent()
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then
+            assertTrue(result.isSuccess, "Категория файла резолвит упражнение")
+            val exercisesSlot = slot<List<Exercise>>()
+            coVerify { repository.importData(any(), capture(exercisesSlot), any()) }
+            assertEquals(
+                "Спина",
+                exercisesSlot.captured.single().category,
+                "Упражнение ссылается на категорию из файла"
+            )
+        }
+
+    @Test
+    fun import_when_exercise_category_key_matches_db_then_canonicalized() =
+        runTest {
+            // Given: в БД «Спина», упражнение файла ссылается на « СПИНА » —
+            // тот же ключ; вставленное упражнение получает каноническое имя
+            val existing = Category(id = 7L, name = "Спина", colorArgb = 1, isCustom = true)
+            val repository = repository(categories = listOf(existing))
+            val file =
+                """
+                {
+                  "version": 1,
+                  "exercises": [
+                    {"name": "Гиперэкстензия", "category": " СПИНА ",
+                     "measuredBy": "REPS", "isCustom": true, "createdAt": 1}
+                  ],
+                  "entries": []
+                }
+                """.trimIndent()
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then
+            assertTrue(result.isSuccess, "Резолв по ключу без регистра и краёв")
+            val exercisesSlot = slot<List<Exercise>>()
+            coVerify { repository.importData(any(), capture(exercisesSlot), any()) }
+            assertEquals(
+                "Спина",
+                exercisesSlot.captured.single().category,
+                "Категория упражнения нормализуется к имени в БД"
+            )
+        }
+
+    @Test
+    fun import_when_old_file_without_categories_then_imported_from_db_categories() =
+        runTest {
+            // Given: старый файл без массива categories (бэкап до введения
+            // секции) — упражнение со стандартной категорией резолвится
+            // по текущей БД (spec-сценарий «Старый файл без категорий
+            // импортируется»)
+            val repository = repository()
+            val useCase = useCase(repository, plankFile)
+
+            // When
+            val result = useCase(uri)
+
+            // Then
+            assertTrue(result.isSuccess, "Файл без categories[] остаётся валидным")
+            val exercisesSlot = slot<List<Exercise>>()
+            coVerify { repository.importData(any(), capture(exercisesSlot), any()) }
+            assertEquals(
+                "CORE",
+                exercisesSlot.captured.single().category,
+                "Категория резолвится по текущей БД"
+            )
+        }
+
+    @Test
+    fun import_when_same_file_twice_then_categories_idempotent() =
+        runTest {
+            // Given: первый импорт вставил категорию «Спина»; повторный —
+            // тот же файл поверх состояния после вставки (spec-сценарий
+            // «Идемпотентность повторного импорта»)
+            val repository = repository()
+            val file =
+                """
+                {
+                  "version": 1,
+                  "exercises": [],
+                  "entries": [],
+                  "categories": [
+                    {"name": "Спина", "colorArgb": -11637006, "isArchived": false}
+                  ]
+                }
+                """.trimIndent()
+            val useCase = useCase(repository, file)
+
+            // When
+            val first = useCase(uri)
+            coEvery { repository.getAllCategories() } returns
+                Result.success(
+                    listOf(
+                        Category(
+                            id = 100L,
+                            name = "Спина",
+                            colorArgb = 0xFF4E6EF2.toInt(),
+                            isCustom = true
+                        )
+                    )
+                )
+            val second = useCase(uri)
+
+            // Then
+            assertTrue(first.isSuccess, "Первый импорт вставляет категорию")
+            assertTrue(second.isSuccess, "Повторный импорт проходит без ошибок")
+            val categoriesSlots = mutableListOf<List<Category>>()
+            coVerify(exactly = 2) {
+                repository.importData(capture(categoriesSlots), any(), any())
+            }
+            assertEquals(1, categoriesSlots[0].size, "Первый импорт вставляет категорию файла")
+            assertTrue(
+                categoriesSlots[1].isEmpty(),
+                "Повторный импорт не дублирует категорию"
+            )
+        }
+
+    // ---------- Регрессия версии формата (design D9, ранее не покрыто) ----------
+
+    @Test
+    fun import_when_version2_with_categories_then_success() =
+        runTest {
+            // Given: файл с меткой "version": 2 и секцией categories[] —
+            // код сторового релиза пишет метку 2, приём сохраняется
+            // (design D9)
+            val repository = repository()
+            val file =
+                """
+                {
+                  "version": 2,
+                  "exercises": [],
+                  "entries": [],
+                  "categories": [
+                    {"name": "Спина", "colorArgb": -11637006, "isArchived": false}
+                  ],
+                  "settings": {"overviewTabVisibility": {}, "lastOverviewTab": "STATS"}
+                }
+                """.trimIndent()
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then
+            assertTrue(result.isSuccess, "Версия 2 остаётся читаемой")
+            val categoriesSlot = slot<List<Category>>()
+            coVerify { repository.importData(capture(categoriesSlot), any(), any()) }
+            assertEquals(
+                listOf("Спина"),
+                categoriesSlot.captured.map { it.name },
+                "Категории из файла версии 2 вставляются"
+            )
+        }
+
+    @Test
+    fun import_when_version3_then_rejected() =
+        runTest {
+            // Given: файл с меткой "version": 3 — формат из будущего,
+            // импорт отвергается (design D9)
+            val repository = repository()
+            val file =
+                """
+                {
+                  "version": 3,
+                  "exercises": [],
+                  "entries": [],
+                  "categories": [
+                    {"name": "Спина", "colorArgb": -11637006, "isArchived": false}
+                  ]
+                }
+                """.trimIndent()
+            val useCase = useCase(repository, file)
+
+            // When
+            val result = useCase(uri)
+
+            // Then
+            assertTrue(result.isFailure, "Неподдерживаемая версия — Result.failure")
+            coVerify(exactly = 0) { repository.importData(any(), any(), any()) }
         }
 
     @Test
@@ -387,7 +832,7 @@ class ImportBackupUseCaseTest {
             // Then — импорт успешен, иконка null
             assertTrue(result.isSuccess, "Старый файл без iconNumber остаётся валидным")
             val exercisesSlot = slot<List<Exercise>>()
-            coVerify { repository.importData(capture(exercisesSlot), any()) }
+            coVerify { repository.importData(any(), capture(exercisesSlot), any()) }
             assertEquals(
                 null,
                 exercisesSlot.captured.single().iconNumber,
@@ -409,7 +854,7 @@ class ImportBackupUseCaseTest {
             // Then
             assertTrue(result.isSuccess, "Вставка проходит")
             val exercisesSlot = slot<List<Exercise>>()
-            coVerify { repository.importData(capture(exercisesSlot), any()) }
+            coVerify { repository.importData(any(), capture(exercisesSlot), any()) }
             assertEquals(
                 5,
                 exercisesSlot.captured.single().iconNumber,
@@ -428,7 +873,7 @@ class ImportBackupUseCaseTest {
                 Exercise(
                     id = 1L,
                     name = "Планка",
-                    category = ExerciseCategory.CORE,
+                    category = "CORE",
                     isCustom = false,
                     comment = null,
                     createdAt = 1_757_371_150_000L,
@@ -444,7 +889,7 @@ class ImportBackupUseCaseTest {
             // Then — дубликат не вставляется, существующее не трогается
             assertTrue(result.isSuccess, "Дедупликация не ломает импорт")
             val exercisesSlot = slot<List<Exercise>>()
-            coVerify { repository.importData(capture(exercisesSlot), any()) }
+            coVerify { repository.importData(any(), capture(exercisesSlot), any()) }
             assertTrue(
                 exercisesSlot.captured.isEmpty(),
                 "Дубликат имени не создаёт новое упражнение"
@@ -487,7 +932,7 @@ class ImportBackupUseCaseTest {
             // Then — вставленное упражнение попадает в архив и помечается isCustom
             assertTrue(result.isSuccess, "Импорт архивного упражнения проходит")
             val exercisesSlot = slot<List<Exercise>>()
-            coVerify { repository.importData(capture(exercisesSlot), any()) }
+            coVerify { repository.importData(any(), capture(exercisesSlot), any()) }
             val inserted = exercisesSlot.captured.single()
             assertTrue(
                 inserted.isArchived,
@@ -525,12 +970,64 @@ class ImportBackupUseCaseTest {
             // Then — импорт успешен, isArchived по умолчанию = false
             assertTrue(result.isSuccess, "Старый файл без isArchived остаётся валидным")
             val exercisesSlot = slot<List<Exercise>>()
-            coVerify { repository.importData(capture(exercisesSlot), any()) }
+            coVerify { repository.importData(any(), capture(exercisesSlot), any()) }
             assertFalse(
                 exercisesSlot.captured.single().isArchived,
                 "Отсутствующее поле даёт isArchived = false (обратная совместимость)"
             )
         }
+
+    @Test
+    fun mergeBackup_when_fileCategoryArchived_duplicateOfActiveExisting_then_idInArchiveList() {
+        // Given: в БД активная «Спина», файл дублирует имя с
+        // isArchived = true — односторонняя архивация (spec-сценарий
+        // «Архивация существующей категории из файла применяется»)
+        val existing = Category(id = 7L, name = "Спина", colorArgb = 1, isCustom = true)
+        val fileCategory = existing.copy(id = 0L, isArchived = true)
+
+        // When
+        val result =
+            mergeBackup(
+                existingCategories = listOf(existing),
+                existingExercises = emptyList(),
+                existingEntries = emptyList(),
+                file = BackupFileContent(listOf(fileCategory), emptyList(), emptyList(), null)
+            )
+
+        // Then
+        assertTrue(result.categoriesToInsert.isEmpty(), "Дубликат имени не попадает в список вставки")
+        assertEquals(
+            listOf(existing.id),
+            result.categoryIdsToArchive,
+            "id существующей категории попадает в список архивации"
+        )
+    }
+
+    @Test
+    fun mergeBackup_when_fileCategoryActive_duplicateOfArchivedExisting_then_idNotInArchiveList() {
+        // Given: в БД архивная «Спина», файл содержит её с isArchived = false —
+        // разархивация не выполняется (spec-сценарий «Разархивация
+        // существующей категории из файла не выполняется»)
+        val existing =
+            Category(id = 7L, name = "Спина", colorArgb = 1, isCustom = true, isArchived = true)
+        val fileCategory = existing.copy(id = 0L, isArchived = false)
+
+        // When
+        val result =
+            mergeBackup(
+                existingCategories = listOf(existing),
+                existingExercises = emptyList(),
+                existingEntries = emptyList(),
+                file = BackupFileContent(listOf(fileCategory), emptyList(), emptyList(), null)
+            )
+
+        // Then
+        assertTrue(result.categoriesToInsert.isEmpty(), "Дубликат имени не попадает в список вставки")
+        assertTrue(
+            result.categoryIdsToArchive.isEmpty(),
+            "Разархивации нет: id архивной существующей не попадает в список архивации"
+        )
+    }
 
     @Test
     fun mergeBackup_when_fileArchived_duplicateOfActiveExisting_then_idInArchiveList() {
@@ -540,21 +1037,26 @@ class ImportBackupUseCaseTest {
         val existing =
             pullUps.copy(
                 name = "Планка",
-                category = ExerciseCategory.CORE,
+                category = "CORE",
                 createdAt = 1_757_371_150_000L,
                 measuredBy = ExerciseMeasuredBy.TIME
             )
         val fileExercise = existing.copy(id = 0L, isArchived = true)
 
         // When
-        val (toInsert, _, toArchive) =
-            mergeBackup(listOf(existing), emptyList(), listOf(fileExercise), emptyList())
+        val result =
+            mergeBackup(
+                existingCategories = standardDomainCategories(),
+                existingExercises = listOf(existing),
+                existingEntries = emptyList(),
+                file = BackupFileContent(emptyList(), listOf(fileExercise), emptyList(), null)
+            )
 
         // Then
-        assertTrue(toInsert.isEmpty(), "Дубликат имени не попадает в список вставки")
+        assertTrue(result.exercisesToInsert.isEmpty(), "Дубликат имени не попадает в список вставки")
         assertEquals(
             listOf(existing.id),
-            toArchive,
+            result.exerciseIdsToArchive,
             "id существующего упражнения попадает в список архивации"
         )
     }
@@ -568,7 +1070,7 @@ class ImportBackupUseCaseTest {
         val existing =
             pullUps.copy(
                 name = "Планка",
-                category = ExerciseCategory.CORE,
+                category = "CORE",
                 createdAt = 1_757_371_150_000L,
                 measuredBy = ExerciseMeasuredBy.TIME,
                 isArchived = true
@@ -576,13 +1078,18 @@ class ImportBackupUseCaseTest {
         val fileExercise = existing.copy(id = 0L, isArchived = false)
 
         // When
-        val (toInsert, _, toArchive) =
-            mergeBackup(listOf(existing), emptyList(), listOf(fileExercise), emptyList())
+        val result =
+            mergeBackup(
+                existingCategories = standardDomainCategories(),
+                existingExercises = listOf(existing),
+                existingEntries = emptyList(),
+                file = BackupFileContent(emptyList(), listOf(fileExercise), emptyList(), null)
+            )
 
         // Then
-        assertTrue(toInsert.isEmpty(), "Дубликат имени не попадает в список вставки")
+        assertTrue(result.exercisesToInsert.isEmpty(), "Дубликат имени не попадает в список вставки")
         assertTrue(
-            toArchive.isEmpty(),
+            result.exerciseIdsToArchive.isEmpty(),
             "Разархивации нет: id архивного существующего не попадает в список архивации"
         )
     }
@@ -595,23 +1102,28 @@ class ImportBackupUseCaseTest {
             pullUps.copy(
                 id = 0L,
                 name = "Планка",
-                category = ExerciseCategory.CORE,
+                category = "CORE",
                 measuredBy = ExerciseMeasuredBy.TIME,
                 isArchived = true
             )
 
         // When
-        val (toInsert, _, toArchive) =
-            mergeBackup(listOf(pullUps), emptyList(), listOf(fileExercise), emptyList())
+        val result =
+            mergeBackup(
+                existingCategories = standardDomainCategories(),
+                existingExercises = listOf(pullUps),
+                existingEntries = emptyList(),
+                file = BackupFileContent(emptyList(), listOf(fileExercise), emptyList(), null)
+            )
 
         // Then
         assertEquals(
             listOf("Планка"),
-            toInsert.map { it.name },
+            result.exercisesToInsert.map { it.name },
             "Новое имя попадает в список вставки"
         )
         assertTrue(
-            toArchive.isEmpty(),
+            result.exerciseIdsToArchive.isEmpty(),
             "Без совпадения имени в списке архивации пусто"
         )
     }
@@ -627,7 +1139,7 @@ class ImportBackupUseCaseTest {
             val existingActivePlank =
                 pullUps.copy(
                     name = "Планка",
-                    category = ExerciseCategory.CORE,
+                    category = "CORE",
                     createdAt = 1_757_371_150_000L,
                     measuredBy = ExerciseMeasuredBy.TIME
                 )
@@ -652,7 +1164,7 @@ class ImportBackupUseCaseTest {
             // Then — дубликат не вставляется, существующее уходит в архив
             assertTrue(result.isSuccess, "Дедупликация не ломает импорт")
             val exercisesSlot = slot<List<Exercise>>()
-            coVerify { repository.importData(capture(exercisesSlot), any()) }
+            coVerify { repository.importData(any(), capture(exercisesSlot), any()) }
             assertTrue(
                 exercisesSlot.captured.isEmpty(),
                 "Дубликат имени не создаёт новое упражнение"
@@ -695,7 +1207,7 @@ class ImportBackupUseCaseTest {
             assertTrue(result.isFailure, "Ошибочный файл — Result.failure")
             val exception = assertInstanceOf(BackupException::class.java, result.exceptionOrNull())
             assertEquals(BackupError.INVALID_FILE, exception.error, "Тип ошибки — неверный файл")
-            coVerify(exactly = 0) { repository.importData(any(), any()) }
+            coVerify(exactly = 0) { repository.importData(any(), any(), any()) }
         }
 
     @Test
@@ -777,13 +1289,6 @@ class ImportBackupUseCaseTest {
                 ),
                 Arguments.of(
                     Named.of(
-                        "неизвестный category",
-                        """{"version": 1, "exercises": [{"name": "X", "category": "STRENGTH",
-                       "measuredBy": "REPS", "isCustom": true, "createdAt": 1}], "entries": []}"""
-                    )
-                ),
-                Arguments.of(
-                    Named.of(
                         "неизвестный measuredBy",
                         """{"version": 1, "exercises": [{"name": "X", "category": "PULL",
                        "measuredBy": "COUNT", "isCustom": true, "createdAt": 1}], "entries": []}"""
@@ -801,6 +1306,27 @@ class ImportBackupUseCaseTest {
                         "sets строкой",
                         """{"version": 1, "exercises": [],
                        "entries": [{"exerciseName": "X", "date": 1, "sets": "4", "createdAt": 1}]}"""
+                    )
+                ),
+                Arguments.of(
+                    Named.of(
+                        "категория без name",
+                        """{"version": 1, "exercises": [], "entries": [],
+                       "categories": [{"colorArgb": 1, "isArchived": false}]}"""
+                    )
+                ),
+                Arguments.of(
+                    Named.of(
+                        "colorArgb категории строкой",
+                        """{"version": 1, "exercises": [], "entries": [],
+                       "categories": [{"name": "X", "colorArgb": "red", "isArchived": false}]}"""
+                    )
+                ),
+                Arguments.of(
+                    Named.of(
+                        "isArchived категории строкой",
+                        """{"version": 1, "exercises": [], "entries": [],
+                       "categories": [{"name": "X", "colorArgb": 1, "isArchived": "yes"}]}"""
                     )
                 )
             )
@@ -935,7 +1461,7 @@ class ImportBackupUseCaseTest {
         runTest {
             // Given — вставка в БД проваливается
             val repository = repository()
-            coEvery { repository.importData(any(), any()) } returns
+            coEvery { repository.importData(any(), any(), any()) } returns
                 Result.failure(RuntimeException("Сбой базы"))
             val dataStore = mockk<AppSettingsDataStore>(relaxed = true)
             val raw =

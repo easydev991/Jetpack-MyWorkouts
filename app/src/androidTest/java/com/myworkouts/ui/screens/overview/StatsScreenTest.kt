@@ -16,8 +16,8 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
+import com.myworkouts.data.db.standardCategories
 import com.myworkouts.domain.model.EntryWithExercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.domain.usecase.CategoryTotal
 import com.myworkouts.domain.usecase.DrillDateGroup
@@ -49,17 +49,21 @@ class StatsScreenTest {
 
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
 
-    /** Название категории в легенде (ресурс [ExerciseCategory.PUSH]). */
+    /** Название категории в легенде (ресурс ["PUSH"]). */
     private val pushLabel: String = context.getString(R.string.exercise_category_push)
 
-    /** Название TIME-категории в легенде (ресурс [ExerciseCategory.CARDIO]). */
+    /** Название TIME-категории в легенде (ресурс ["CARDIO"]). */
     private val cardioLabel: String = context.getString(R.string.exercise_category_cardio)
 
     /** Текст значения легенды: единственная строка уровня — «100 %». */
     private val hundredPercentText: String = context.getString(R.string.overview_legend_percent, 100)
 
+    /** Цвета категорий для фикстур: `colorArgb` стандартного набора. */
+    private val categoryColors: Map<String, Int> =
+        standardCategories.associate { it.name to it.colorArgb }
+
     /** Непустая «Статистика» недели: PUSH 3 подхода, запись сегодня. */
-    private fun weekState(selected: ExerciseCategory? = null): StatsUiState {
+    private fun weekState(selected: String? = null): StatsUiState {
         val today = LocalDate.now()
         return StatsUiState(
             period = StatsPeriod.WEEK,
@@ -67,18 +71,18 @@ class StatsScreenTest {
             categoryTotals =
                 listOf(
                     CategoryTotal(
-                        category = ExerciseCategory.PUSH,
+                        category = "PUSH",
                         totalSets = 3
                     )
                 ),
             exerciseTotals =
                 mapOf(
-                    ExerciseCategory.PUSH to
+                    "PUSH" to
                         listOf(ExerciseTotal("Отжимания", totalSets = 3))
                 ),
             drillGroups =
                 mapOf(
-                    ExerciseCategory.PUSH to
+                    "PUSH" to
                         listOf(
                             DrillDateGroup(
                                 date = today,
@@ -89,7 +93,7 @@ class StatsScreenTest {
                                             exerciseId = 2L,
                                             exerciseName = "Отжимания",
                                             iconNumber = null,
-                                            category = ExerciseCategory.PUSH,
+                                            category = "PUSH",
                                             measuredBy = ExerciseMeasuredBy.REPS,
                                             exerciseComment = null,
                                             sets = 1,
@@ -103,12 +107,13 @@ class StatsScreenTest {
                             )
                         )
                 ),
+            categoryColors = categoryColors,
             isEmpty = false
         )
     }
 
     /** Только-TIME «Статистика» недели: CARDIO (бег), запись сегодня. */
-    private fun timeState(selected: ExerciseCategory? = null): StatsUiState {
+    private fun timeState(selected: String? = null): StatsUiState {
         val today = LocalDate.now()
         return StatsUiState(
             period = StatsPeriod.WEEK,
@@ -116,18 +121,18 @@ class StatsScreenTest {
             categoryTotals =
                 listOf(
                     CategoryTotal(
-                        category = ExerciseCategory.CARDIO,
+                        category = "CARDIO",
                         totalSets = 2
                     )
                 ),
             exerciseTotals =
                 mapOf(
-                    ExerciseCategory.CARDIO to
+                    "CARDIO" to
                         listOf(ExerciseTotal("Бег", totalSets = 2))
                 ),
             drillGroups =
                 mapOf(
-                    ExerciseCategory.CARDIO to
+                    "CARDIO" to
                         listOf(
                             DrillDateGroup(
                                 date = today,
@@ -138,7 +143,7 @@ class StatsScreenTest {
                                             exerciseId = 3L,
                                             exerciseName = "Бег",
                                             iconNumber = null,
-                                            category = ExerciseCategory.CARDIO,
+                                            category = "CARDIO",
                                             measuredBy = ExerciseMeasuredBy.TIME,
                                             exerciseComment = null,
                                             sets = 2,
@@ -152,6 +157,7 @@ class StatsScreenTest {
                             )
                         )
                 ),
+            categoryColors = categoryColors,
             isEmpty = false
         )
     }
@@ -244,7 +250,7 @@ class StatsScreenTest {
     @Test
     fun stats_when_drill_down_opened_then_today_section_has_today_header() {
         // Given — drill-down категории PUSH с записью за сегодня
-        setContentWith(weekState(selected = ExerciseCategory.PUSH))
+        setContentWith(weekState(selected = "PUSH"))
 
         // Then — секция сегодняшних записей озаглавлена «Сегодня»
         // (в отличие от главного экрана, где секция без заголовка)
@@ -257,7 +263,7 @@ class StatsScreenTest {
     @Test
     fun stats_when_back_to_categories_clicked_then_drill_down_closes() {
         // Given — drill-down категории PUSH
-        setContentWith(weekState(selected = ExerciseCategory.PUSH))
+        setContentWith(weekState(selected = "PUSH"))
         scrollTo(context.getString(R.string.overview_back_to_categories))
         composeTestRule
             .onNodeWithText(context.getString(R.string.overview_back_to_categories))
@@ -281,7 +287,7 @@ class StatsScreenTest {
     @Test
     fun stats_when_period_changed_then_drill_down_resets() {
         // Given — drill-down категории PUSH
-        setContentWith(weekState(selected = ExerciseCategory.PUSH))
+        setContentWith(weekState(selected = "PUSH"))
         composeTestRule
             .onNodeWithText(context.getString(R.string.overview_period_month))
             .performClick()

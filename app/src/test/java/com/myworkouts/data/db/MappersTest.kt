@@ -1,7 +1,6 @@
 package com.myworkouts.data.db
 
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.ui.icons.ExerciseIcons
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -11,16 +10,17 @@ import org.junit.jupiter.api.Test
  * Unit-тесты маппинга `Exercise` ↔ `ExerciseEntity` (Mappers.kt).
  *
  * Покрывают двусторонний перенос `measuredBy` ↔ `measured_by` по образцу
- * `category`: enum в домене, строка в entity. А также двусторонний перенос
- * флага архивации `isArchived` ↔ `is_archived` и опционального номера
- * иконки `iconNumber` ↔ `icon_number` (exercise-icon-mvp).
+ * category: имя категории переносится строкой как есть (custom-categories,
+ * design Decision 1), enum-тип остаётся только у типа измерения. А также
+ * двусторонний перенос флага архивации `isArchived` ↔ `is_archived` и
+ * опционального номера иконки `iconNumber` ↔ `icon_number` (exercise-icon-mvp).
  */
 class MappersTest {
     private fun sampleExercise(measuredBy: ExerciseMeasuredBy) =
         Exercise(
             id = 1L,
             name = "Планка",
-            category = ExerciseCategory.CORE,
+            category = "CORE",
             isCustom = false,
             comment = null,
             createdAt = 100L,
@@ -238,12 +238,13 @@ class MappersTest {
                 weightKg = 5.0
             ).toEntryWithExercise()
 
-        // Then — все поля доезжают, категория и тип измерения переводятся в enum
+        // Then — все поля доезжают, категория переносится строкой как есть,
+        // тип измерения переводится в enum
         assertEquals(3L, item.id)
         assertEquals(7L, item.exerciseId)
         assertEquals("Подтягивания", item.exerciseName)
         assertEquals(ExerciseIcons.PULLUPS, item.iconNumber)
-        assertEquals(ExerciseCategory.PULL, item.category)
+        assertEquals("PULL", item.category)
         assertEquals(ExerciseMeasuredBy.REPS, item.measuredBy)
         assertEquals("Хват шире плеч", item.exerciseComment)
         assertEquals(4, item.sets)

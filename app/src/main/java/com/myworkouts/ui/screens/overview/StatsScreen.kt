@@ -57,8 +57,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
 import com.myworkouts.R
+import com.myworkouts.data.db.standardCategories
 import com.myworkouts.domain.model.EntryWithExercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.domain.usecase.CategoryTotal
 import com.myworkouts.domain.usecase.DrillDateGroup
@@ -70,7 +70,7 @@ import com.myworkouts.ui.screens.main.formatEntryValue
 import com.myworkouts.ui.screens.main.formatWeightKg
 import com.myworkouts.ui.state.StatsUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
-import com.myworkouts.ui.theme.color
+import com.myworkouts.ui.util.categoryLabel
 import com.myworkouts.ui.util.formatDurationResource
 import com.myworkouts.ui.util.sectionDateLabelResource
 import java.time.LocalDate
@@ -118,7 +118,7 @@ private const val HSL_COMPONENTS = 3
 internal fun StatsScreen(
     state: StatsUiState,
     onPeriodChange: (StatsPeriod) -> Unit,
-    onCategoryClick: (ExerciseCategory?) -> Unit,
+    onCategoryClick: (String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -147,7 +147,7 @@ internal fun StatsScreen(
 private fun StatsScreenPortraitBody(
     state: StatsUiState,
     onPeriodChange: (StatsPeriod) -> Unit,
-    onCategoryClick: (ExerciseCategory?) -> Unit,
+    onCategoryClick: (String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val showDrill = !state.isEmpty && state.selected != null
@@ -212,7 +212,7 @@ private fun StatsScreenPortraitBody(
 private fun StatsScreenLandscapeBody(
     state: StatsUiState,
     onPeriodChange: (StatsPeriod) -> Unit,
-    onCategoryClick: (ExerciseCategory?) -> Unit,
+    onCategoryClick: (String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -295,17 +295,31 @@ private fun EmptyPeriodHint(modifier: Modifier = Modifier) {
 }
 
 /**
- * Секторы доната: обзор — по категориям (цвет [ExerciseCategory.color]),
+ * Цвет категории из модели (`colorArgb`, custom-categories design
+ * Decision 10); отсутствующее в каталоге имя — нейтральный цвет темы.
+ */
+@Composable
+private fun categoryColor(
+    name: String,
+    colors: Map<String, Int>
+): Color = colors[name]?.let(::Color) ?: MaterialTheme.colorScheme.outline
+
+/**
+ * Секторы доната: обзор — по категориям (цвет `colorArgb` из модели),
  * drill-down — по упражнениям (оттенки цвета категории, [shadeDelta]).
  * Доля — по сумме подходов (overview-stats-time-support Decision 1).
  */
+@Composable
 private fun donutSlices(state: StatsUiState): List<Pair<Color, Int>> {
     val selected = state.selected
     return if (selected == null) {
-        state.categoryTotals.map { it.category.color to it.totalSets }
+        state.categoryTotals.map { total ->
+            categoryColor(total.category, state.categoryColors) to total.totalSets
+        }
     } else {
+        val base = categoryColor(selected, state.categoryColors)
         state.exerciseTotals[selected].orEmpty().mapIndexed { index, total ->
-            shade(selected.color, shadeDelta(index)) to total.totalSets
+            shade(base, shadeDelta(index)) to total.totalSets
         }
     }
 }
@@ -324,20 +338,21 @@ private fun legendItems(state: StatsUiState): List<StatsLegendRow> {
         val base = state.categoryTotals.sumOf { it.totalSets }
         state.categoryTotals.map { total ->
             StatsLegendRow(
-                label = stringResource(total.category.labelResId),
+                label = categoryLabel(total.category),
                 valueText = stringResource(R.string.overview_legend_percent, percentOf(total.totalSets, base)),
-                color = total.category.color,
+                color = categoryColor(total.category, state.categoryColors),
                 category = total.category
             )
         }
     } else {
         val totals = state.exerciseTotals[selected].orEmpty()
         val base = totals.sumOf { it.totalSets }
+        val drillBaseColor = categoryColor(selected, state.categoryColors)
         totals.mapIndexed { index, total ->
             StatsLegendRow(
                 label = total.exerciseName,
                 valueText = stringResource(R.string.overview_legend_percent, percentOf(total.totalSets, base)),
-                color = shade(selected.color, shadeDelta(index)),
+                color = shade(drillBaseColor, shadeDelta(index)),
                 category = null
             )
         }
@@ -349,8 +364,8 @@ private data class StatsLegendRow(
     val label: String,
     val valueText: String,
     val color: Color,
-    /** Категория для drill-down; `null` у строк упражнений (некликабельны). */
-    val category: ExerciseCategory?
+    /** Имя категории для drill-down; `null` у строк упражнений (некликабельны). */
+    val category: String?
 )
 
 /**
@@ -363,7 +378,7 @@ private data class StatsLegendRow(
 @Composable
 private fun LegendSection(
     items: List<StatsLegendRow>,
-    onCategoryClick: (ExerciseCategory?) -> Unit,
+    onCategoryClick: (String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isDrill = items.firstOrNull()?.category == null
@@ -414,7 +429,7 @@ private fun LegendSection(
 @Composable
 private fun OverviewLegendGrid(
     items: List<StatsLegendRow>,
-    onCategoryClick: (ExerciseCategory?) -> Unit,
+    onCategoryClick: (String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -716,36 +731,40 @@ private const val PREVIEW_DAY_MILLIS = 86_400_000L
 /** Миллисекунды «вчера» для демо-записи в группе вчерашнего дня. */
 private val previewYesterdayMillis = (LocalDate.now().toEpochDay() - 1) * PREVIEW_DAY_MILLIS
 
+/** Демо-цвета категорий: `colorArgb` стандартного набора (Decision 10). */
+private val demoCategoryColors: Map<String, Int> =
+    standardCategories.associate { it.name to it.colorArgb }
+
 /** Демо-легенда: доли по подходам убывание (уровень категорий). */
 internal val demoCategoryTotals =
     listOf(
-        CategoryTotal(category = ExerciseCategory.PUSH, totalSets = 6),
-        CategoryTotal(category = ExerciseCategory.CORE, totalSets = 5),
-        CategoryTotal(category = ExerciseCategory.PULL, totalSets = 4),
-        CategoryTotal(category = ExerciseCategory.CARDIO, totalSets = 2)
+        CategoryTotal(category = "PUSH", totalSets = 6),
+        CategoryTotal(category = "CORE", totalSets = 5),
+        CategoryTotal(category = "PULL", totalSets = 4),
+        CategoryTotal(category = "CARDIO", totalSets = 2)
     )
 
 private val demoExerciseTotals =
     mapOf(
-        ExerciseCategory.PUSH to
+        "PUSH" to
             listOf(
                 ExerciseTotal(exerciseName = "Отжимания", totalSets = 3),
                 ExerciseTotal(exerciseName = "Отжимания на брусьях", totalSets = 3)
             ),
-        ExerciseCategory.CORE to
+        "CORE" to
             listOf(
                 ExerciseTotal(exerciseName = "Скручивания", totalSets = 3),
                 ExerciseTotal(exerciseName = "Планка", totalSets = 2)
             ),
-        ExerciseCategory.PULL to
+        "PULL" to
             listOf(ExerciseTotal(exerciseName = "Подтягивания", totalSets = 4)),
-        ExerciseCategory.CARDIO to
+        "CARDIO" to
             listOf(ExerciseTotal(exerciseName = "Бег", totalSets = 2))
     )
 
 private val demoDrillGroups =
     mapOf(
-        ExerciseCategory.PUSH to
+        "PUSH" to
             listOf(
                 DrillDateGroup(
                     date = LocalDate.now(),
@@ -754,7 +773,7 @@ private val demoDrillGroups =
                             previewEntry(
                                 id = 1L,
                                 name = "Отжимания",
-                                category = ExerciseCategory.PUSH,
+                                category = "PUSH",
                                 sets = 3,
                                 reps = 15
                             )
@@ -767,14 +786,14 @@ private val demoDrillGroups =
                             previewEntry(
                                 id = 2L,
                                 name = "Отжимания на брусьях",
-                                category = ExerciseCategory.PUSH,
+                                category = "PUSH",
                                 sets = 3,
                                 reps = 10
                             ).copy(date = previewYesterdayMillis)
                         )
                 )
             ),
-        ExerciseCategory.PULL to
+        "PULL" to
             listOf(
                 DrillDateGroup(
                     date = LocalDate.now(),
@@ -783,14 +802,14 @@ private val demoDrillGroups =
                             previewEntry(
                                 id = 3L,
                                 name = "Подтягивания",
-                                category = ExerciseCategory.PULL,
+                                category = "PULL",
                                 sets = 4,
                                 reps = 10
                             )
                         )
                 )
             ),
-        ExerciseCategory.CORE to
+        "CORE" to
             listOf(
                 DrillDateGroup(
                     date = LocalDate.now(),
@@ -799,21 +818,21 @@ private val demoDrillGroups =
                             previewEntry(
                                 id = 4L,
                                 name = "Скручивания",
-                                category = ExerciseCategory.CORE,
+                                category = "CORE",
                                 sets = 3,
                                 reps = 12
                             ),
                             previewEntry(
                                 id = 5L,
                                 name = "Планка",
-                                category = ExerciseCategory.CORE,
+                                category = "CORE",
                                 sets = 2,
                                 durationSec = 90
                             )
                         )
                 )
             ),
-        ExerciseCategory.CARDIO to
+        "CARDIO" to
             listOf(
                 DrillDateGroup(
                     date = LocalDate.now(),
@@ -822,7 +841,7 @@ private val demoDrillGroups =
                             previewEntry(
                                 id = 6L,
                                 name = "Бег",
-                                category = ExerciseCategory.CARDIO,
+                                category = "CARDIO",
                                 sets = 2,
                                 durationSec = 1800
                             )
@@ -839,7 +858,7 @@ private val demoDrillGroups =
 private fun previewEntry(
     id: Long,
     name: String,
-    category: ExerciseCategory,
+    category: String,
     sets: Int,
     reps: Int? = null,
     durationSec: Int? = null
@@ -874,7 +893,7 @@ private fun previewEntry(
  */
 internal fun demoStatsState(
     period: StatsPeriod,
-    selected: ExerciseCategory? = null,
+    selected: String? = null,
     visiblePeriods: List<StatsPeriod> = StatsPeriod.entries.toList()
 ): StatsUiState =
     StatsUiState(
@@ -883,6 +902,7 @@ internal fun demoStatsState(
         categoryTotals = demoCategoryTotals,
         exerciseTotals = demoExerciseTotals,
         drillGroups = demoDrillGroups,
+        categoryColors = demoCategoryColors,
         isEmpty = false,
         visiblePeriods = visiblePeriods
     )
@@ -907,7 +927,7 @@ internal fun StatsEmptyPreview() {
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
 @Composable
 internal fun StatsDrillDownPreview() {
-    StatsScreenPreview(period = StatsPeriod.WEEK, selected = ExerciseCategory.PUSH)
+    StatsScreenPreview(period = StatsPeriod.WEEK, selected = "PUSH")
 }
 
 /** Пикер скрыт: один видимый период, контент поднят на его место. */
@@ -932,7 +952,7 @@ internal fun StatsLandscapeWeekPreview() {
 @Preview(widthDp = 891, heightDp = 411, uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
 @Composable
 internal fun StatsLandscapeDrillDownPreview() {
-    StatsScreenPreview(period = StatsPeriod.WEEK, selected = ExerciseCategory.PUSH)
+    StatsScreenPreview(period = StatsPeriod.WEEK, selected = "PUSH")
 }
 
 /** Ландшафт: пикер скрыт при одном видимом периоде. */
@@ -946,7 +966,7 @@ internal fun StatsLandscapePeriodHiddenPreview() {
 @Composable
 private fun StatsScreenPreview(
     period: StatsPeriod,
-    selected: ExerciseCategory? = null,
+    selected: String? = null,
     isEmpty: Boolean = false,
     visiblePeriods: List<StatsPeriod> = StatsPeriod.entries.toList()
 ) {

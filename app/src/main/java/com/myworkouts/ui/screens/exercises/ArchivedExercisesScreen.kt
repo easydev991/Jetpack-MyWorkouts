@@ -1,14 +1,17 @@
+// Требование detekt TooManyFunctions: Content + два списка + табы +
+// меню-хелперы пакета живут рядом; дробить файл хуже подавления.
+@file:Suppress("TooManyFunctions")
+
 package com.myworkouts.ui.screens.exercises
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,38 +24,32 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
-import com.myworkouts.domain.model.Exercise
 import com.myworkouts.ui.state.ArchivedExercisesUiState
+import com.myworkouts.ui.state.ArchivedTab
 import com.myworkouts.ui.viewmodel.ArchivedExercisesViewModel
 
 /**
- * Экран «Архив упражнений» — реактивный список архивных
- * упражнений каталога с возможностью восстановления через long-press
- * меню «Вернуть» (exercises-archive, capability
- * `archived-exercises-screen`).
+ * Экран «Архив» — реактивные списки архивных упражнений и архивных
+ * категорий с таб-баром «Упражнения» / «Категории» (exercises-archive +
+ * custom-categories, capability `archived-exercises-screen`).
  *
  * Не участвует в нижней навигации (`Screen.ArchivedExercises` НЕ в
  * `BottomTabs`) — паттерн `Screen.Appearance`
  * (non-tab-screen-navigation/spec.md).
  *
- * VM-обёртка: подписка на [ArchivedExercisesViewModel.uiState], локальное
- * состояние long-press меню. Вся верстка — в
+ * VM-обёртка: подписка на [ArchivedExercisesViewModel.uiState], локальные
+ * состояния long-press меню (упражнения и категории). Вся верстка — в
  * [ArchivedExercisesScreenContent].
  *
- * @param viewModel ViewModel с реактивным списком архивных
+ * @param viewModel ViewModel с реактивными списками архива
  * @param onBackClick Тап стрелки «назад» в TopAppBar → навигация
  *   обратно на [com.myworkouts.navigation.Screen.Exercises]
  * @param modifier внешний модификатор
@@ -65,20 +62,28 @@ fun ArchivedExercisesScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var contextMenu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+    var exerciseContextMenu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+    var categoryContextMenu by remember { mutableStateOf<CategoryContextMenuState?>(null) }
 
     ArchivedExercisesScreenContent(
         state =
             ArchivedExercisesState(
                 uiState = uiState,
-                contextMenu = contextMenu,
-                onContextMenuItemChange = { contextMenu = it },
-                onUnarchive = { item ->
+                contextMenu = exerciseContextMenu,
+                categoryContextMenu = categoryContextMenu,
+                onContextMenuItemChange = { exerciseContextMenu = it },
+                onCategoryContextMenuItemChange = { categoryContextMenu = it },
+                onUnarchiveExercise = { id ->
                     // Паттерн ExercisesScreen.onRequestArchive — обёртка
                     // закрывает меню и делегирует без побочных эффектов
-                    contextMenu = null
-                    viewModel.unarchive(item)
+                    exerciseContextMenu = null
+                    viewModel.unarchive(id)
                 },
+                onUnarchiveCategory = { id ->
+                    categoryContextMenu = null
+                    viewModel.unarchiveCategory(id)
+                },
+                onTabSelect = viewModel::selectTab,
                 onBackClick = onBackClick
             ),
         modifier = modifier
@@ -90,26 +95,32 @@ fun ArchivedExercisesScreen(
  * [ArchivedExercisesUiState] плюс колбэки. UI-тесты и превью передают
  * готовый state без ViewModel (образец — `ExercisesScreenState`).
  *
- * `contextMenu` хранит [ExerciseContextMenuState] (общий тип с
- * `ExercisesScreen`) — структура идентична, отдельный тип не нужен.
+ * `contextMenu` / `categoryContextMenu` хранят транзитные состояния
+ * long-press меню (общие типы с `ExercisesScreen`) — структура
+ * идентична, отдельные типы не нужны.
  *
  * @property contextMenu Транзитное состояние long-press меню
- *   (`null` — закрыто). Прокидывается из VM-обёртки
- *   [ArchivedExercisesScreen], которая хранит `remember`
- *   `mutableStateOf`.
+ *   упражнения (`null` — закрыто)
+ * @property categoryContextMenu Транзитное состояние long-press меню
+ *   категории (`null` — закрыто; custom-categories, tasks 7.3)
  */
 internal data class ArchivedExercisesState(
     val uiState: ArchivedExercisesUiState,
     val contextMenu: ExerciseContextMenuState? = null,
+    val categoryContextMenu: CategoryContextMenuState? = null,
     val onContextMenuItemChange: (ExerciseContextMenuState?) -> Unit = {},
-    val onUnarchive: (Exercise) -> Unit = {},
+    val onCategoryContextMenuItemChange: (CategoryContextMenuState?) -> Unit = {},
+    val onUnarchiveExercise: (Long) -> Unit = {},
+    val onUnarchiveCategory: (Long) -> Unit = {},
+    /** Переключение вкладки архива (custom-categories, tasks 7.3). */
+    val onTabSelect: (ArchivedTab) -> Unit = {},
     val onBackClick: () -> Unit = {}
 )
 
 /**
- * Контент экрана «Архив упражнений»: TopAppBar со стрелкой
- * «назад» + тело (LazyColumn со списком или заглушка пустого
- * состояния) + long-press меню «Вернуть».
+ * Контент экрана «Архив»: TopAppBar со стрелкой «назад» + тело
+ * (таб-бар при двух непустых коллекциях, списки по вкладке или
+ * заглушка пустого архива) + long-press меню «Вернуть».
  *
  * Используется для UI-тестов и превью без ViewModel (design Decision 3,
  * change `entry-create-screen`).
@@ -131,7 +142,11 @@ internal fun ArchivedExercisesScreenContent(
         contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.archived_exercises_title)) },
+                // Общий заголовок архива (custom-categories, spec
+                // «TopAppBar со стрелкой назад»): экран объединяет архивы
+                // упражнений и категорий; contentDescription кнопки
+                // архива ExercisesScreen — тот же ключ.
+                title = { Text(stringResource(R.string.archive_title)) },
                 navigationIcon = {
                     IconButton(onClick = state.onBackClick) {
                         Icon(
@@ -143,47 +158,68 @@ internal fun ArchivedExercisesScreenContent(
             )
         }
     ) { paddingValues ->
-        Box(
+        Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
         ) {
-            when (val s = state.uiState) {
-                ArchivedExercisesUiState.Loading -> Unit
-                is ArchivedExercisesUiState.Success ->
-                    SuccessBody(state = state, success = s)
+            // Один cast на контент: таб-бар и выбранная вкладка — из Success
+            // (до первой эмиссии (Loading) — вкладка «Упражнения»).
+            val success = state.uiState as? ArchivedExercisesUiState.Success
+            val selectedTab = success?.selectedTab ?: ArchivedTab.EXERCISES
+            // Таб-бар только при двух непустых коллекциях (spec «Табы
+            // „Упражнения“ / „Категории“ и видимость таб-бара») —
+            // паттерн «таб-бар при ≥ 2 видимых вкладках» OverviewScreen.
+            if (success != null && success.exercises.isNotEmpty() && success.categories.isNotEmpty()) {
+                CatalogTabs(
+                    selectedIndex = selectedTab.ordinal,
+                    onSelect = { state.onTabSelect(ArchivedTab.entries[it]) }
+                )
+            }
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (val s = state.uiState) {
+                    ArchivedExercisesUiState.Loading -> Unit
+                    is ArchivedExercisesUiState.Success ->
+                        when {
+                            // Обе коллекции пусты — заглушка по центру
+                            // (spec «Пустое состояние списка»), экран
+                            // не закрывается.
+                            s.exercises.isEmpty() && s.categories.isEmpty() -> ArchivedEmptyStub()
+                            // Один непустой тип (таб-бар скрыт) — просто
+                            // список этого типа (spec «Только упражнения»
+                            // / «Только категории»), вкладка не важна.
+                            s.categories.isEmpty() -> ArchivedExercisesList(state = state, success = s)
+                            s.exercises.isEmpty() -> ArchivedCategoriesList(state = state, success = s)
+                            // Оба типа — контент по выбранной вкладке;
+                            // пустая вкладка = просто пустой список.
+                            s.selectedTab == ArchivedTab.EXERCISES ->
+                                ArchivedExercisesList(state = state, success = s)
+                            else -> ArchivedCategoriesList(state = state, success = s)
+                        }
+                }
             }
         }
     }
 }
 
 /**
- * Тело экрана для `ArchivedExercisesUiState.Success`: список
- * архивных упражнений или заглушка пустого состояния. Длина
- * списка = счётчик архивных (design Decision 8).
+ * Заглушка пустого архива — «В архиве пусто» по центру (паттерн
+ * `exercises_list_empty`). Показывается только когда пусты ОБЕ
+ * коллекции (spec «Пустое состояние списка»); экран не закрывается.
  */
 @Composable
-private fun SuccessBody(
-    state: ArchivedExercisesState,
-    success: ArchivedExercisesUiState.Success
-) {
+private fun ArchivedEmptyStub() {
     Box(modifier = Modifier.fillMaxSize()) {
-        if (success.exercises.isEmpty()) {
-            // Заглушка пустого состояния — паттерн `exercises_list_empty`
-            // на ExercisesScreen.
-            Text(
-                text = stringResource(R.string.archived_exercises_empty),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier =
-                    Modifier
-                        .align(Alignment.Center)
-                        .padding(16.dp)
-            )
-        } else {
-            ArchivedExercisesList(state = state, success = success)
-        }
+        Text(
+            text = stringResource(R.string.archived_exercises_empty),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier =
+                Modifier
+                    .align(Alignment.Center)
+                    .padding(16.dp)
+        )
     }
 }
 
@@ -197,49 +233,66 @@ private fun ArchivedExercisesList(
     state: ArchivedExercisesState,
     success: ArchivedExercisesUiState.Success
 ) {
-    var anchorOrigin by remember { mutableStateOf(IntOffset.Zero) }
-    var anchorHeight by remember { mutableIntStateOf(0) }
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .onGloballyPositioned { coords ->
-                    val pos = coords.positionInRoot()
-                    anchorOrigin = IntOffset(pos.x.toInt(), pos.y.toInt())
-                    anchorHeight = coords.size.height
-                }
-    ) {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(
-                items = success.exercises,
-                key = { it.id },
-                contentType = { "row" }
-            ) { exercise ->
-                var positionInRoot by remember { mutableStateOf(Offset.Zero) }
-                ExerciseListItemRow(
-                    exercise = exercise,
-                    isSelected = state.contextMenu?.item?.id == exercise.id,
-                    modifier =
-                        Modifier
-                            .onGloballyPositioned { coords ->
-                                positionInRoot = coords.positionInRoot()
-                            }.applyLongPress(
-                                item = exercise,
-                                positionInRootProvider = { positionInRoot },
-                                onItemLongPress = state.onContextMenuItemChange,
-                                openMenuLabel = stringResource(R.string.a11y_open_menu)
-                            )
+    ContextMenuList(
+        items = success.exercises,
+        keyOf = { it.id },
+        menuOffsetInRoot = state.contextMenu?.offsetInRoot,
+        onLongPress = { item, offset ->
+            state.onContextMenuItemChange(ExerciseContextMenuState(item, offset))
+        },
+        rowContent = { exercise, modifier ->
+            ExerciseListItemRow(
+                exercise = exercise,
+                isSelected = state.contextMenu?.item?.id == exercise.id,
+                modifier = modifier
+            )
+        },
+        menu = { offset ->
+            state.contextMenu?.let { menu ->
+                UnarchiveContextMenu(
+                    offset = offset,
+                    onMenuDismiss = { state.onContextMenuItemChange(null) },
+                    onUnarchiveClick = { state.onUnarchiveExercise(menu.item.id) }
                 )
             }
         }
-        state.contextMenu?.let { menu ->
-            ExerciseContextMenu(
-                offset = contextMenuDpOffset(menu.offsetInRoot, anchorOrigin, anchorHeight),
-                mode = ExerciseMenuMode.Unarchive,
-                isCustom = false,
-                onMenuDismiss = { state.onContextMenuItemChange(null) },
-                onUnarchiveClick = { state.onUnarchive(menu.item) }
+    )
+}
+
+/**
+ * Список архивных категорий + контекстное меню «Вернуть»
+ * (custom-categories, spec «Вкладка „Категории“ в архиве»): тот же
+ * [CategoryListItemRow], что на вкладке категорий экрана упражнений;
+ * меню — единственный пункт «Вернуть» для стандартных и кастомных
+ * ([UnarchiveContextMenu] — по образцу архивных упражнений).
+ */
+@Composable
+private fun ArchivedCategoriesList(
+    state: ArchivedExercisesState,
+    success: ArchivedExercisesUiState.Success
+) {
+    ContextMenuList(
+        items = success.categories,
+        keyOf = { it.id },
+        menuOffsetInRoot = state.categoryContextMenu?.offsetInRoot,
+        onLongPress = { item, offset ->
+            state.onCategoryContextMenuItemChange(CategoryContextMenuState(item, offset))
+        },
+        rowContent = { category, modifier ->
+            CategoryListItemRow(
+                category = category,
+                isSelected = state.categoryContextMenu?.item?.id == category.id,
+                modifier = modifier
             )
+        },
+        menu = { offset ->
+            state.categoryContextMenu?.let { menu ->
+                UnarchiveContextMenu(
+                    offset = offset,
+                    onMenuDismiss = { state.onCategoryContextMenuItemChange(null) },
+                    onUnarchiveClick = { state.onUnarchiveCategory(menu.item.id) }
+                )
+            }
         }
-    }
+    )
 }

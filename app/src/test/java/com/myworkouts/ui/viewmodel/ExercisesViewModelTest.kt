@@ -6,14 +6,18 @@ import com.myworkouts.analytics.AppErrorOperation
 import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.repository.CategoryInUseDeletionException
 import com.myworkouts.data.repository.LinkedEntriesDeletionException
+import com.myworkouts.data.repository.StandardCategoryDeletionException
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.Category
+import com.myworkouts.domain.model.DeleteCategoryError
 import com.myworkouts.domain.model.DeleteExerciseError
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.ui.state.ExercisesTab
 import com.myworkouts.ui.state.ExercisesUiState
 import io.mockk.coVerify
 import io.mockk.every
@@ -34,6 +38,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -85,10 +90,30 @@ private class ExercisesViewModelFakeRepository(
     var setArchivedResult: Result<Unit> = Result.success(Unit)
 
     /**
-     * Управляемый из тестов счётчик архивных (exercises-archive, §2.7):
-     * тест §3.4 устанавливает значение через `archivedCountFlow.value = ...`.
+     * Подменяет `hasArchived()` репозитория (реактивный признак «в архиве
+     * есть упражнения или категории»); тест §3.4 устанавливает значение
+     * через `hasArchivedFlow.value = ...`.
      */
-    val archivedCountFlow: MutableStateFlow<Int> = MutableStateFlow(0)
+    val hasArchivedFlow: MutableStateFlow<Boolean> = MutableStateFlow(false)
+
+    // ---------- custom-categories (этап 5): категорийные потоки и сценарии ----------
+
+    /** Управляемый список активных категорий (вкладка «Категории»). */
+    val categoriesFlow: MutableStateFlow<List<Category>> = MutableStateFlow(emptyList())
+
+    /** Управляемый набор имён категорий с упражнениями (pre-check удаления). */
+    val categoryNamesInUse: MutableStateFlow<Set<String>> = MutableStateFlow(emptySet())
+
+    /** Сценарий `deleteCategory` для тестов §5. */
+    var deleteCategoryResult: Result<Unit> = Result.success(Unit)
+
+    var lastDeletedCategoryId: Long? = null
+
+    /** Вызовы `setCategoryArchived` в порядке обращений (тесты §5). */
+    val setCategoryArchivedCalls = mutableListOf<Pair<Long, Boolean>>()
+
+    /** Сценарий `setCategoryArchived` для теста §5 (race — по образцу §3.3). */
+    var setCategoryArchivedResult: Result<Unit> = Result.success(Unit)
 
     override suspend fun setArchived(
         id: Long,
@@ -100,7 +125,7 @@ private class ExercisesViewModelFakeRepository(
 
     override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
 
-    override fun archivedCount(): Flow<Int> = archivedCountFlow
+    override fun hasArchived(): Flow<Boolean> = hasArchivedFlow
 
     override fun exercises(query: String): Flow<List<Exercise>> = catalog
 
@@ -139,11 +164,44 @@ private class ExercisesViewModelFakeRepository(
     override suspend fun exerciseHistory(exerciseId: Long): Result<List<ExerciseEntry>> = Result.success(emptyList())
 
     override suspend fun importData(
+        categories: List<Category>,
         exercises: List<Exercise>,
         entries: List<BackupEntry>
     ): Result<Unit> = Result.success(Unit)
 
     override suspend fun deleteAllData(): Result<Unit> = Result.success(Unit)
+
+    // Новый контракт категорий (custom-categories, этапы 2 и 5):
+    // управляемые потоки и запись вызовов для тестов §5.
+
+    override suspend fun addCategory(name: String): Result<Category> =
+        Result.success(Category(id = 0L, name = name.trim(), colorArgb = 0, isCustom = true))
+
+    override suspend fun renameCategory(
+        id: Long,
+        newName: String
+    ): Result<Unit> = Result.success(Unit)
+
+    override suspend fun deleteCategory(id: Long): Result<Unit> {
+        lastDeletedCategoryId = id
+        return deleteCategoryResult
+    }
+
+    override suspend fun setCategoryArchived(
+        id: Long,
+        isArchived: Boolean
+    ): Result<Unit> {
+        setCategoryArchivedCalls.add(id to isArchived)
+        return setCategoryArchivedResult
+    }
+
+    override fun categories(): Flow<List<Category>> = categoriesFlow
+
+    override fun archivedCategories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+    override fun categoryNamesWithLinkedExercises(): Flow<Set<String>> = categoryNamesInUse
+
+    override suspend fun getAllCategories(): Result<List<Category>> = Result.success(emptyList())
 }
 
 /**
@@ -161,7 +219,7 @@ class ExercisesViewModelTest {
         Exercise(
             id = 1L,
             name = "Подтягивания",
-            category = ExerciseCategory.PULL,
+            category = "PULL",
             isCustom = false,
             comment = null,
             createdAt = 1_721_000_000_000L,
@@ -172,7 +230,7 @@ class ExercisesViewModelTest {
         Exercise(
             id = 2L,
             name = "Планка",
-            category = ExerciseCategory.CORE,
+            category = "CORE",
             isCustom = false,
             comment = "тело — прямая линия",
             createdAt = 1_721_100_000_000L,
@@ -190,6 +248,24 @@ class ExercisesViewModelTest {
      *  появятся в §2.x. */
     private lateinit var dataStore: AppSettingsDataStore
 
+    /** Стандартная категория (тесты §5, custom-categories). */
+    private val push =
+        Category(
+            id = 1L,
+            name = "PUSH",
+            colorArgb = 0xFF4E6EF2.toInt(),
+            isCustom = false
+        )
+
+    /** Кастомная категория (тесты §5, custom-categories). */
+    private val shoulders =
+        Category(
+            id = 2L,
+            name = "Плечи",
+            colorArgb = 0xFF22AA66.toInt(),
+            isCustom = true
+        )
+
     @BeforeEach
     fun setUp() {
         testDispatcher = StandardTestDispatcher()
@@ -206,6 +282,9 @@ class ExercisesViewModelTest {
         // обратная совместимость для существующих тестов §1–§3. Тесты
         // §4.1 (red) переопределяют stub на `flowOf(true)`.
         every { dataStore.dontShowArchiveDialog } returns flowOf(false)
+        // Категорийный opt-out (custom-categories): default — показывать
+        // диалог; тесты §5 переопределяют на `flowOf(true)`.
+        every { dataStore.dontShowCategoryArchiveDialog } returns flowOf(false)
     }
 
     @AfterEach
@@ -264,7 +343,7 @@ class ExercisesViewModelTest {
                 Exercise(
                     id = 3L,
                     name = "Приседания",
-                    category = ExerciseCategory.LEGS,
+                    category = "LEGS",
                     isCustom = false,
                     comment = null,
                     createdAt = 1_721_200_000_000L
@@ -446,7 +525,7 @@ class ExercisesViewModelTest {
             )
         }
 
-    // ---------- §3. TDD: pending-архивация + archivedCount ----------
+    // ---------- §3. TDD: pending-архивация + hasArchived ----------
 
     /**
      * `requestArchive(item)` ставит `pendingArchiveId == item.id` в
@@ -586,59 +665,44 @@ class ExercisesViewModelTest {
         }
 
     /**
-     * `archivedCount` из репозитория реактивно попадает в
-     * `Success.archivedCount` (exercises-archive design Decision 2;
+     * `hasArchived` из репозитория реактивно попадает в
+     * `Success.hasArchived` (exercises-archive design Decision 2;
      * tasks §3.4). Тест управляет значением через
-     * `repository.archivedCountFlow.value`.
+     * `repository.hasArchivedFlow.value`.
      */
     @Test
-    fun archivedCount_fromRepository_reactivelyReflectedInUiState() =
+    fun hasArchived_fromRepository_reactivelyReflectedInUiState() =
         runTest(testDispatcher) {
-            // Given — стартовое значение 0
+            // Given — стартовое значение false
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             advanceUntilIdle()
             val initial = viewModel.uiState.value as ExercisesUiState.Success
-            assertEquals(
-                0,
-                initial.archivedCount,
-                "Стартовое archivedCount = 0 (initialValue stateIn)"
+            assertFalse(
+                initial.hasArchived,
+                "Стартовый hasArchived = false (initialValue stateIn)"
             )
 
-            // When — счётчик архивных стал 1 (первое заархивированное)
-            repository.archivedCountFlow.value = 1
+            // When — в архиве появился объект любого типа
+            repository.hasArchivedFlow.value = true
             advanceUntilIdle()
 
             // Then
             val afterOne = viewModel.uiState.value as ExercisesUiState.Success
-            assertEquals(
-                1,
-                afterOne.archivedCount,
-                "archivedCount реактивно = 1 после изменения в репозитории"
+            assertTrue(
+                afterOne.hasArchived,
+                "hasArchived реактивно = true после изменения в репозитории"
             )
 
-            // When — восстановили последнее (1 → 0)
-            repository.archivedCountFlow.value = 0
+            // When — архив восстановили (true → false)
+            repository.hasArchivedFlow.value = false
             advanceUntilIdle()
 
             // Then
-            val afterZero = viewModel.uiState.value as ExercisesUiState.Success
-            assertEquals(
-                0,
-                afterZero.archivedCount,
-                "archivedCount реактивно = 0 после восстановления"
-            )
-
-            // When — стало 2
-            repository.archivedCountFlow.value = 2
-            advanceUntilIdle()
-
-            // Then
-            val afterTwo = viewModel.uiState.value as ExercisesUiState.Success
-            assertEquals(
-                2,
-                afterTwo.archivedCount,
-                "archivedCount реактивно = 2"
+            val afterRestore = viewModel.uiState.value as ExercisesUiState.Success
+            assertFalse(
+                afterRestore.hasArchived,
+                "hasArchived реактивно = false после восстановления"
             )
         }
 
@@ -779,5 +843,444 @@ class ExercisesViewModelTest {
                 "confirmArchive(suppress=false) вызвал setArchived(id, true)"
             )
             coVerify(exactly = 0) { dataStore.setDontShowArchiveDialog(any()) }
+        }
+
+    // ---------- §5. custom-categories: табы, вкладка «Категории» ----------
+
+    /**
+     * Выбранная вкладка по умолчанию — [ExercisesTab.EXERCISES];
+     * `selectTab(CATEGORIES)` отражается в `Success.selectedTab`
+     * (spec «Выбор вкладки отражается в Success»).
+     */
+    @Test
+    fun selectTab_then_reflectedInUiState_and_defaultIsExercises() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then — дефолт
+            val initial = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                ExercisesTab.EXERCISES,
+                initial.selectedTab,
+                "Дефолтная вкладка — Упражнения"
+            )
+            assertTrue(
+                analyticsProvider.events.isEmpty(),
+                "Без selectTab событий аналитики нет"
+            )
+
+            // When
+            viewModel.selectTab(ExercisesTab.CATEGORIES)
+            advanceUntilIdle()
+
+            // Then
+            val after = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                ExercisesTab.CATEGORIES,
+                after.selectedTab,
+                "selectTab(CATEGORIES) отражается в Success.selectedTab"
+            )
+            assertEquals(
+                listOf(
+                    AnalyticsEvent.UserAction(
+                        UserActionType.SELECT_CATEGORIES_TAB,
+                        "categories"
+                    )
+                ),
+                analyticsProvider.events,
+                "Выбор вкладки — user_action SELECT_CATEGORIES_TAB (value = categories)"
+            )
+        }
+
+    /**
+     * Реактивный список категорий из репозитория попадает в
+     * `Success.categories` (spec «Список упражнений реактивен» —
+     * подписка на `categories()`).
+     */
+    @Test
+    fun categories_fromRepository_reactivelyReflectedInUiState() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — в репозитории появилась кастомная категория
+            repository.categoriesFlow.value = listOf(push, shoulders)
+            advanceUntilIdle()
+
+            // Then
+            val state = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                listOf(push, shoulders),
+                state.categories,
+                "categories реактивно приезжают из repository.categories()"
+            )
+        }
+
+    /**
+     * Пре-чек удаления (spec «Алерт удаления категории и пре-чек
+     * использования»): имя категории в `categoryNamesWithLinkedExercises()`
+     * → снекбар `UsedByExercises` БЕЗ открытия алерта
+     * (`pendingCategoryDeleteId == null`), категория не удаляется.
+     */
+    @Test
+    fun requestCategoryDelete_whenNameInUse_thenErrorWithoutDialog_andRepositoryUntouched() =
+        runTest(testDispatcher) {
+            // Given — на PUSH ссылается упражнение
+            repository.categoryNamesInUse.value = setOf("PUSH")
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.requestCategoryDelete(push)
+            advanceUntilIdle()
+
+            // Then — снекбар вместо алерта
+            val state = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                DeleteCategoryError.UsedByExercises,
+                state.categoryDeleteError,
+                "Используемая категория — снекбар UsedByExercises"
+            )
+            assertNull(state.pendingCategoryDeleteId, "Алерт НЕ открыт")
+            assertNull(repository.lastDeletedCategoryId, "Репозиторий не тронут на пре-чеке")
+
+            // When — сброс ошибки one-shot
+            viewModel.onCategoryErrorShown()
+            advanceUntilIdle()
+
+            // Then
+            assertNull(
+                (viewModel.uiState.value as ExercisesUiState.Success).categoryDeleteError,
+                "onCategoryErrorShown() сбрасывает categoryDeleteError"
+            )
+        }
+
+    /**
+     * Пре-чек прошёл (имя свободно) → алерт через
+     * `pendingCategoryDeleteId`; `cancelCategoryDelete()` сбрасывает.
+     */
+    @Test
+    fun requestCategoryDelete_whenFree_thenPendingSet_and_cancelResets() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.requestCategoryDelete(shoulders)
+            advanceUntilIdle()
+
+            // Then
+            val afterRequest = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                shoulders.id,
+                afterRequest.pendingCategoryDeleteId,
+                "Свободная категория — открывается алерт (pendingCategoryDeleteId = id)"
+            )
+            assertNull(afterRequest.categoryDeleteError, "Ошибки нет")
+
+            // When — отмена
+            viewModel.cancelCategoryDelete()
+            advanceUntilIdle()
+
+            // Then
+            assertNull(
+                (viewModel.uiState.value as ExercisesUiState.Success).pendingCategoryDeleteId,
+                "cancelCategoryDelete сбрасывает pendingCategoryDeleteId"
+            )
+        }
+
+    /**
+     * `confirmCategoryDelete()` при `Result.success` — pending сброшен,
+     * репозиторий вызван с id категории.
+     */
+    @Test
+    fun confirmCategoryDelete_onSuccess_clearsPending_andCallsRepository() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestCategoryDelete(shoulders)
+            advanceUntilIdle()
+
+            // When
+            viewModel.confirmCategoryDelete()
+            advanceUntilIdle()
+
+            // Then
+            val state = viewModel.uiState.value as ExercisesUiState.Success
+            assertNull(state.pendingCategoryDeleteId, "pending сброшен после успеха")
+            assertNull(state.categoryDeleteError, "Ошибки нет")
+            assertEquals(shoulders.id, repository.lastDeletedCategoryId, "deleteCategory(id) вызван")
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.DELETE_CATEGORY)),
+                analyticsProvider.events,
+                "Подтверждённое удаление категории — user_action DELETE_CATEGORY"
+            )
+        }
+
+    /**
+     * Safety-net (spec «Ошибки удаления категории — типизированные
+     * причины»): `CategoryInUseDeletionException` →
+     * `UsedByExercises`; повторное подтверждение после сброса ошибки
+     * возможно (one-shot).
+     */
+    @Test
+    fun confirmCategoryDelete_onUsedByExercisesFailure_mapsError_andOneShotResets() =
+        runTest(testDispatcher) {
+            // Given
+            val failure = CategoryInUseDeletionException()
+            repository.deleteCategoryResult = Result.failure(failure)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestCategoryDelete(shoulders)
+            advanceUntilIdle()
+
+            // When
+            viewModel.confirmCategoryDelete()
+            advanceUntilIdle()
+
+            // Then
+            val state = viewModel.uiState.value as ExercisesUiState.Success
+            assertNull(state.pendingCategoryDeleteId, "pending сброшен и при ошибке")
+            assertEquals(
+                DeleteCategoryError.UsedByExercises,
+                state.categoryDeleteError,
+                "CategoryInUseDeletionException → UsedByExercises"
+            )
+            val appError =
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().single()
+            assertEquals(
+                AppErrorOperation.CATEGORY_DELETE,
+                appError.operation,
+                "Сбой удаления категории — событие AppError(CATEGORY_DELETE)"
+            )
+            assertSame(failure, appError.throwable, "В событии — итоговое исключение")
+
+            // When — one-shot сброс
+            viewModel.onCategoryErrorShown()
+            advanceUntilIdle()
+
+            // Then
+            assertNull(
+                (viewModel.uiState.value as ExercisesUiState.Success).categoryDeleteError,
+                "onCategoryErrorShown() сбрасывает categoryDeleteError"
+            )
+        }
+
+    /**
+     * Safety-net: `StandardCategoryDeletionException` →
+     * `StandardCategory`; прочее исключение → `Other`.
+     */
+    @Test
+    fun confirmCategoryDelete_onStandardAndOtherFailures_mapsTypedErrors() =
+        runTest(testDispatcher) {
+            // Given — стандартная категория (safety net)
+            repository.deleteCategoryResult =
+                Result.failure(StandardCategoryDeletionException())
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestCategoryDelete(push)
+            advanceUntilIdle()
+            viewModel.confirmCategoryDelete()
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                DeleteCategoryError.StandardCategory,
+                (viewModel.uiState.value as ExercisesUiState.Success).categoryDeleteError,
+                "StandardCategoryDeletionException → StandardCategory"
+            )
+            viewModel.onCategoryErrorShown()
+            advanceUntilIdle()
+
+            // When — прочая ошибка (например, «категория не найдена»)
+            repository.deleteCategoryResult =
+                Result.failure(IllegalStateException("Категория не найдена"))
+            viewModel.requestCategoryDelete(shoulders)
+            advanceUntilIdle()
+            viewModel.confirmCategoryDelete()
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                DeleteCategoryError.Other,
+                (viewModel.uiState.value as ExercisesUiState.Success).categoryDeleteError,
+                "Прочее исключение → Other"
+            )
+        }
+
+    /**
+     * `requestCategoryArchive(id)` при категорийном флаге `false`
+     * (default) открывает алерт; флаг УПРАЖНЕНИЙ на категории не
+     * влияет (spec «Флаг упражнений не влияет на категории») —
+     * `setCategoryArchived` не вызывается.
+     */
+    @Test
+    fun requestCategoryArchive_whenCategoryFlagFalse_thenOpensDialog_evenIfExerciseFlagSet() =
+        runTest(testDispatcher) {
+            // Given — флаг упражнений включён, категорийный выключен
+            every { dataStore.dontShowArchiveDialog } returns flowOf(true)
+            every { dataStore.dontShowCategoryArchiveDialog } returns flowOf(false)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.requestCategoryArchive(push.id)
+            advanceUntilIdle()
+
+            // Then
+            val state = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                push.id,
+                state.pendingCategoryArchiveId,
+                "Категорийный флаг false — открывается алерт, несмотря на флаг упражнений"
+            )
+            assertTrue(
+                repository.setCategoryArchivedCalls.isEmpty(),
+                "setCategoryArchived НЕ вызван на открытии алерта"
+            )
+            assertTrue(
+                analyticsProvider.events.isEmpty(),
+                "ARCHIVE_CATEGORY логируется только на подтверждении"
+            )
+
+            // When — отмена
+            viewModel.cancelCategoryArchive()
+            advanceUntilIdle()
+
+            // Then
+            assertNull(
+                (viewModel.uiState.value as ExercisesUiState.Success).pendingCategoryArchiveId,
+                "cancelCategoryArchive сбрасывает pendingCategoryArchiveId"
+            )
+        }
+
+    /**
+     * `requestCategoryArchive(id)` при `dontShowCategoryArchiveDialog
+     * == true` — немедленная архивация БЕЗ алерта (spec «Включённый
+     * флаг архивирует без алерта»).
+     */
+    @Test
+    fun requestCategoryArchive_whenCategoryFlagTrue_thenArchivesImmediately_withoutDialog() =
+        runTest(testDispatcher) {
+            // Given
+            every { dataStore.dontShowCategoryArchiveDialog } returns flowOf(true)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.requestCategoryArchive(push.id)
+            advanceUntilIdle()
+
+            // Then
+            val state = viewModel.uiState.value as ExercisesUiState.Success
+            assertNull(state.pendingCategoryArchiveId, "Алерт НЕ открыт")
+            assertEquals(
+                listOf(push.id to true),
+                repository.setCategoryArchivedCalls,
+                "setCategoryArchived(id, true) вызван немедленно"
+            )
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.ARCHIVE_CATEGORY)),
+                analyticsProvider.events,
+                "Архивация без алерта — user_action ARCHIVE_CATEGORY"
+            )
+        }
+
+    /**
+     * `confirmCategoryArchive(suppress = true)` — архивация + запись
+     * ОТДЕЛЬНОГО категорийного pref (`setDontShowCategoryArchiveDialog`);
+     * `suppress = false` pref не пишет.
+     */
+    @Test
+    fun confirmCategoryArchive_callsSetCategoryArchived_and_suppressWritesCategoryPref() =
+        runTest(testDispatcher) {
+            // Given
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestCategoryArchive(shoulders.id)
+            advanceUntilIdle()
+
+            // When
+            viewModel.confirmCategoryArchive(suppress = true)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(
+                listOf(shoulders.id to true),
+                repository.setCategoryArchivedCalls,
+                "confirmCategoryArchive вызвал setCategoryArchived(id, true)"
+            )
+            coVerify(exactly = 1) { dataStore.setDontShowCategoryArchiveDialog(true) }
+            coVerify(exactly = 0) { dataStore.setDontShowArchiveDialog(any()) }
+            assertNull(
+                (viewModel.uiState.value as ExercisesUiState.Success).pendingCategoryArchiveId,
+                "pending сброшен после подтверждения"
+            )
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.ARCHIVE_CATEGORY)),
+                analyticsProvider.events,
+                "Подтверждённая архивация категории — user_action ARCHIVE_CATEGORY"
+            )
+
+            // When — suppress = false: pref не пишется
+            viewModel.requestCategoryArchive(push.id)
+            advanceUntilIdle()
+            viewModel.confirmCategoryArchive(suppress = false)
+            advanceUntilIdle()
+
+            // Then
+            coVerify(exactly = 1) { dataStore.setDontShowCategoryArchiveDialog(any()) }
+        }
+
+    /**
+     * `confirmCategoryArchive()` при `Result.failure` — pending сброшен
+     * молча (race — по образцу архивации упражнений, spec «Failure при
+     * подтверждении»); повторный запрос возможен.
+     */
+    @Test
+    fun confirmCategoryArchive_onFailure_clearsPending_andAllowsRetry() =
+        runTest(testDispatcher) {
+            // Given — форсируем failure (race между списком и подтверждением)
+            repository.setCategoryArchivedResult =
+                Result.failure(IllegalStateException("Категория не найдена"))
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestCategoryArchive(push.id)
+            advanceUntilIdle()
+
+            // When
+            viewModel.confirmCategoryArchive()
+            advanceUntilIdle()
+
+            // Then — pending сброшен молча (без снекбара), повторный
+            // запрос открывает новый pending
+            assertNull(
+                (viewModel.uiState.value as ExercisesUiState.Success).pendingCategoryArchiveId,
+                "Failure сбрасывает pendingCategoryArchiveId"
+            )
+            repository.setCategoryArchivedResult = Result.success(Unit)
+            viewModel.requestCategoryArchive(shoulders.id)
+            advanceUntilIdle()
+            assertEquals(
+                shoulders.id,
+                (viewModel.uiState.value as ExercisesUiState.Success).pendingCategoryArchiveId,
+                "Повторный requestCategoryArchive открывает новый pending"
+            )
         }
 }

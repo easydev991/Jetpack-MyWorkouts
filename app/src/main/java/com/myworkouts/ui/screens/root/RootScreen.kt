@@ -33,9 +33,11 @@ import com.myworkouts.navigation.visibleTabs
 import com.myworkouts.ui.screens.entry.EntryCreateScreen
 import com.myworkouts.ui.screens.entry.EntrySettingsScreen
 import com.myworkouts.ui.screens.exercises.ArchivedExercisesScreen
+import com.myworkouts.ui.screens.exercises.CategoryCreateScreen
 import com.myworkouts.ui.screens.exercises.ExerciseCreateScreen
 import com.myworkouts.ui.screens.exercises.ExercisesScreen
 import com.myworkouts.ui.viewmodel.ArchivedExercisesViewModel
+import com.myworkouts.ui.viewmodel.CategoryCreateViewModel
 import com.myworkouts.ui.viewmodel.EntryCreateViewModel
 import com.myworkouts.ui.viewmodel.EntrySettingsViewModel
 import com.myworkouts.ui.viewmodel.ExerciseCreateViewModel
@@ -201,6 +203,14 @@ private fun AppNavHost(
                 navController = navController
             )
         }
+        composable(Screen.CategoryCreate.route, arguments = Screen.CategoryCreate.arguments) { backStackEntry ->
+            CategoryCreateNavDestination(
+                backStackEntry = backStackEntry,
+                repository = repository,
+                analyticsProvider = analyticsProvider,
+                navController = navController
+            )
+        }
     }
 }
 
@@ -221,6 +231,7 @@ private fun screenForRoute(route: String?): AppScreen? =
         Screen.EntryCreate.route -> AppScreen.EntryCreateScreen
         Screen.EntrySettings.route -> AppScreen.EntrySettingsScreen
         Screen.ExerciseCreate.route -> AppScreen.ExerciseCreateScreen
+        Screen.CategoryCreate.route -> AppScreen.CategoryCreateScreen
         Screen.Overview.route -> AppScreen.OverviewScreen
         Screen.OverviewSettings.route -> AppScreen.OverviewSettingsScreen
         else -> null
@@ -308,6 +319,33 @@ private fun ExerciseCreateNavDestination(
 }
 
 /**
+ * `composable(Screen.CategoryCreate.route) { ... }` — вынесено из
+ * `AppNavHost` ради соблюдения detekt `LongMethod`. Query-аргумент
+ * categoryId выбирает режим create/edit (custom-categories, design
+ * Decision 7), FAB вкладки «Категории» ведёт на createRoute().
+ */
+@Composable
+private fun CategoryCreateNavDestination(
+    backStackEntry: NavBackStackEntry,
+    repository: WorkoutDataRepository,
+    analyticsProvider: AnalyticsProvider,
+    navController: NavHostController
+) {
+    val categoryId =
+        backStackEntry.arguments?.getLong(
+            Screen.CategoryCreate.ARG_CATEGORY_ID,
+            Screen.CategoryCreate.NO_CATEGORY_ID
+        ) ?: Screen.CategoryCreate.NO_CATEGORY_ID
+    CategoryCreateScreen(
+        viewModel =
+            viewModel(
+                factory = CategoryCreateViewModel.factory(repository, categoryId, analyticsProvider)
+            ),
+        onBackClick = { navController.popBackStack() }
+    )
+}
+
+/**
  * `composable(Screen.Exercises.route) { ... }` — вынесено из
  * `AppNavHost` ради соблюдения detekt `LongMethod`. Колбэк архива —
  * навигация на `Screen.ArchivedExercises.route` (exercises-archive,
@@ -326,8 +364,12 @@ private fun ExercisesNavDestination(
                 factory = ExercisesViewModel.factory(repository, dataStore, analyticsProvider)
             ),
         onAddExerciseClick = { navController.navigate(Screen.ExerciseCreate.createRoute()) },
+        onAddCategoryClick = { navController.navigate(Screen.CategoryCreate.createRoute()) },
         onEditExercise = { exerciseId ->
             navController.navigate(Screen.ExerciseCreate.createRoute(exerciseId))
+        },
+        onEditCategory = { categoryId ->
+            navController.navigate(Screen.CategoryCreate.createRoute(categoryId))
         },
         onArchivedExercisesClick = {
             navController.navigate(Screen.ArchivedExercises.route)

@@ -160,9 +160,32 @@
     <string name="exercise_archive_dialog_confirm">Архивировать</string>
     <!-- archive-alert-hide: текст чекбокса «Больше не показывать» в диалоге архивации -->
     <string name="exercise_archive_dont_show_again">Больше не показывать</string>
-    <string name="exercises_archive_button">Архив упражнений</string>
-    <string name="archived_exercises_title">Архив упражнений</string>
     <string name="archived_exercises_empty">В архиве пусто</string>
+
+    <!-- Custom categories (custom-categories: табы, меню, алерты, снекбары,
+         вкладка «Категории», экран создания; archive_title — общий ключ
+         кнопки архива и заголовка экрана архива) -->
+    <string name="exercises_tab_exercises">Упражнения</string>
+    <string name="exercises_tab_categories">Категории</string>
+    <string name="category_list_menu_edit">Изменить</string>
+    <string name="category_list_menu_archive">Архивировать</string>
+    <string name="category_list_menu_delete">Удалить</string>
+    <string name="category_delete_dialog_title">Удалить категорию?</string>
+    <string name="category_delete_dialog_text">Категория \"%1$s\" будет удалена</string>
+    <string name="category_archive_dialog_title">Архивировать категорию?</string>
+    <string name="category_archive_dialog_text">Чтобы снова использовать категорию \"%1$s\" в упражнениях, нужно будет вернуть её из архива</string>
+    <string name="category_archive_dialog_confirm">Архивировать</string>
+    <string name="category_delete_error_used_by_exercises">Эта категория уже используется в упражнении</string>
+    <string name="category_delete_error_standard">Нельзя удалить стандартную категорию</string>
+    <string name="category_delete_error_generic">Не удалось удалить категорию</string>
+    <string name="categories_list_empty">Нет категорий</string>
+    <string name="categories_add_category">Добавить категорию</string>
+    <string name="category_create_title">Новая категория</string>
+    <string name="category_edit_title">Изменить категорию</string>
+    <string name="category_field_name">Название</string>
+    <string name="category_error_duplicate">Категория с таким названием уже существует</string>
+    <string name="category_save_error">Не удалось сохранить категорию</string>
+    <string name="archive_title">Архив</string>
 
     <!-- Entry settings screen (настройка видимости полей формы записи) -->
     <string name="entry_settings_title">Настроить экран</string>

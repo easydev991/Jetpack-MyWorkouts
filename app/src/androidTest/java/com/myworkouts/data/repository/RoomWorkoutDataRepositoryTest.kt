@@ -10,7 +10,6 @@ import com.myworkouts.data.repository.LinkedEntriesDeletionException
 import com.myworkouts.data.repository.StandardExerciseDeletionException
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import kotlinx.coroutines.Dispatchers
@@ -74,11 +73,11 @@ class RoomWorkoutDataRepositoryTest {
                     listOf(
                         StandardExercise(
                             name = "Подтягивания",
-                            category = ExerciseCategory.PULL
+                            category = "PULL"
                         ),
                         StandardExercise(
                             name = "Планка",
-                            category = ExerciseCategory.CORE,
+                            category = "CORE",
                             measuredBy = ExerciseMeasuredBy.TIME
                         )
                     )
@@ -136,7 +135,7 @@ class RoomWorkoutDataRepositoryTest {
                     Exercise(
                         id = 0L,
                         name = "Жим",
-                        category = ExerciseCategory.PUSH,
+                        category = "PUSH",
                         isCustom = true,
                         comment = null,
                         createdAt = 1L,
@@ -646,7 +645,7 @@ class RoomWorkoutDataRepositoryTest {
                 Exercise(
                     id = 0L,
                     name = "Отжимания на турнике",
-                    category = ExerciseCategory.PULL,
+                    category = "PULL",
                     isCustom = true,
                     comment = "широкий хват",
                     createdAt = 1_700_000_000_000L
@@ -669,7 +668,7 @@ class RoomWorkoutDataRepositoryTest {
                 fetched.isCustom
             )
             assertEquals("широкий хват", fetched.comment)
-            assertEquals(ExerciseCategory.PULL, fetched.category)
+            assertEquals("PULL", fetched.category)
         }
 
     @Test
@@ -681,7 +680,7 @@ class RoomWorkoutDataRepositoryTest {
                 Exercise(
                     id = 0L,
                     name = "Стойка на руках",
-                    category = ExerciseCategory.PUSH,
+                    category = "PUSH",
                     isCustom = true,
                     comment = null,
                     createdAt = 1_700_000_000_000L
@@ -711,7 +710,7 @@ class RoomWorkoutDataRepositoryTest {
                 Exercise(
                     id = 0L,
                     name = "Стойка на руках",
-                    category = ExerciseCategory.PUSH,
+                    category = "PUSH",
                     isCustom = true,
                     comment = null,
                     createdAt = 1_700_000_000_000L,
@@ -749,7 +748,7 @@ class RoomWorkoutDataRepositoryTest {
                         Exercise(
                             id = 0L,
                             name = "С иконкой",
-                            category = ExerciseCategory.PUSH,
+                            category = "PUSH",
                             isCustom = true,
                             comment = null,
                             createdAt = 1L,
@@ -762,7 +761,7 @@ class RoomWorkoutDataRepositoryTest {
                         Exercise(
                             id = 0L,
                             name = "Без иконки",
-                            category = ExerciseCategory.PUSH,
+                            category = "PUSH",
                             isCustom = true,
                             comment = null,
                             createdAt = 2L
@@ -774,7 +773,7 @@ class RoomWorkoutDataRepositoryTest {
                         Exercise(
                             id = 0L,
                             name = "Нулевая иконка",
-                            category = ExerciseCategory.PUSH,
+                            category = "PUSH",
                             isCustom = true,
                             comment = null,
                             createdAt = 3L,
@@ -808,7 +807,7 @@ class RoomWorkoutDataRepositoryTest {
                     Exercise(
                         id = 0L,
                         name = "Отжимания на турнике",
-                        category = ExerciseCategory.PULL,
+                        category = "PULL",
                         isCustom = true,
                         comment = "широкий хват",
                         createdAt = 1_700_000_000_000L
@@ -846,7 +845,7 @@ class RoomWorkoutDataRepositoryTest {
                     Exercise(
                         id = pullupsId,
                         name = "Подтягивания",
-                        category = ExerciseCategory.PULL,
+                        category = "PULL",
                         isCustom = false,
                         comment = "хват сверху, лопатки сведены",
                         createdAt = 0L
@@ -914,7 +913,7 @@ class RoomWorkoutDataRepositoryTest {
                         Exercise(
                             id = 0L,
                             name = "Отжимания на турнике",
-                            category = ExerciseCategory.PULL,
+                            category = "PULL",
                             isCustom = true,
                             comment = null,
                             createdAt = 1_700_000_000_000L
@@ -973,7 +972,7 @@ class RoomWorkoutDataRepositoryTest {
                         Exercise(
                             id = 0L,
                             name = "Становая тяга",
-                            category = ExerciseCategory.PULL,
+                            category = "PULL",
                             isCustom = true,
                             comment = null,
                             createdAt = 1_700_000_000_000L
@@ -1033,7 +1032,7 @@ class RoomWorkoutDataRepositoryTest {
             assertNotNull(exercise)
             assertEquals(expectedId, exercise!!.id)
             assertEquals("Подтягивания", exercise.name)
-            assertEquals(ExerciseCategory.PULL, exercise.category)
+            assertEquals("PULL", exercise.category)
             assertFalse("Стандартное упражнение из setUp — isCustom=false", exercise.isCustom)
             assertEquals(ExerciseMeasuredBy.REPS, exercise.measuredBy)
         }
@@ -1199,7 +1198,7 @@ class RoomWorkoutDataRepositoryTest {
                         Exercise(
                             id = 0L,
                             name = "Планка",
-                            category = ExerciseCategory.CORE,
+                            category = "CORE",
                             isCustom = true,
                             comment = null,
                             createdAt = 1_700_000_000_000L,
@@ -1260,7 +1259,7 @@ class RoomWorkoutDataRepositoryTest {
         }
 
     // Архивация (exercises-archive, tasks §2): setArchived, archivedExercises,
-    // archivedCount, фильтрация архивных в exercises().
+    // hasArchived, фильтрация архивных в exercises().
 
     /**
      * `setArchived(id, true)` для активного упражнения → `Result.success`,
@@ -1366,15 +1365,19 @@ class RoomWorkoutDataRepositoryTest {
     /**
      * `archivedExercises()` эмитит только упражнения с `is_archived = 1`,
      * отсортированные по контракту `is_custom DESC, created_at DESC,
-     * name COLLATE NOCASE`; `archivedCount()` эмитит количество
-     * (spec-сценарии «Архив пуст», «Реактивный список архивных упражнений»,
-     * «Реактивный счётчик архивных упражнений»).
+     * name COLLATE NOCASE`; `hasArchived()` эмитит `false` на пустом
+     * архиве и `true` после архивации (spec-сценарии «Архив пуст»,
+     * «Реактивный список архивных упражнений», «Кнопка архива в
+     * TopAppBar»).
      */
     @Test
-    fun archivedExercises_emitsOnlyArchived_sortedByContract_andCount() =
+    fun archivedExercises_emitsOnlyArchived_sortedByContract_andHasArchivedFlag() =
         runBlocking {
-            // Given — пустой архив: счётчик 0, список пуст
-            assertEquals(0, repository.archivedCount().first())
+            // Given — пустой архив: признак false, список пуст
+            assertFalse(
+                "На пустом архиве hasArchived() должен быть false",
+                repository.hasArchived().first()
+            )
             assertTrue(repository.archivedExercises().first().isEmpty())
 
             // And — четыре упражнения с разными ключами сортировки:
@@ -1405,12 +1408,14 @@ class RoomWorkoutDataRepositoryTest {
 
             // When
             val archived = repository.archivedExercises().first()
-            val count = repository.archivedCount().first()
 
             // Then — только архивные, в порядке контракта сортировки
             assertEquals(listOf("Отжимания", "Жим", "Бег", "Ходьба"), archived.map { it.name })
             assertTrue("Все элементы архива должны быть isArchived=true", archived.all { it.isArchived })
-            assertEquals(4, count)
+            assertTrue(
+                "После архивации хотя бы одного упражнения hasArchived() должен быть true",
+                repository.hasArchived().first()
+            )
         }
 
     /**

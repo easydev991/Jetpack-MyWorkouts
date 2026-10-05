@@ -1,3 +1,9 @@
+// TooManyFunctions подавлен осознанно: таб-переключатель и вкладка
+// «Категории» (custom-categories 5.4) добавили top-level функции, а
+// конвенция превью (светлая + тёмная тема) и переиспользование алертов
+// требуют держать их рядом с упражнениями; дробить файл хуже подавления.
+@file:Suppress("TooManyFunctions")
+
 package com.myworkouts.ui.screens.exercises
 
 import androidx.annotation.StringRes
@@ -11,8 +17,6 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -32,8 +36,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -41,27 +47,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.DpOffset
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
 import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.UserActionType
+import com.myworkouts.domain.model.Category
+import com.myworkouts.domain.model.DeleteCategoryError
 import com.myworkouts.domain.model.DeleteExerciseError
 import com.myworkouts.domain.model.Exercise
+import com.myworkouts.ui.state.ExercisesTab
 import com.myworkouts.ui.state.ExercisesUiState
+import com.myworkouts.ui.util.categoryLabel
 import com.myworkouts.ui.viewmodel.ExercisesViewModel
 
 /**
@@ -74,7 +81,7 @@ import com.myworkouts.ui.viewmodel.ExercisesViewModel
  * типизированные причины в снекбаре»; exercises-archive: меню
  * «Архивировать» для кастомных и стандартных, алерт подтверждения
  * архивации, `IconButton` архива в `TopAppBar` при
- * `archivedCount > 0`).
+ * `hasArchived`).
  *
  * VM-обёртка: подписка на [ExercisesViewModel.uiState], локальное
  * состояние long-press меню, `SnackbarHostState` для one-shot
@@ -100,78 +107,122 @@ import com.myworkouts.ui.viewmodel.ExercisesViewModel
 fun ExercisesScreen(
     viewModel: ExercisesViewModel,
     onAddExerciseClick: () -> Unit,
+    onAddCategoryClick: () -> Unit,
     onArchivedExercisesClick: () -> Unit,
     analyticsProvider: AnalyticsProvider,
-    modifier: Modifier = Modifier,
-    onEditExercise: (Long) -> Unit = {}
+    onEditExercise: (Long) -> Unit = {},
+    onEditCategory: (Long) -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var contextMenu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+    var categoryContextMenu by remember { mutableStateOf<CategoryContextMenuState?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Локализованный текст ошибки для текущего `Success.deleteError`.
-    // Резолвится на уровне композиции (stringResource — @Composable),
-    // чтобы LaunchedEffect мог его использовать без повторного
-    // резолва во время suspend-блока. Пересоздаётся при изменении
-    // `deleteError` вместе с recomposition обёртки. Для Loading —
-    // всегда `null` (поле `deleteError` существует только в Success).
-    val errorMessage: String? =
-        when (val s = uiState) {
-            ExercisesUiState.Loading -> null
-            is ExercisesUiState.Success -> s.deleteError?.let { deleteErrorText(it) }
-        }
-
-    // One-shot snackbar для ошибки удаления (design Decision 6):
-    // ключ LaunchedEffect — текущий `uiState`, при изменении блок
-    // перезапускается, текущий снекбар закрывается, новый
-    // показывается. `onErrorShown()` сбрасывает флаг после показа —
-    // без этого LaunchedEffect сработал бы повторно при следующем
-    // composition с тем же `null`-после-сброса.
-    LaunchedEffect(uiState) {
-        val currentSuccess = uiState as? ExercisesUiState.Success ?: return@LaunchedEffect
-        if (currentSuccess.deleteError == null) return@LaunchedEffect
-        val message = errorMessage ?: return@LaunchedEffect
-        snackbarHostState.currentSnackbarData?.dismiss()
-        snackbarHostState.showSnackbar(message)
-        viewModel.onErrorShown()
-    }
+    ExercisesDeleteErrorSnackbar(
+        uiState = uiState,
+        snackbarHostState = snackbarHostState,
+        onErrorShown = viewModel::onErrorShown,
+        onCategoryErrorShown = viewModel::onCategoryErrorShown
+    )
 
     ExercisesScreenContent(
         state =
             ExercisesScreenState(
                 uiState = uiState,
                 contextMenu = contextMenu,
+                categoryContextMenu = categoryContextMenu,
+                // FAB-события в точке нажатия (design D10)
                 onAddExerciseClick = {
-                    // FAB-событие в точке нажатия (design D10)
                     analyticsProvider.log(
                         AnalyticsEvent.UserAction(UserActionType.OPEN_EXERCISE_CREATE)
                     )
                     onAddExerciseClick()
                 },
+                onAddCategoryClick = {
+                    analyticsProvider.log(
+                        AnalyticsEvent.UserAction(UserActionType.OPEN_CATEGORY_CREATE)
+                    )
+                    onAddCategoryClick()
+                },
+                // Обёртки long-press меню: «закрыть меню и делегировать»
+                // (паттерн MainScreen.kt:90–95)
+                onTabSelect = viewModel::selectTab,
                 onContextMenuItemChange = { contextMenu = it },
-                onRequestEdit = { item ->
-                    // Паттерн MainScreen.kt:90–95 — обёртка закрывает
-                    // меню и делегирует без побочных эффектов
+                onCategoryContextMenuItemChange = { categoryContextMenu = it },
+                onRequestEdit = {
                     contextMenu = null
-                    onEditExercise(item.id)
+                    onEditExercise(it.id)
                 },
-                onRequestArchive = { item ->
+                onRequestArchive = {
                     contextMenu = null
-                    viewModel.requestArchive(item)
+                    viewModel.requestArchive(it)
                 },
-                onRequestDelete = { item ->
+                onRequestDelete = {
                     contextMenu = null
-                    viewModel.requestDelete(item)
+                    viewModel.requestDelete(it)
                 },
                 onConfirmDelete = viewModel::confirmDelete,
                 onCancelDelete = viewModel::cancelDelete,
                 onConfirmArchive = viewModel::confirmArchive,
                 onCancelArchive = viewModel::cancelArchive,
+                onRequestCategoryEdit = {
+                    categoryContextMenu = null
+                    onEditCategory(it.id)
+                },
+                onRequestCategoryArchive = {
+                    categoryContextMenu = null
+                    viewModel.requestCategoryArchive(it.id)
+                },
+                onRequestCategoryDelete = {
+                    categoryContextMenu = null
+                    viewModel.requestCategoryDelete(it)
+                },
+                onConfirmCategoryDelete = viewModel::confirmCategoryDelete,
+                onCancelCategoryDelete = viewModel::cancelCategoryDelete,
+                onConfirmCategoryArchive = viewModel::confirmCategoryArchive,
+                onCancelCategoryArchive = viewModel::cancelCategoryArchive,
                 onArchivedExercisesClick = onArchivedExercisesClick
             ),
         snackbarHostState = snackbarHostState,
         modifier = modifier
     )
+}
+
+/**
+ * One-shot снекбар ошибки удаления (design Decision 6): локализованный
+ * текст резолвится на уровне композиции (`stringResource` —
+ * `@Composable`), чтобы `LaunchedEffect` использовал его без повторного
+ * резолва в suspend-блоке (для `Loading` — всегда `null`). Ключ эффекта —
+ * текущий [uiState]: при изменении блок перезапускается, текущий снекбар
+ * закрывается, показывается новый; сбрасывается та ошибка, которая была
+ * показана (`deleteError` приоритетнее `categoryDeleteError`).
+ */
+@Composable
+private fun ExercisesDeleteErrorSnackbar(
+    uiState: ExercisesUiState,
+    snackbarHostState: SnackbarHostState,
+    onErrorShown: () -> Unit,
+    onCategoryErrorShown: () -> Unit
+) {
+    val errorMessage: String? =
+        when (val s = uiState) {
+            ExercisesUiState.Loading -> null
+            is ExercisesUiState.Success ->
+                s.deleteError?.let { deleteErrorText(it) }
+                    ?: s.categoryDeleteError?.let { categoryDeleteErrorText(it) }
+        }
+    LaunchedEffect(uiState) {
+        val currentSuccess = uiState as? ExercisesUiState.Success ?: return@LaunchedEffect
+        val message = errorMessage ?: return@LaunchedEffect
+        snackbarHostState.currentSnackbarData?.dismiss()
+        snackbarHostState.showSnackbar(message)
+        if (currentSuccess.deleteError != null) {
+            onErrorShown()
+        } else {
+            onCategoryErrorShown()
+        }
+    }
 }
 
 /**
@@ -185,14 +236,14 @@ internal data class ExerciseContextMenuState(
 )
 
 /**
- * Режим long-press меню: [Active] — пункты по типу упражнения
- * (Изменить/Архивировать/Удалить для кастомных, Архивировать для
- * стандартных); [Unarchive] — единственный пункт «Вернуть» для
- * архивных строк (exercises-archive Decision 4). Разделяемое
- * упражнениями и архивом — режим выбирает сам меню, вызывающему
- * достаточно передать нужные колбэки с дефолтом `{}`.
+ * Транзитное состояние long-press меню категории (custom-categories
+ * 5.4): какая категория + где на экране — копия
+ * [ExerciseContextMenuState].
  */
-internal enum class ExerciseMenuMode { Active, Unarchive }
+internal data class CategoryContextMenuState(
+    val item: Category,
+    val offsetInRoot: Offset
+)
 
 /**
  * Test/Preview-state для [ExercisesScreenContent]: данные
@@ -206,8 +257,15 @@ internal enum class ExerciseMenuMode { Active, Unarchive }
 internal data class ExercisesScreenState(
     val uiState: ExercisesUiState,
     val contextMenu: ExerciseContextMenuState? = null,
+    /** Транзитное состояние long-press меню категории (custom-categories). */
+    val categoryContextMenu: CategoryContextMenuState? = null,
     val onAddExerciseClick: () -> Unit = {},
+    /** FAB на вкладке «Категории» → `Screen.CategoryCreate.createRoute()`. */
+    val onAddCategoryClick: () -> Unit = {},
+    /** Переключение вкладки (custom-categories, design Decision 6). */
+    val onTabSelect: (ExercisesTab) -> Unit = {},
     val onContextMenuItemChange: (ExerciseContextMenuState?) -> Unit = {},
+    val onCategoryContextMenuItemChange: (CategoryContextMenuState?) -> Unit = {},
     val onRequestEdit: (Exercise) -> Unit = {},
     val onRequestArchive: (Exercise) -> Unit = {},
     val onRequestDelete: (Exercise) -> Unit = {},
@@ -224,6 +282,21 @@ internal data class ExercisesScreenState(
      */
     val onConfirmArchive: (Boolean) -> Unit = {},
     val onCancelArchive: () -> Unit = {},
+    /** Тап «Изменить» в меню категории → edit-маршрут (`category.id`). */
+    val onRequestCategoryEdit: (Category) -> Unit = {},
+    /** Тап «Архивировать» в меню категории (VM читает suppress-флаг). */
+    val onRequestCategoryArchive: (Category) -> Unit = {},
+    /** Тап «Удалить» в меню категории (пре-чек внутри VM). */
+    val onRequestCategoryDelete: (Category) -> Unit = {},
+    val onConfirmCategoryDelete: () -> Unit = {},
+    val onCancelCategoryDelete: () -> Unit = {},
+    /**
+     * Подтверждение архивации категории — сигнатура с suppress,
+     * симметрично [onConfirmArchive] (custom-categories, spec «Алерт
+     * архивации категории с чекбоксом подавления»).
+     */
+    val onConfirmCategoryArchive: (Boolean) -> Unit = {},
+    val onCancelCategoryArchive: () -> Unit = {},
     val onArchivedExercisesClick: () -> Unit = {}
 )
 
@@ -251,6 +324,11 @@ internal fun ExercisesScreenContent(
     modifier: Modifier = Modifier,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }
 ) {
+    // Один cast на контент: выбранная вкладка — из Success (до первой
+    // эмиссии (Loading) и в превью — «Упражнения», таб-бар и FAB отрисованы
+    // сразу, без прыжка после загрузки), видимость кнопки архива — тоже.
+    val success = state.uiState as? ExercisesUiState.Success
+    val selectedTab = success?.selectedTab ?: ExercisesTab.EXERCISES
     Scaffold(
         modifier = modifier,
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -262,45 +340,120 @@ internal fun ExercisesScreenContent(
             TopAppBar(
                 title = { Text(stringResource(R.string.exercises_title)) },
                 actions = {
-                    // Кнопка архива — реактивно по `archivedCount > 0`
-                    // (exercises-archive spec «Кнопка архива в TopAppBar»).
-                    // Видимость через текущий `Success` — при `Loading`
-                    // или в превью без VM поле `archivedCount` отсутствует,
-                    // иконка не показывается.
-                    val archivedCount =
-                        (state.uiState as? ExercisesUiState.Success)?.archivedCount ?: 0
-                    if (archivedCount > 0) {
-                        IconButton(onClick = state.onArchivedExercisesClick) {
-                            Icon(
-                                imageVector = Icons.Filled.Archive,
-                                contentDescription =
-                                    stringResource(R.string.exercises_archive_button)
-                            )
-                        }
-                    }
+                    // Кнопка архива — реактивно по наличию архивного
+                    // объекта любого типа (custom-categories, spec
+                    // «Кнопка архива в TopAppBar»). Видимость через
+                    // текущий `Success` — при `Loading` иконка не
+                    // показывается.
+                    ExercisesTopBarArchiveAction(
+                        visible = success?.hasArchived == true,
+                        onClick = state.onArchivedExercisesClick
+                    )
                 }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = state.onAddExerciseClick) {
-                Icon(
-                    Icons.Filled.Add,
-                    contentDescription = stringResource(R.string.exercises_add_exercise)
-                )
-            }
+            ExercisesFab(selectedTab = selectedTab, state = state)
         }
     ) { paddingValues ->
-        Box(
+        Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
         ) {
-            when (val s = state.uiState) {
-                ExercisesUiState.Loading -> Unit
-                is ExercisesUiState.Success -> SuccessBody(state = state, success = s)
+            CatalogTabs(
+                selectedIndex = selectedTab.ordinal,
+                onSelect = { state.onTabSelect(ExercisesTab.entries[it]) }
+            )
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (val s = state.uiState) {
+                    ExercisesUiState.Loading -> Unit
+                    is ExercisesUiState.Success ->
+                        when (s.selectedTab) {
+                            ExercisesTab.EXERCISES -> SuccessBody(state = state, success = s)
+                            ExercisesTab.CATEGORIES -> CategoriesBody(state = state, success = s)
+                        }
+                }
             }
         }
+    }
+}
+
+/**
+ * Кнопка архива в `TopAppBar` (exercises-archive + custom-categories,
+ * spec «Кнопка архива в TopAppBar»): contentDescription = archive_title —
+ * общий ключ с заголовком экрана архива (паттерн «кнопка → экран» для
+ * TalkBack; exercises_archive_button удалён).
+ */
+@Composable
+private fun ExercisesTopBarArchiveAction(
+    visible: Boolean,
+    onClick: () -> Unit
+) {
+    if (visible) {
+        IconButton(onClick = onClick) {
+            Icon(
+                imageVector = Icons.Filled.Archive,
+                contentDescription = stringResource(R.string.archive_title)
+            )
+        }
+    }
+}
+
+/**
+ * FAB экрана — действует по активной вкладке (spec «FAB открывает
+ * ExerciseCreateScreen» + custom-categories: на вкладке категорий —
+ * CategoryCreate); contentDescription по вкладке.
+ */
+@Composable
+private fun ExercisesFab(
+    selectedTab: ExercisesTab,
+    state: ExercisesScreenState
+) {
+    val isCategoriesTab = selectedTab == ExercisesTab.CATEGORIES
+    FloatingActionButton(
+        onClick = {
+            if (isCategoriesTab) state.onAddCategoryClick() else state.onAddExerciseClick()
+        }
+    ) {
+        Icon(
+            Icons.Filled.Add,
+            contentDescription =
+                stringResource(
+                    if (isCategoriesTab) {
+                        R.string.categories_add_category
+                    } else {
+                        R.string.exercises_add_exercise
+                    }
+                )
+        )
+    }
+}
+
+/**
+ * Общий таб-бар «Упражнения / Категории» каталога и архива
+ * (custom-categories, spec «Табы „Упражнения“ / „Категории“»):
+ * индексная сигнатура — один рендер для [ExercisesTab] и [ArchivedTab]
+ * (паттерн OverviewTabs, [SecondaryTabRow]); call-site маппит свой
+ * enum в индекс.
+ */
+@Composable
+internal fun CatalogTabs(
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit
+) {
+    SecondaryTabRow(selectedTabIndex = selectedIndex) {
+        Tab(
+            selected = selectedIndex == 0,
+            onClick = { onSelect(0) },
+            text = { Text(stringResource(R.string.exercises_tab_exercises)) }
+        )
+        Tab(
+            selected = selectedIndex == 1,
+            onClick = { onSelect(1) },
+            text = { Text(stringResource(R.string.exercises_tab_categories)) }
+        )
     }
 }
 
@@ -400,84 +553,222 @@ private fun ExercisesList(
     state: ExercisesScreenState,
     success: ExercisesUiState.Success
 ) {
-    // Якорь для DropdownMenu (образец MainScreen.kt:261–271):
-    // позиция списка в корне + высота нужны, чтобы сместить меню
-    // к точке long-press с поправкой на верхнюю границу контейнера.
-    var anchorOrigin by remember { mutableStateOf(IntOffset.Zero) }
-    var anchorHeight by remember { mutableIntStateOf(0) }
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .onGloballyPositioned { coords ->
-                    val pos = coords.positionInRoot()
-                    anchorOrigin = IntOffset(pos.x.toInt(), pos.y.toInt())
-                    anchorHeight = coords.size.height
-                }
-    ) {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(
-                items = success.exercises,
-                key = { it.id },
-                contentType = { "row" }
-            ) { exercise ->
-                var positionInRoot by remember { mutableStateOf(Offset.Zero) }
-                ExerciseListItemRow(
-                    exercise = exercise,
-                    isSelected = state.contextMenu?.item?.id == exercise.id,
-                    modifier =
-                        Modifier
-                            .onGloballyPositioned { coords ->
-                                positionInRoot = coords.positionInRoot()
-                            }.applyLongPress(
-                                item = exercise,
-                                positionInRootProvider = { positionInRoot },
-                                onItemLongPress = state.onContextMenuItemChange,
-                                openMenuLabel = stringResource(R.string.a11y_open_menu)
-                            )
+    ContextMenuList(
+        items = success.exercises,
+        keyOf = { it.id },
+        menuOffsetInRoot = state.contextMenu?.offsetInRoot,
+        onLongPress = { item, offset ->
+            state.onContextMenuItemChange(ExerciseContextMenuState(item, offset))
+        },
+        rowContent = { exercise, modifier ->
+            ExerciseListItemRow(
+                exercise = exercise,
+                isSelected = state.contextMenu?.item?.id == exercise.id,
+                modifier = modifier
+            )
+        },
+        menu = { offset ->
+            state.contextMenu?.let { menu ->
+                ActiveContextMenu(
+                    offset = offset,
+                    isCustom = menu.item.isCustom,
+                    onMenuDismiss = { state.onContextMenuItemChange(null) },
+                    onEditClick = { state.onRequestEdit(menu.item) },
+                    onArchiveClick = { state.onRequestArchive(menu.item) },
+                    onDeleteClick = { state.onRequestDelete(menu.item) }
                 )
             }
         }
-        state.contextMenu?.let { menu ->
-            ExerciseContextMenu(
-                offset = contextMenuDpOffset(menu.offsetInRoot, anchorOrigin, anchorHeight),
-                mode = ExerciseMenuMode.Active,
-                isCustom = menu.item.isCustom,
-                onMenuDismiss = { state.onContextMenuItemChange(null) },
-                onEditClick = { state.onRequestEdit(menu.item) },
-                onArchiveClick = { state.onRequestArchive(menu.item) },
-                onDeleteClick = { state.onRequestDelete(menu.item) }
+    )
+}
+
+/**
+ * Тело вкладки «Категории» (custom-categories, spec «Вкладка
+ * „Категории“ — список и пустое состояние»): список активных
+ * категорий или заглушка, алерт удаления при
+ * `pendingCategoryDeleteId`, алерт архивации с чекбоксом подавления
+ * при `pendingCategoryArchiveId` (переиспользование
+ * [ExerciseConfirmDialog] + [ArchiveSuppressSlot], тексты категорий).
+ */
+@Composable
+private fun CategoriesBody(
+    state: ExercisesScreenState,
+    success: ExercisesUiState.Success
+) {
+    // Состояние чекбокса «Больше не показывать» — отдельная копия
+    // от диалога архивации упражнений (см. [SuccessBody]; custom-categories,
+    // spec «Алерт архивации категории с чекбоксом подавления»).
+    var suppress by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (success.categories.isEmpty()) {
+            // Заглушка пустого состояния: «Нет категорий» по центру
+            // (паттерн exercises_list_empty).
+            Text(
+                text = stringResource(R.string.categories_list_empty),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier =
+                    Modifier
+                        .align(Alignment.Center)
+                        .padding(16.dp)
+            )
+        } else {
+            CategoriesList(state = state, success = success)
+        }
+
+        val pendingCategoryDelete =
+            success.categories.firstOrNull { it.id == success.pendingCategoryDeleteId }
+        if (pendingCategoryDelete != null) {
+            ExerciseConfirmDialog(
+                itemName = categoryLabel(pendingCategoryDelete.name),
+                titleRes = R.string.category_delete_dialog_title,
+                textRes = R.string.category_delete_dialog_text,
+                confirmRes = R.string.delete,
+                cancelRes = R.string.cancel,
+                confirmInError = true,
+                onConfirm = state.onConfirmCategoryDelete,
+                onCancel = state.onCancelCategoryDelete
+            )
+        }
+
+        val pendingCategoryArchive =
+            success.categories.firstOrNull { it.id == success.pendingCategoryArchiveId }
+        if (pendingCategoryArchive != null) {
+            ExerciseConfirmDialog(
+                itemName = categoryLabel(pendingCategoryArchive.name),
+                titleRes = R.string.category_archive_dialog_title,
+                textRes = R.string.category_archive_dialog_text,
+                confirmRes = R.string.category_archive_dialog_confirm,
+                cancelRes = R.string.cancel,
+                confirmInError = false,
+                // Чекбокс подавления — тот же слот, что у упражнений;
+                // флаг в DataStore — отдельный (design Decision 8).
+                suppressContent = {
+                    ArchiveSuppressSlot(
+                        checked = suppress,
+                        onCheckedChange = { suppress = it }
+                    )
+                },
+                onConfirm = { state.onConfirmCategoryArchive(suppress) },
+                onCancel = state.onCancelCategoryArchive
             )
         }
     }
 }
 
 /**
- * Меню `DropdownMenu` в точке long-press: режим [ExerciseMenuMode.Active]
- * — для кастомного упражнения три пункта (Изменить / Архивировать /
- * Удалить), для стандартного один пункт «Архивировать»; режим
- * [ExerciseMenuMode.Unarchive] — единственный пункт «Вернуть» для
- * архивных строк (exercises-archive spec «Контекстное меню по долгому
- * нажатию — с учётом типа упражнения»; «Long-press меню «Вернуть» для
- * архивных строк»). У всех `leadingIcon` с `contentDescription = null` —
- * текст пункта сам читается службами доступности (entry-edit-mode,
- * design Decision 6; образец — `MainScreen.EntryContextMenu`).
- *
- * Колбэки лишних пунктов для конкретного режима не нужны и идут с
- * дефолтом `{}` (`onUnarchiveClick` — для Active, остальные — для
- * Unarchive). Это позволяет одному вызову обслуживать оба экрана
- * (`ExercisesScreen`, `ArchivedExercisesScreen`).
+ * Список категорий + контекстное меню (custom-categories, spec
+ * «Контекстное меню категории по типу»): long-press открывает меню
+ * у точки нажатия — для кастомной категории три пункта
+ * (Изменить/Архивировать/Удалить), для стандартной один
+ * («Архивировать»). Алерты рендерятся в [CategoriesBody].
+ */
+@Composable
+private fun CategoriesList(
+    state: ExercisesScreenState,
+    success: ExercisesUiState.Success
+) {
+    ContextMenuList(
+        items = success.categories,
+        keyOf = { it.id },
+        menuOffsetInRoot = state.categoryContextMenu?.offsetInRoot,
+        onLongPress = { item, offset ->
+            state.onCategoryContextMenuItemChange(CategoryContextMenuState(item, offset))
+        },
+        rowContent = { category, modifier ->
+            CategoryListItemRow(
+                category = category,
+                isSelected = state.categoryContextMenu?.item?.id == category.id,
+                modifier = modifier
+            )
+        },
+        menu = { offset ->
+            state.categoryContextMenu?.let { menu ->
+                ActiveContextMenu(
+                    offset = offset,
+                    isCustom = menu.item.isCustom,
+                    onMenuDismiss = { state.onCategoryContextMenuItemChange(null) },
+                    onEditClick = { state.onRequestCategoryEdit(menu.item) },
+                    onArchiveClick = { state.onRequestCategoryArchive(menu.item) },
+                    onDeleteClick = { state.onRequestCategoryDelete(menu.item) },
+                    editRes = R.string.category_list_menu_edit,
+                    archiveRes = R.string.category_list_menu_archive,
+                    deleteRes = R.string.category_list_menu_delete
+                )
+            }
+        }
+    )
+}
+
+/**
+ * Активное меню `DropdownMenu` в точке long-press — для кастомного
+ * элемента три пункта (Изменить / Архивировать / Удалить), для
+ * стандартного один «Архивировать» (edit-delete-exercise §4.6.a;
+ * exercises-archive Decision 4; custom-categories — то же для
+ * категорий). Общее для упражнений и категорий каталога: тексты —
+ * параметрами-ресурсами (дефолт — строки упражнений, категориям
+ * передаются `category_list_menu_*`). У всех `leadingIcon` с
+ * `contentDescription = null` — текст пункта сам читается службами
+ * доступности (entry-edit-mode, design Decision 6; образец —
+ * `MainScreen.EntryContextMenu`).
  */
 @Suppress("LongParameterList")
 @Composable
-internal fun ExerciseContextMenu(
+internal fun ActiveContextMenu(
     offset: DpOffset,
-    mode: ExerciseMenuMode,
     isCustom: Boolean,
     onMenuDismiss: () -> Unit,
     onEditClick: () -> Unit = {},
     onArchiveClick: () -> Unit = {},
     onDeleteClick: () -> Unit = {},
+    @StringRes editRes: Int = R.string.exercise_list_menu_edit,
+    @StringRes archiveRes: Int = R.string.exercise_list_menu_archive,
+    @StringRes deleteRes: Int = R.string.exercise_list_menu_delete
+) {
+    DropdownMenu(
+        expanded = true,
+        onDismissRequest = onMenuDismiss,
+        offset = offset
+    ) {
+        if (isCustom) {
+            DropdownMenuItem(
+                text = { Text(stringResource(editRes)) },
+                onClick = onEditClick,
+                leadingIcon = {
+                    Icon(imageVector = Icons.Filled.Edit, contentDescription = null)
+                }
+            )
+        }
+        DropdownMenuItem(
+            text = { Text(stringResource(archiveRes)) },
+            onClick = onArchiveClick,
+            leadingIcon = {
+                Icon(imageVector = Icons.Filled.Archive, contentDescription = null)
+            }
+        )
+        if (isCustom) {
+            DropdownMenuItem(
+                text = { Text(stringResource(deleteRes)) },
+                onClick = onDeleteClick,
+                leadingIcon = {
+                    Icon(imageVector = Icons.Filled.Delete, contentDescription = null)
+                }
+            )
+        }
+    }
+}
+
+/**
+ * Меню `DropdownMenu` архивной строки — единственный пункт «Вернуть»
+ * (exercises-archive spec «Long-press меню «Вернуть» для архивных
+ * строк»); общее для упражнений и категорий архива. `leadingIcon` —
+ * как в [ActiveContextMenu].
+ */
+@Composable
+internal fun UnarchiveContextMenu(
+    offset: DpOffset,
+    onMenuDismiss: () -> Unit,
     onUnarchiveClick: () -> Unit = {}
 ) {
     DropdownMenu(
@@ -485,43 +776,13 @@ internal fun ExerciseContextMenu(
         onDismissRequest = onMenuDismiss,
         offset = offset
     ) {
-        when (mode) {
-            ExerciseMenuMode.Active -> {
-                if (isCustom) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.exercise_list_menu_edit)) },
-                        onClick = onEditClick,
-                        leadingIcon = {
-                            Icon(imageVector = Icons.Filled.Edit, contentDescription = null)
-                        }
-                    )
-                }
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.exercise_list_menu_archive)) },
-                    onClick = onArchiveClick,
-                    leadingIcon = {
-                        Icon(imageVector = Icons.Filled.Archive, contentDescription = null)
-                    }
-                )
-                if (isCustom) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.exercise_list_menu_delete)) },
-                        onClick = onDeleteClick,
-                        leadingIcon = {
-                            Icon(imageVector = Icons.Filled.Delete, contentDescription = null)
-                        }
-                    )
-                }
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.exercise_list_menu_unarchive)) },
+            onClick = onUnarchiveClick,
+            leadingIcon = {
+                Icon(imageVector = Icons.Filled.Unarchive, contentDescription = null)
             }
-            ExerciseMenuMode.Unarchive ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.exercise_list_menu_unarchive)) },
-                    onClick = onUnarchiveClick,
-                    leadingIcon = {
-                        Icon(imageVector = Icons.Filled.Unarchive, contentDescription = null)
-                    }
-                )
-        }
+        )
     }
 }
 
@@ -674,4 +935,20 @@ private fun deleteErrorText(error: DeleteExerciseError): String =
             stringResource(R.string.exercise_delete_error_standard)
         DeleteExerciseError.Other ->
             stringResource(R.string.exercise_delete_error_generic)
+    }
+
+/**
+ * Локализованный текст типизированной ошибки удаления категории для
+ * снекбара (custom-categories, spec «Ошибки удаления категории —
+ * типизированные причины в снекбаре»). Паттерн — [deleteErrorText].
+ */
+@Composable
+private fun categoryDeleteErrorText(error: DeleteCategoryError): String =
+    when (error) {
+        DeleteCategoryError.UsedByExercises ->
+            stringResource(R.string.category_delete_error_used_by_exercises)
+        DeleteCategoryError.StandardCategory ->
+            stringResource(R.string.category_delete_error_standard)
+        DeleteCategoryError.Other ->
+            stringResource(R.string.category_delete_error_generic)
     }

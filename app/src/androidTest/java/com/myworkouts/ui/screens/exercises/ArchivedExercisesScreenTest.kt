@@ -21,15 +21,16 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.ui.icons.EXERCISE_ICON_TEST_TAG
 import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.ArchivedExercisesUiState
+import com.myworkouts.ui.state.ArchivedTab
 import com.myworkouts.ui.viewmodel.ArchivedExercisesViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,7 +59,7 @@ class ArchivedExercisesScreenTest {
         Exercise(
             id = 1L,
             name = "Подтягивания",
-            category = ExerciseCategory.PULL,
+            category = "PULL",
             isCustom = false,
             comment = null,
             createdAt = 1_721_000_000_000L,
@@ -139,7 +140,7 @@ class ArchivedExercisesScreenTest {
                         uiState = ArchivedExercisesUiState.Success(exercises = listOf(pullups)),
                         contextMenu = menu,
                         onContextMenuItemChange = { menu = it },
-                        onUnarchive = {},
+                        onUnarchiveExercise = {},
                         onBackClick = {}
                     )
             )
@@ -182,7 +183,7 @@ class ArchivedExercisesScreenTest {
                         uiState = ArchivedExercisesUiState.Success(exercises = listOf(pullups)),
                         contextMenu = menu,
                         onContextMenuItemChange = { menu = it },
-                        onUnarchive = {},
+                        onUnarchiveExercise = {},
                         onBackClick = {}
                     )
             )
@@ -287,23 +288,228 @@ class ArchivedExercisesScreenTest {
     }
 
     /**
+     * custom-categories, tasks 7.4 + spec «В архиве и упражнения,
+     * и категории — таб-бар»: `SecondaryTabRow` под TopAppBar,
+     * переключение вкладки показывает список категорий.
+     */
+    @Test
+    fun archived_when_exercises_and_categories_then_tab_bar_shown_and_switch_works() {
+        // Given — в архиве оба типа (кастомная категория: имя строки не
+        // зависит от локализованных label стандартных); state-машина
+        // выбранной вкладки — как в ExercisesCategoriesTabTest
+        val category =
+            Category(
+                id = 10L,
+                name = "Дома",
+                colorArgb = 0xFF9C27B0.toInt(),
+                isCustom = true,
+                isArchived = true
+            )
+        composeTestRule.setContent {
+            var tab by remember { mutableStateOf(ArchivedTab.EXERCISES) }
+            ArchivedExercisesScreenContent(
+                state =
+                    ArchivedExercisesState(
+                        uiState =
+                            ArchivedExercisesUiState.Success(
+                                exercises = listOf(pullups),
+                                categories = listOf(category),
+                                selectedTab = tab
+                            ),
+                        onTabSelect = { tab = it },
+                        onBackClick = {}
+                    )
+            )
+        }
+
+        // Then — оба таба видны
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercises_tab_exercises))
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercises_tab_categories))
+            .assertIsDisplayed()
+
+        // When — тап по вкладке «Категории»
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercises_tab_categories))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — строка категории видна
+        composeTestRule
+            .onNodeWithText("Дома")
+            .assertIsDisplayed()
+    }
+
+    /**
+     * custom-categories, tasks 7.4 + spec «Только упражнения — список
+     * без таб-бара»: в архиве только упражнения — вкладки скрыты.
+     */
+    @Test
+    fun archived_when_only_exercises_then_no_tab_bar() {
+        // Given — только упражнения
+        setContentWith(
+            ArchivedExercisesUiState.Success(exercises = listOf(pullups))
+        )
+
+        // Then — строка видна, табов нет
+        composeTestRule
+            .onNodeWithText("Подтягивания")
+            .assertIsDisplayed()
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercises_tab_categories))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercises_tab_exercises))
+            .assertCountEquals(0)
+    }
+
+    /**
+     * custom-categories, tasks 7.4 + spec «Только категории — список
+     * без таб-бара»: в архиве только категории — вкладки скрыты,
+     * список категорий виден.
+     */
+    @Test
+    fun archived_when_only_categories_then_no_tab_bar_and_list_shown() {
+        // Given — только категории
+        val category =
+            Category(
+                id = 10L,
+                name = "Дома",
+                colorArgb = 0xFF9C27B0.toInt(),
+                isCustom = true,
+                isArchived = true
+            )
+        setContentWith(
+            ArchivedExercisesUiState.Success(
+                exercises = emptyList(),
+                categories = listOf(category)
+            )
+        )
+
+        // Then — строка категории видна, табов нет
+        composeTestRule
+            .onNodeWithText("Дома")
+            .assertIsDisplayed()
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercises_tab_categories))
+            .assertCountEquals(0)
+    }
+
+    /**
+     * custom-categories, tasks 7.4 + spec «Тап „Вернуть“ восстанавливает
+     * категорию»: реальный `ArchivedExercisesViewModel` + VM-fake с
+     * управляемым `archivedCategories`-потоком: long-press → «Вернуть» →
+     * `setCategoryArchived(id, false)` записан, категория реактивно
+     * пропала (паттерн теста §7.3 для упражнений).
+     */
+    @Test
+    fun archived_category_when_restore_then_set_category_archived_false_and_row_removed() {
+        // Given — VM с одной архивной категорией
+        val category =
+            Category(
+                id = 10L,
+                name = "Дома",
+                colorArgb = 0xFF9C27B0.toInt(),
+                isCustom = true,
+                isArchived = true
+            )
+        val fake =
+            FakeArchivedRepository(
+                initialArchivedCategories = listOf(category)
+            )
+        composeTestRule.setContent {
+            ArchivedExercisesScreen(
+                viewModel =
+                    androidx.lifecycle.viewmodel.compose.viewModel(
+                        factory = ArchivedExercisesViewModel.factory(fake, NoopAnalyticsProvider())
+                    ),
+                onBackClick = {}
+            )
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule
+            .onNodeWithText("Дома")
+            .assertIsDisplayed()
+
+        // When — long-press → тап «Вернуть»
+        composeTestRule
+            .onNodeWithText("Дома")
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_unarchive))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — категория пропала из списка
+        composeTestRule
+            .onAllNodesWithText("Дома")
+            .assertCountEquals(0)
+        // And — fake-репозиторий получил вызов `setCategoryArchived(id, false)`
+        assertEquals(
+            "setCategoryArchived должен быть вызван с isArchived = false",
+            listOf(category.id to false),
+            fake.setCategoryArchivedCalls
+        )
+    }
+
+    /**
      * Fake [com.myworkouts.data.repository.WorkoutDataRepository] для
-     * теста §7.3 (VM-driven): `archived` управляется через `MutableStateFlow`
-     * (тест обновляет как реактивный SQL-Flow); `setArchived` записывает
-     * вызов и обновляет `archived` соответственно
-     * (`isArchived = false` → удаление из списка; `isArchived = true`
-     * — без действий).
+     * VM-driven тестов (§7.3 упражнения + custom-categories задачи 7.4
+     * категории): `archived` / `archivedCategories` управляются через
+     * `MutableStateFlow` (тест обновляет как реактивный SQL-Flow);
+     * `setArchived` / `setCategoryArchived` записывают вызов и обновляют
+     * соответствующий список (восстановление → удаление из списка).
      */
     private class FakeArchivedRepository(
-        initialArchived: List<Exercise> = emptyList()
+        initialArchived: List<Exercise> = emptyList(),
+        initialArchivedCategories: List<Category> = emptyList()
     ) : com.myworkouts.data.repository.WorkoutDataRepository {
         val archived: MutableStateFlow<List<Exercise>> = MutableStateFlow(initialArchived)
 
+        val archivedCategories: MutableStateFlow<List<Category>> =
+            MutableStateFlow(initialArchivedCategories)
+
         val setArchivedCalls = mutableListOf<Pair<Long, Boolean>>()
+
+        val setCategoryArchivedCalls = mutableListOf<Pair<Long, Boolean>>()
 
         override fun archivedExercises(): Flow<List<Exercise>> = archived
 
-        override fun archivedCount(): Flow<Int> = MutableStateFlow(archived.value.size)
+        override fun hasArchived(): Flow<Boolean> =
+            MutableStateFlow(archived.value.isNotEmpty() || archivedCategories.value.isNotEmpty())
+
+        override suspend fun setCategoryArchived(
+            id: Long,
+            isArchived: Boolean
+        ): Result<Unit> {
+            setCategoryArchivedCalls.add(id to isArchived)
+            if (!isArchived) {
+                archivedCategories.value = archivedCategories.value.filterNot { it.id == id }
+            }
+            return Result.success(Unit)
+        }
+
+        override fun categories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+        override fun archivedCategories(): Flow<List<Category>> = archivedCategories
+
+        override fun categoryNamesWithLinkedExercises(): Flow<Set<String>> = MutableStateFlow(emptySet())
+
+        override suspend fun getAllCategories(): Result<List<Category>> = Result.success(emptyList())
+
+        // CRUD категорий этому экрану не нужен: заглушки (custom-categories).
+        override suspend fun addCategory(name: String): Result<Category> =
+            Result.success(Category(id = 0L, name = name.trim(), colorArgb = 0, isCustom = true))
+
+        override suspend fun renameCategory(
+            id: Long,
+            newName: String
+        ): Result<Unit> = Result.success(Unit)
+
+        override suspend fun deleteCategory(id: Long): Result<Unit> = Result.success(Unit)
 
         override suspend fun setArchived(
             id: Long,
@@ -349,6 +555,7 @@ class ArchivedExercisesScreenTest {
             Result.success(emptyList())
 
         override suspend fun importData(
+            categories: List<Category>,
             exercises: List<Exercise>,
             entries: List<BackupEntry>
         ): Result<Unit> = Result.success(Unit)

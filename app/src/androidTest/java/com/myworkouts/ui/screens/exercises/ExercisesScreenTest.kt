@@ -28,7 +28,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.icons.EXERCISE_ICON_TEST_TAG
@@ -64,7 +63,7 @@ class ExercisesScreenTest {
         Exercise(
             id = 1L,
             name = "Подтягивания",
-            category = ExerciseCategory.PULL,
+            category = "PULL",
             isCustom = false,
             comment = "широкий хват",
             createdAt = 1_721_000_000_000L,
@@ -75,7 +74,7 @@ class ExercisesScreenTest {
         Exercise(
             id = 2L,
             name = "Планка",
-            category = ExerciseCategory.CORE,
+            category = "CORE",
             isCustom = false,
             comment = null,
             createdAt = 1_721_100_000_000L,
@@ -87,7 +86,7 @@ class ExercisesScreenTest {
         Exercise(
             id = 100L,
             name = "Жим",
-            category = ExerciseCategory.PUSH,
+            category = "PUSH",
             isCustom = true,
             comment = null,
             createdAt = 1_721_200_000_000L,
@@ -274,10 +273,12 @@ class ExercisesScreenTest {
             navController.navigate(Screen.Exercises.route)
         }
 
-        // Then
+        // Then — «Упражнения» теперь два узла (TopAppBar + вкладка
+        // таб-бара, exercises_tab_exercises — тот же текст): проверяем,
+        // что как минимум заголовок отображается.
         composeTestRule.waitForIdle()
         composeTestRule
-            .onNodeWithText(context.getString(R.string.exercises_title))
+            .onAllNodesWithText(context.getString(R.string.exercises_title))[0]
             .assertIsDisplayed()
         composeTestRule
             .onNodeWithText("Подтягивания")
@@ -942,29 +943,29 @@ class ExercisesScreenTest {
     }
 
     /**
-     * §6.5: `archivedCount == 0` → кнопка архива в `TopAppBar` скрыта;
-     * `archivedCount == 1` → кнопка отображается с иконкой
-     * `Icons.Filled.Archive` и `contentDescription =
-     * exercises_archive_button`; тап кнопки — сработал колбэк
+     * §6.5: `hasArchived == false` → кнопка архива в `TopAppBar` скрыта;
+     * `hasArchived == true` → кнопка отображается с иконкой
+     * `Icons.Filled.Archive` и `contentDescription = archive_title`;
+     * тап кнопки — сработал колбэк
      * `onArchivedExercisesClick`.
      */
     @Test
-    fun exercises_screen_when_archivedCount_is_zero_then_archive_button_hidden() {
-        // Given — `archivedCount = 0`
+    fun exercises_screen_when_hasArchived_is_false_then_archive_button_hidden() {
+        // Given — `hasArchived = false`
         setContentWith(
-            ExercisesUiState.Success(exercises = listOf(pullups, plank), archivedCount = 0)
+            ExercisesUiState.Success(exercises = listOf(pullups, plank), hasArchived = false)
         )
 
         // Then — кнопки архива нет
         composeTestRule
             .onAllNodesWithContentDescription(
-                context.getString(R.string.exercises_archive_button)
+                context.getString(R.string.archive_title)
             ).assertCountEquals(0)
     }
 
     @Test
-    fun exercises_screen_when_archivedCount_is_one_then_archive_button_visible_and_tap_fires_callback() {
-        // Given — `archivedCount = 1`, захват callback
+    fun exercises_screen_when_hasArchived_is_true_then_archive_button_visible_and_tap_fires_callback() {
+        // Given — `hasArchived = true`, захват callback
         var clickCount = 0
         composeTestRule.setContent {
             ExercisesScreenContent(
@@ -973,7 +974,7 @@ class ExercisesScreenTest {
                         uiState =
                             ExercisesUiState.Success(
                                 exercises = listOf(pullups),
-                                archivedCount = 1
+                                hasArchived = true
                             ),
                         onAddExerciseClick = {},
                         onArchivedExercisesClick = { clickCount += 1 }
@@ -983,12 +984,12 @@ class ExercisesScreenTest {
 
         // Then — кнопка архива видна
         composeTestRule
-            .onNodeWithContentDescription(context.getString(R.string.exercises_archive_button))
+            .onNodeWithContentDescription(context.getString(R.string.archive_title))
             .assertIsDisplayed()
 
         // When — тап по кнопке
         composeTestRule
-            .onNodeWithContentDescription(context.getString(R.string.exercises_archive_button))
+            .onNodeWithContentDescription(context.getString(R.string.archive_title))
             .performClick()
 
         // Then — колбэк вызван один раз
@@ -997,15 +998,16 @@ class ExercisesScreenTest {
 
     /**
      * §6.6: реактивное появление/скрытие кнопки — после изменения
-     * `archivedCount` с 0 на 1 кнопка появляется; после восстановления
-     * (1 → 0) — скрывается. `mutableStateOf<ExercisesUiState>` в
+     * `hasArchived` с false на true кнопка появляется; после
+     * восстановления из архива (true → false) — скрывается.
+     * `mutableStateOf<ExercisesUiState>` в
      * `setContent` имитирует реактивное обновление (Content-based
      * инфраструктура текущего `ExercisesScreenTest` без отдельного
      * FakeRepository).
      */
     @Test
     fun exercises_screen_archive_button_reactive_show_hide() {
-        // Given — начальное состояние `archivedCount = 0`
+        // Given — начальное состояние `hasArchived = false`
         composeTestRule.setContent {
             val uiState: androidx.compose.runtime.MutableState<ExercisesUiState> =
                 remember {
@@ -1028,32 +1030,32 @@ class ExercisesScreenTest {
         // Then — кнопка скрыта
         composeTestRule
             .onAllNodesWithContentDescription(
-                context.getString(R.string.exercises_archive_button)
+                context.getString(R.string.archive_title)
             ).assertCountEquals(0)
 
-        // When — реактивное обновление: `archivedCount = 1`
+        // When — реактивное обновление: `hasArchived = true`
         composeTestRule.runOnIdle {
             uiStateRef.value =
-                ExercisesUiState.Success(exercises = listOf(pullups), archivedCount = 1)
+                ExercisesUiState.Success(exercises = listOf(pullups), hasArchived = true)
         }
         composeTestRule.waitForIdle()
 
         // Then — кнопка появилась
         composeTestRule
-            .onNodeWithContentDescription(context.getString(R.string.exercises_archive_button))
+            .onNodeWithContentDescription(context.getString(R.string.archive_title))
             .assertIsDisplayed()
 
-        // When — реактивное обновление: `archivedCount = 0`
+        // When — реактивное обновление: `hasArchived = false`
         composeTestRule.runOnIdle {
             uiStateRef.value =
-                ExercisesUiState.Success(exercises = listOf(pullups), archivedCount = 0)
+                ExercisesUiState.Success(exercises = listOf(pullups), hasArchived = false)
         }
         composeTestRule.waitForIdle()
 
         // Then — кнопка скрылась
         composeTestRule
             .onAllNodesWithContentDescription(
-                context.getString(R.string.exercises_archive_button)
+                context.getString(R.string.archive_title)
             ).assertCountEquals(0)
     }
 

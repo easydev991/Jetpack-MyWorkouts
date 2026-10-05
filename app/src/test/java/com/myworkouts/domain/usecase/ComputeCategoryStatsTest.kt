@@ -1,7 +1,6 @@
 package com.myworkouts.domain.usecase
 
 import com.myworkouts.domain.model.EntryWithExercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -10,11 +9,12 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * Unit-тесты [computeCategoryStats] (overview-screen, tasks 2.1–2.2):
- * фильтрация календарного периода, доли по сумме подходов (totalSets)
- * для обоих типов измерения (REPS и TIME), сортировка и drill-down
- * данные. Чистая функция, `today` — параметром,
- * зона системная (как на главном экране).
+ * Unit-тесты [computeCategoryStats] (overview-screen, tasks 2.1–2.2;
+ * custom-categories задача 3.1): фильтрация календарного периода, доли
+ * по сумме подходов (totalSets) для обоих типов измерения (REPS и TIME),
+ * сортировка и drill-down данные. Категория — имя-строка (кастомные и
+ * стандартные группируются одинаково, по имени). Чистая функция,
+ * `today` — параметром, зона системная (как на главном экране).
  */
 class ComputeCategoryStatsTest {
     private val today = LocalDate.of(2026, 9, 14)
@@ -33,7 +33,7 @@ class ComputeCategoryStatsTest {
     private fun entry(
         id: Long,
         exerciseName: String = "Подтягивания",
-        category: ExerciseCategory = ExerciseCategory.PULL,
+        category: String = "PULL",
         measuredBy: ExerciseMeasuredBy = ExerciseMeasuredBy.REPS,
         date: Long,
         sets: Int = 3,
@@ -75,10 +75,10 @@ class ComputeCategoryStatsTest {
         // для явной проверки in/out
         val entries =
             listOf(
-                entry(id = 1L, category = ExerciseCategory.PULL, date = millis(today.minusDays(7))),
-                entry(id = 2L, category = ExerciseCategory.PUSH, date = millis(today.minusDays(6))),
-                entry(id = 3L, category = ExerciseCategory.LEGS, date = millis(today)),
-                entry(id = 4L, category = ExerciseCategory.CORE, date = millis(today.plusDays(1)))
+                entry(id = 1L, category = "PULL", date = millis(today.minusDays(7))),
+                entry(id = 2L, category = "PUSH", date = millis(today.minusDays(6))),
+                entry(id = 3L, category = "LEGS", date = millis(today)),
+                entry(id = 4L, category = "CORE", date = millis(today.plusDays(1)))
             )
 
         // When
@@ -86,7 +86,7 @@ class ComputeCategoryStatsTest {
 
         // Then — окно скользящее: d-7 вне, d-6 внутри, today внутри, завтра вне
         val categories = result.categoryTotals.map { it.category }.toSet()
-        assertEquals(setOf(ExerciseCategory.PUSH, ExerciseCategory.LEGS), categories, "В окне только d-6 и today")
+        assertEquals(setOf("PUSH", "LEGS"), categories, "В окне только d-6 и today")
     }
 
     @Test
@@ -94,9 +94,9 @@ class ComputeCategoryStatsTest {
         // Given — 15.08 (today − 30, вне), 16.08 (today − 29, ровно граница), today
         val entries =
             listOf(
-                entry(id = 1L, category = ExerciseCategory.PULL, date = millis(LocalDate.of(2026, 8, 15))),
-                entry(id = 2L, category = ExerciseCategory.PUSH, date = millis(LocalDate.of(2026, 8, 16))),
-                entry(id = 3L, category = ExerciseCategory.LEGS, date = millis(today))
+                entry(id = 1L, category = "PULL", date = millis(LocalDate.of(2026, 8, 15))),
+                entry(id = 2L, category = "PUSH", date = millis(LocalDate.of(2026, 8, 16))),
+                entry(id = 3L, category = "LEGS", date = millis(today))
             )
 
         // When
@@ -104,7 +104,7 @@ class ComputeCategoryStatsTest {
 
         // Then — окно 30 дней: 15.08 вне, 16.08 и today внутри
         val categories = result.categoryTotals.map { it.category }.toSet()
-        assertEquals(setOf(ExerciseCategory.PUSH, ExerciseCategory.LEGS), categories, "В окне только 16.08 и today")
+        assertEquals(setOf("PUSH", "LEGS"), categories, "В окне только 16.08 и today")
     }
 
     @Test
@@ -112,9 +112,9 @@ class ComputeCategoryStatsTest {
         // Given — 14.09.2025 (today − 365, вне), 15.09.2025 (today − 364, граница), today
         val entries =
             listOf(
-                entry(id = 1L, category = ExerciseCategory.PULL, date = millis(LocalDate.of(2025, 9, 14))),
-                entry(id = 2L, category = ExerciseCategory.PUSH, date = millis(LocalDate.of(2025, 9, 15))),
-                entry(id = 3L, category = ExerciseCategory.LEGS, date = millis(today))
+                entry(id = 1L, category = "PULL", date = millis(LocalDate.of(2025, 9, 14))),
+                entry(id = 2L, category = "PUSH", date = millis(LocalDate.of(2025, 9, 15))),
+                entry(id = 3L, category = "LEGS", date = millis(today))
             )
 
         // When
@@ -123,7 +123,7 @@ class ComputeCategoryStatsTest {
         // Then — окно 365 дней: 14.09.2025 вне, 15.09.2025 и today внутри
         val categories = result.categoryTotals.map { it.category }.toSet()
         assertEquals(
-            setOf(ExerciseCategory.PUSH, ExerciseCategory.LEGS),
+            setOf("PUSH", "LEGS"),
             categories,
             "В окне только 15.09.2025 и today"
         )
@@ -161,7 +161,7 @@ class ComputeCategoryStatsTest {
             listOf(
                 entry(
                     id = 1L,
-                    category = ExerciseCategory.CORE,
+                    category = "CORE",
                     exerciseName = "Планка",
                     measuredBy = ExerciseMeasuredBy.TIME,
                     date = millis(today),
@@ -176,10 +176,10 @@ class ComputeCategoryStatsTest {
 
         // Then — TIME-категория видна в донате и легенде drill-down
         val total = result.categoryTotals.single()
-        assertEquals(ExerciseCategory.CORE, total.category, "TIME-категория в донате")
+        assertEquals("CORE", total.category, "TIME-категория в донате")
         assertEquals(3, total.totalSets, "Доля по подходам")
         val exerciseTotal =
-            checkNotNull(result.exerciseTotals[ExerciseCategory.CORE]) { "Легенда drill-down CORE" }
+            checkNotNull(result.exerciseTotals["CORE"]) { "Легенда drill-down CORE" }
                 .single()
         assertEquals("Планка", exerciseTotal.exerciseName, "TIME-упражнение в легенде")
         assertEquals(3, exerciseTotal.totalSets, "Доля упражнения по подходам")
@@ -192,7 +192,7 @@ class ComputeCategoryStatsTest {
             listOf(
                 entry(
                     id = 1L,
-                    category = ExerciseCategory.PUSH,
+                    category = "PUSH",
                     exerciseName = "Отжимания",
                     date = millis(today),
                     sets = 2,
@@ -200,7 +200,7 @@ class ComputeCategoryStatsTest {
                 ),
                 entry(
                     id = 2L,
-                    category = ExerciseCategory.CORE,
+                    category = "CORE",
                     exerciseName = "Планка",
                     measuredBy = ExerciseMeasuredBy.TIME,
                     date = millis(today),
@@ -215,7 +215,7 @@ class ComputeCategoryStatsTest {
 
         // Then — сортировка по подходам: CORE (3) выше PUSH (2), хотя REPS-объём меньше
         assertEquals(
-            listOf(ExerciseCategory.CORE, ExerciseCategory.PUSH),
+            listOf("CORE", "PUSH"),
             result.categoryTotals.map { it.category },
             "Доли и сортировка по сумме подходов обоих типов измерения"
         )
@@ -226,10 +226,10 @@ class ComputeCategoryStatsTest {
         // Given — PULL 30, PUSH 40, LEGS 20
         val entries =
             listOf(
-                entry(id = 1L, category = ExerciseCategory.PULL, date = millis(today)),
+                entry(id = 1L, category = "PULL", date = millis(today)),
                 entry(
                     id = 2L,
-                    category = ExerciseCategory.PUSH,
+                    category = "PUSH",
                     exerciseName = "Отжимания",
                     date = millis(today),
                     sets = 4,
@@ -237,7 +237,7 @@ class ComputeCategoryStatsTest {
                 ),
                 entry(
                     id = 3L,
-                    category = ExerciseCategory.LEGS,
+                    category = "LEGS",
                     exerciseName = "Приседания",
                     date = millis(today),
                     sets = 2,
@@ -270,7 +270,7 @@ class ComputeCategoryStatsTest {
                 ),
                 entry(
                     id = 3L,
-                    category = ExerciseCategory.PUSH,
+                    category = "PUSH",
                     exerciseName = "Отжимания",
                     date = millis(today),
                     sets = 4
@@ -282,7 +282,7 @@ class ComputeCategoryStatsTest {
 
         // Then — упражнения внутри категории, убывание суммы
         val pullTotals =
-            checkNotNull(result.exerciseTotals[ExerciseCategory.PULL]) { "PULL-легенда drill-down" }
+            checkNotNull(result.exerciseTotals["PULL"]) { "PULL-легенда drill-down" }
         assertEquals(
             listOf(3, 2),
             pullTotals.map { it.totalSets },
@@ -309,7 +309,7 @@ class ComputeCategoryStatsTest {
 
         // Then — даты убыванием, поля записи доезжают
         val groups =
-            checkNotNull(result.drillGroups[ExerciseCategory.PULL]) { "Drill-down PULL" }
+            checkNotNull(result.drillGroups["PULL"]) { "Drill-down PULL" }
         assertEquals(2, groups.size, "Две дневные группы")
         assertEquals(today, groups.first().date, "Свежая дата первой")
         val fresh = groups.first().entries.single()
@@ -326,7 +326,7 @@ class ComputeCategoryStatsTest {
             listOf(
                 entry(
                     id = 1L,
-                    category = ExerciseCategory.CORE,
+                    category = "CORE",
                     exerciseName = "Планка",
                     measuredBy = ExerciseMeasuredBy.TIME,
                     date = millis(today),
@@ -340,11 +340,84 @@ class ComputeCategoryStatsTest {
 
         // Then — TIME-запись видна в списке drill-down своей категории
         val coreGroups =
-            checkNotNull(result.drillGroups[ExerciseCategory.CORE]) { "Drill-down CORE" }
+            checkNotNull(result.drillGroups["CORE"]) { "Drill-down CORE" }
         val drillEntry = coreGroups.single().entries.single()
         assertEquals("Планка", drillEntry.exerciseName)
         assertEquals(null, drillEntry.reps, "У TIME-записи нет повторов")
         assertEquals(90, drillEntry.durationSec, "Длительность drill-записи")
+    }
+
+    @Test
+    fun custom_category_grouped_by_name_like_standard() {
+        // Given — кастомная категория «Спина»: REPS- и TIME-записи в одном периоде
+        val entries =
+            listOf(
+                entry(
+                    id = 1L,
+                    exerciseName = "Тяга гантели",
+                    category = "Спина",
+                    date = millis(today)
+                ),
+                entry(
+                    id = 2L,
+                    exerciseName = "Гиперэкстензия",
+                    category = "Спина",
+                    measuredBy = ExerciseMeasuredBy.TIME,
+                    date = millis(today),
+                    sets = 2,
+                    reps = null,
+                    durationSec = 60
+                )
+            )
+
+        // When
+        val result = computeCategoryStats(entries, StatsPeriod.WEEK, today)
+
+        // Then — группировка по имени не меняется: одна строка доната,
+        // drill-down легенда и записи той же категории
+        val total = result.categoryTotals.single()
+        assertEquals("Спина", total.category, "Кастомная категория в донате по имени")
+        assertEquals(5, total.totalSets, "Доля по подходам обоих типов (3 REPS + 2 TIME)")
+        assertEquals(
+            listOf("Тяга гантели", "Гиперэкстензия"),
+            checkNotNull(result.exerciseTotals["Спина"]) { "Легенда drill-down «Спина»" }
+                .map { it.exerciseName },
+            "Упражнения кастомной категории в легенде"
+        )
+        assertEquals(
+            2,
+            checkNotNull(result.drillGroups["Спина"]) { "Drill-down «Спина»" }
+                .single()
+                .entries
+                .size,
+            "Обе записи в drill-down кастомной категории"
+        )
+    }
+
+    @Test
+    fun category_totals_when_equal_sets_then_sorted_by_name() {
+        // Given — равные суммы подходов у стандартной и кастомной категорий
+        val entries =
+            listOf(
+                entry(id = 1L, category = "Спина", exerciseName = "Тяга", date = millis(today), sets = 2),
+                entry(
+                    id = 2L,
+                    category = "PUSH",
+                    exerciseName = "Отжимания",
+                    date = millis(today),
+                    sets = 2
+                )
+            )
+
+        // When
+        val result = computeCategoryStats(entries, StatsPeriod.WEEK, today)
+
+        // Then — тай-брейк по имени: латиница «PUSH» раньше кириллицы «Спина»
+        assertEquals(
+            listOf("PUSH", "Спина"),
+            result.categoryTotals.map { it.category },
+            "Равные доли — сортировка по имени категории"
+        )
     }
 
     @Test

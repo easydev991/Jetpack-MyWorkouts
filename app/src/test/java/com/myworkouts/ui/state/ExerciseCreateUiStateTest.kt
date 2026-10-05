@@ -1,7 +1,8 @@
 package com.myworkouts.ui.state
 
-import com.myworkouts.domain.model.ExerciseCategory
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -20,7 +21,7 @@ class ExerciseCreateUiStateTest {
     fun canSave_when_createMode_validForm_then_true() {
         // Given
         val state =
-            ExerciseCreateUiState(name = "Жим", category = ExerciseCategory.PUSH)
+            ExerciseCreateUiState(name = "Жим", categoryName = "PUSH")
 
         // When
         val result = state.canSave
@@ -47,7 +48,7 @@ class ExerciseCreateUiStateTest {
         val state =
             ExerciseCreateUiState(
                 name = "Жим",
-                category = ExerciseCategory.PUSH,
+                categoryName = "PUSH",
                 isEditMode = true,
                 hasChanges = false
             )
@@ -65,7 +66,7 @@ class ExerciseCreateUiStateTest {
         val state =
             ExerciseCreateUiState(
                 name = "Жим",
-                category = ExerciseCategory.PUSH,
+                categoryName = "PUSH",
                 isEditMode = true,
                 hasChanges = true
             )
@@ -83,7 +84,7 @@ class ExerciseCreateUiStateTest {
         val state =
             ExerciseCreateUiState(
                 name = "Жим",
-                category = ExerciseCategory.PUSH,
+                categoryName = "PUSH",
                 isEditMode = true,
                 hasChanges = true,
                 isExerciseMissing = true
@@ -147,7 +148,7 @@ class ExerciseCreateUiStateTest {
     @Test
     fun hasUnsavedChanges_when_createCategoryOnly_then_true() {
         // Given
-        val state = ExerciseCreateUiState(category = ExerciseCategory.PULL)
+        val state = ExerciseCreateUiState(categoryName = "PULL")
 
         // When
         val result = state.hasUnsavedChanges
@@ -199,7 +200,7 @@ class ExerciseCreateUiStateTest {
         val state =
             ExerciseCreateUiState(
                 name = "Подтягивания",
-                category = ExerciseCategory.PULL,
+                categoryName = "PULL",
                 comment = "широкий хват",
                 isEditMode = true,
                 hasChanges = false
@@ -218,7 +219,7 @@ class ExerciseCreateUiStateTest {
         val state =
             ExerciseCreateUiState(
                 name = "Подтягивания",
-                category = ExerciseCategory.PULL,
+                categoryName = "PULL",
                 isEditMode = true,
                 hasChanges = true
             )
@@ -261,5 +262,66 @@ class ExerciseCreateUiStateTest {
 
         // Then
         assertFalse(result, "Повторный выбор «Без иконки» гасит условие")
+    }
+
+    /* dropdownCategories (custom-categories, этап 8): активные + текущая
+     * архивная в edit-режиме, без дублей активной текущей. */
+
+    @Test
+    fun dropdownCategories_when_noSelection_then_availableCategories() {
+        // Given — create-режим, категория не выбрана
+        val available = listOf(Category(id = 1L, name = "PUSH", colorArgb = 1, isCustom = false))
+        val state = ExerciseCreateUiState(availableCategories = available)
+
+        // When / Then
+        assertEquals(
+            available,
+            state.dropdownCategories,
+            "Без выбранной категории список дропдауна = активные категории"
+        )
+    }
+
+    @Test
+    fun dropdownCategories_when_currentActive_then_noDuplicate() {
+        // Given — edit-режим, текущая категория активна
+        val available =
+            listOf(
+                Category(id = 1L, name = "PUSH", colorArgb = 1, isCustom = false),
+                Category(id = 2L, name = "PULL", colorArgb = 2, isCustom = false)
+            )
+        val state =
+            ExerciseCreateUiState(
+                categoryName = "PUSH",
+                availableCategories = available
+            )
+
+        // When / Then
+        assertEquals(
+            listOf("PUSH", "PULL"),
+            state.dropdownCategories.map { it.name },
+            "Активная текущая категория не дублируется в дропдауне"
+        )
+    }
+
+    @Test
+    fun dropdownCategories_when_currentArchived_then_appendedToList() {
+        // Given — edit-режим, текущая категория «Плечи» архивна (нет среди активных)
+        val available =
+            listOf(
+                Category(id = 1L, name = "PUSH", colorArgb = 1, isCustom = false),
+                Category(id = 2L, name = "PULL", colorArgb = 2, isCustom = false)
+            )
+        val state =
+            ExerciseCreateUiState(
+                categoryName = "Плечи",
+                availableCategories = available
+            )
+
+        // When / Then
+        assertEquals(
+            listOf("PUSH", "PULL", "Плечи"),
+            state.dropdownCategories.map { it.name },
+            "Архивная текущая категория добавляется в конец списка дропдауна"
+        )
     }
 }

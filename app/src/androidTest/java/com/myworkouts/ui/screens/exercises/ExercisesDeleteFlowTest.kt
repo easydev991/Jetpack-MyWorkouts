@@ -18,10 +18,10 @@ import com.myworkouts.data.repository.LinkedEntriesDeletionException
 import com.myworkouts.data.repository.StandardExerciseDeletionException
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
@@ -54,7 +54,7 @@ class ExercisesDeleteFlowTest {
         Exercise(
             id = 100L,
             name = "Жим",
-            category = ExerciseCategory.PUSH,
+            category = "PUSH",
             isCustom = true,
             comment = null,
             createdAt = 1_721_200_000_000L,
@@ -119,6 +119,7 @@ class ExercisesDeleteFlowTest {
             Result.success(emptyList())
 
         override suspend fun importData(
+            categories: List<Category>,
             exercises: List<Exercise>,
             entries: List<BackupEntry>
         ): Result<Unit> = Result.success(Unit)
@@ -135,7 +136,31 @@ class ExercisesDeleteFlowTest {
 
         override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
 
-        override fun archivedCount(): Flow<Int> = MutableStateFlow(0)
+        override fun hasArchived(): Flow<Boolean> = MutableStateFlow(false)
+
+        // Новый контракт категорий (custom-categories, этап 2): заглушки.
+        override suspend fun addCategory(name: String): Result<Category> =
+            Result.success(Category(id = 0L, name = name.trim(), colorArgb = 0, isCustom = true))
+
+        override suspend fun renameCategory(
+            id: Long,
+            newName: String
+        ): Result<Unit> = Result.success(Unit)
+
+        override suspend fun deleteCategory(id: Long): Result<Unit> = Result.success(Unit)
+
+        override suspend fun setCategoryArchived(
+            id: Long,
+            isArchived: Boolean
+        ): Result<Unit> = Result.success(Unit)
+
+        override fun categories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+        override fun archivedCategories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+        override fun categoryNamesWithLinkedExercises(): Flow<Set<String>> = MutableStateFlow(emptySet())
+
+        override suspend fun getAllCategories(): Result<List<Category>> = Result.success(emptyList())
     }
 
     /** Регистрирует [ExercisesScreen] с реальной VM на fake-репозитории. */
@@ -153,6 +178,7 @@ class ExercisesDeleteFlowTest {
                                 )
                         ),
                     onAddExerciseClick = {},
+                    onAddCategoryClick = {},
                     onArchivedExercisesClick = {},
                     analyticsProvider = NoopAnalyticsProvider()
                 )
@@ -232,7 +258,7 @@ class ExercisesErrorSnackbarTest(
         Exercise(
             id = 100L,
             name = "Жим",
-            category = ExerciseCategory.PUSH,
+            category = "PUSH",
             isCustom = true,
             comment = null,
             createdAt = 1_721_200_000_000L,
@@ -285,6 +311,7 @@ class ExercisesErrorSnackbarTest(
             Result.success(emptyList())
 
         override suspend fun importData(
+            categories: List<Category>,
             exercises: List<Exercise>,
             entries: List<BackupEntry>
         ): Result<Unit> = Result.success(Unit)
@@ -301,7 +328,31 @@ class ExercisesErrorSnackbarTest(
 
         override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
 
-        override fun archivedCount(): Flow<Int> = MutableStateFlow(0)
+        override fun hasArchived(): Flow<Boolean> = MutableStateFlow(false)
+
+        // Новый контракт категорий (custom-categories, этап 2): заглушки.
+        override suspend fun addCategory(name: String): Result<Category> =
+            Result.success(Category(id = 0L, name = name.trim(), colorArgb = 0, isCustom = true))
+
+        override suspend fun renameCategory(
+            id: Long,
+            newName: String
+        ): Result<Unit> = Result.success(Unit)
+
+        override suspend fun deleteCategory(id: Long): Result<Unit> = Result.success(Unit)
+
+        override suspend fun setCategoryArchived(
+            id: Long,
+            isArchived: Boolean
+        ): Result<Unit> = Result.success(Unit)
+
+        override fun categories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+        override fun archivedCategories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+        override fun categoryNamesWithLinkedExercises(): Flow<Set<String>> = MutableStateFlow(emptySet())
+
+        override suspend fun getAllCategories(): Result<List<Category>> = Result.success(emptyList())
     }
 
     @Test
@@ -324,6 +375,7 @@ class ExercisesErrorSnackbarTest(
                                 )
                         ),
                     onAddExerciseClick = {},
+                    onAddCategoryClick = {},
                     onArchivedExercisesClick = {},
                     analyticsProvider = NoopAnalyticsProvider()
                 )
@@ -427,7 +479,7 @@ class ExercisesPreCheckSnackbarTest {
         Exercise(
             id = 100L,
             name = "Жим",
-            category = ExerciseCategory.PUSH,
+            category = "PUSH",
             isCustom = true,
             comment = null,
             createdAt = 1_721_200_000_000L,
@@ -481,6 +533,7 @@ class ExercisesPreCheckSnackbarTest {
             Result.success(emptyList())
 
         override suspend fun importData(
+            categories: List<Category>,
             exercises: List<Exercise>,
             entries: List<BackupEntry>
         ): Result<Unit> = Result.success(Unit)
@@ -497,7 +550,31 @@ class ExercisesPreCheckSnackbarTest {
 
         override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
 
-        override fun archivedCount(): Flow<Int> = MutableStateFlow(0)
+        override fun hasArchived(): Flow<Boolean> = MutableStateFlow(false)
+
+        // Новый контракт категорий (custom-categories, этап 2): заглушки.
+        override suspend fun addCategory(name: String): Result<Category> =
+            Result.success(Category(id = 0L, name = name.trim(), colorArgb = 0, isCustom = true))
+
+        override suspend fun renameCategory(
+            id: Long,
+            newName: String
+        ): Result<Unit> = Result.success(Unit)
+
+        override suspend fun deleteCategory(id: Long): Result<Unit> = Result.success(Unit)
+
+        override suspend fun setCategoryArchived(
+            id: Long,
+            isArchived: Boolean
+        ): Result<Unit> = Result.success(Unit)
+
+        override fun categories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+        override fun archivedCategories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+        override fun categoryNamesWithLinkedExercises(): Flow<Set<String>> = MutableStateFlow(emptySet())
+
+        override suspend fun getAllCategories(): Result<List<Category>> = Result.success(emptyList())
     }
 
     @Test
@@ -521,6 +598,7 @@ class ExercisesPreCheckSnackbarTest {
                                 )
                         ),
                     onAddExerciseClick = {},
+                    onAddCategoryClick = {},
                     onArchivedExercisesClick = {},
                     analyticsProvider = NoopAnalyticsProvider()
                 )

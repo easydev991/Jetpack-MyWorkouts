@@ -13,8 +13,8 @@ import com.myworkouts.data.repository.EntryValidator
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.BackupSettings
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.domain.model.OverviewTab
@@ -95,6 +95,34 @@ class ImportBackupUseCase(
                 CrashlyticsHelper.logException(e, "Восстановление резервной копии: некорректный файл копии")
                 return Result.failure(e)
             }
+        mergeAndInsert(fileContent).getOrElse { error ->
+            return Result.failure(error)
+        }
+        // Настройки вкладок применяются после восстановления (design D8):
+        // бэкапы v1 не содержат блока — DataStore не меняется.
+        applyBackupSettings(dataStore, fileContent.settings)
+        return Result.success(Unit)
+    }
+
+    /**
+     * Снимки репозитория → merge → вставка одной транзакцией
+     * [WorkoutDataRepository.importData] → односторонняя архивация
+     * (design Decision 2 и D9: категории — по правилу упражнений).
+     * id для архивации взяты из снимков, сделанных в этом же вызове,
+     * поэтому сбой архивации практически недостижим и проваливает импорт
+     * loud'ом; повторный импорт безопасен — merge идемпотентен
+     * по построению. Вынесено из [invoke] — detekt `LongMethod`.
+     *
+     * `ReturnCount` подавлен осознанно: early-return на каждом шаге
+     * конвейера «снимки → merge → вставка → архивация» — тот же
+     * контракт, что у [invoke].
+     */
+    @Suppress("ReturnCount")
+    private suspend fun mergeAndInsert(fileContent: BackupFileContent): Result<Unit> {
+        val existingCategories =
+            repository.getAllCategories().getOrElse { error ->
+                return Result.failure(error)
+            }
         val existingExercises =
             repository.getAllExercises().getOrElse { error ->
                 return Result.failure(error)
@@ -103,25 +131,29 @@ class ImportBackupUseCase(
             repository.getAllEntries().getOrElse { error ->
                 return Result.failure(error)
             }
-        val (exercisesToInsert, entriesToInsert, idsToArchive) =
-            mergeBackup(existingExercises, existingEntries, fileContent.exercises, fileContent.entries)
-        val importResult = repository.importData(exercisesToInsert, entriesToInsert)
-        importResult.getOrElse { error ->
-            return Result.failure(error)
+        val merge =
+            mergeBackup(
+                existingCategories = existingCategories,
+                existingExercises = existingExercises,
+                existingEntries = existingEntries,
+                file = fileContent
+            )
+        repository
+            .importData(merge.categoriesToInsert, merge.exercisesToInsert, merge.entriesToInsert)
+            .getOrElse { error ->
+                return Result.failure(error)
+            }
+        merge.categoryIdsToArchive.forEach { id ->
+            repository.setCategoryArchived(id, true).getOrElse { error ->
+                return Result.failure(error)
+            }
         }
-        // Односторонняя архивация после успешного слияния (design Decision 2):
-        // id взяты из снимка, сделанного в этом же вызове, поэтому сбой
-        // архивации практически недостижим и проваливает импорт loud'ом;
-        // повторный импорт безопасен — merge идемпотентен по построению.
-        idsToArchive.forEach { id ->
+        merge.exerciseIdsToArchive.forEach { id ->
             repository.setArchived(id, true).getOrElse { error ->
                 return Result.failure(error)
             }
         }
-        // Настройки вкладок применяются после восстановления (design D8):
-        // бэкапы v1 не содержат блока — DataStore не меняется.
-        applyBackupSettings(dataStore, fileContent.settings)
-        return importResult
+        return Result.success(Unit)
     }
 }
 
@@ -157,46 +189,90 @@ private data class EntryContentKey(
 )
 
 /**
- * Чистая функция merge (design Decision 4): возвращает тройку «упражнения к
- * вставке, записи к вставке, id существующих упражнений к архивации».
- * Упражнения — отсутствующие в текущем каталоге по ключу
- * `name.trim().lowercase()`, всегда с `isCustom = true` (файл недоверенный)
- * и `id = 0` (присвоит БД). Записи — с разрешённым по имени упражнением,
- * прошедшие [EntryValidator] против его `measuredBy` и не дублирующие по
- * содержимому ни текущие, уже взятые из этого же файла. «Плохие» элементы
- * пропускаются без провала всего импорта. Третий элемент — односторонняя
- * архивация (design Decision 1): id существующих упражнений, которые в файле
- * помечены `isArchived = true`, а сами активны; разархивация из файла
- * не выполняется.
+ * Результат merge (custom-categories, design D9): списки к вставке
+ * (категории, упражнения, записи) и id существующих сущностей к
+ * односторонней архивации — категории и упражнения по одному правилу.
+ */
+internal data class BackupMergeResult(
+    val categoriesToInsert: List<Category>,
+    val exercisesToInsert: List<Exercise>,
+    val entriesToInsert: List<BackupEntry>,
+    val categoryIdsToArchive: List<Long>,
+    val exerciseIdsToArchive: List<Long>
+)
+
+/**
+ * Чистая функция merge (design Decision 4 и D9). Категории —
+ * отсутствующие в БД по ключу `name.trim().lowercase()` (и внутри файла),
+ * всегда с `isCustom = true` (файл недоверенный) и `id = 0`; односторонняя
+ * архивация существующих — по правилу упражнений. Упражнения — категория
+ * резолвится по ключу (БД ∪ файл) в каноническое имя; неизвестная
+ * категория — упражнение пропускается (и его записи — автоматически, они
+ * не найдут упражнения в списке вставки); отсутствующие в текущем
+ * каталоге по ключу имени, всегда с `isCustom = true` и `id = 0`. Записи —
+ * с разрешённым по имени упражнением, прошедшие [EntryValidator] против
+ * его `measuredBy` и не дублирующие по содержимому ни текущие, уже взятые
+ * из этого же файла. «Плохие» элементы пропускаются без провала всего
+ * импорта.
  */
 internal fun mergeBackup(
+    existingCategories: List<Category>,
     existingExercises: List<Exercise>,
     existingEntries: List<ExerciseEntry>,
-    fileExercises: List<Exercise>,
-    fileEntries: List<BackupEntry>
-): Triple<List<Exercise>, List<BackupEntry>, List<Long>> {
+    file: BackupFileContent
+): BackupMergeResult {
+    val existingCategoryByKey =
+        existingCategories.associateBy { it.name.trim().lowercase() }
+    val categoriesToInsert =
+        file.categories
+            .filter { it.name.trim().lowercase() !in existingCategoryByKey }
+            .distinctBy { it.name.trim().lowercase() }
+            .map { it.copy(id = 0L, isCustom = true) }
+    val categoryIdsToArchive =
+        file.categories
+            .filter { it.isArchived }
+            .mapNotNull { existingCategoryByKey[it.name.trim().lowercase()] }
+            .filter { !it.isArchived }
+            .map { it.id }
+            .distinct()
+    // Резолв категории упражнения: ключ → каноническое имя (БД ∪ файл);
+    // ключ совпадает с дедупом категорий (trim + lowercase, design D9).
+    val categoryNamesByKey =
+        existingCategoryByKey.mapValues { it.value.name } +
+            categoriesToInsert.associate { it.name.trim().lowercase() to it.name }
+    val resolvableFileExercises =
+        file.exercises.mapNotNull { exercise ->
+            val categoryName =
+                categoryNamesByKey[exercise.category.trim().lowercase()]
+                    ?: return@mapNotNull null
+            exercise.copy(category = categoryName)
+        }
     val existingByName =
         existingExercises.associateBy { it.name.trim().lowercase() }
     val exercisesToInsert =
-        fileExercises
+        resolvableFileExercises
             .filter { it.name.trim().lowercase() !in existingByName }
             .distinctBy { it.name.trim().lowercase() }
             .map { it.copy(isCustom = true, id = 0L) }
-    val idsToArchive =
-        fileExercises
+    val exerciseIdsToArchive =
+        resolvableFileExercises
             .filter { it.isArchived }
             .mapNotNull { existingByName[it.name.trim().lowercase()] }
             .filter { !it.isArchived }
             .map { it.id }
             .distinct()
     val measuredByKey =
-        buildMap {
-            existingExercises.forEach { put(it.name.trim().lowercase(), it.measuredBy) }
-            exercisesToInsert.forEach { put(it.name.trim().lowercase(), it.measuredBy) }
-        }
+        existingExercises.associate { it.name.trim().lowercase() to it.measuredBy } +
+            exercisesToInsert.associate { it.name.trim().lowercase() to it.measuredBy }
     val namesById = existingExercises.associate { it.id to it.name }
-    val entriesToInsert = newFileEntries(existingEntries, fileEntries, measuredByKey, namesById)
-    return Triple(exercisesToInsert, entriesToInsert, idsToArchive)
+    val entriesToInsert = newFileEntries(existingEntries, file.entries, measuredByKey, namesById)
+    return BackupMergeResult(
+        categoriesToInsert = categoriesToInsert,
+        exercisesToInsert = exercisesToInsert,
+        entriesToInsert = entriesToInsert,
+        categoryIdsToArchive = categoryIdsToArchive,
+        exerciseIdsToArchive = exerciseIdsToArchive
+    )
 }
 
 /**
@@ -238,16 +314,7 @@ private fun newFileEntries(
         if (EntryValidator.validate(probe, measuredBy).isFailure) {
             return@forEach
         }
-        val dedupKey =
-            EntryContentKey(
-                exerciseKey = key,
-                date = probe.date,
-                sets = probe.sets,
-                reps = probe.reps,
-                weightKg = probe.weightKg,
-                durationSec = probe.durationSec,
-                comment = probe.comment
-            )
+        val dedupKey = probe.contentKey(key)
         if (!seenEntryKeys.add(dedupKey)) {
             return@forEach
         }
@@ -303,15 +370,28 @@ internal fun parseBackupJson(raw: String): BackupFileContent {
         (0 until entriesArray.length()).map { index ->
             parseEntry(entriesArray.optJSONObject(index) ?: throw invalidFile("Элемент entries не объект"))
         }
+    // Секция categories[] — обратно совместимое расширение (design D9):
+    // отсутствие массива (старые бэкапы) — пустой список, не ошибка.
+    val categories =
+        root.optJSONArray("categories")?.let { categoriesArray ->
+            (0 until categoriesArray.length()).map { index ->
+                parseCategory(
+                    categoriesArray.optJSONObject(index)
+                        ?: throw invalidFile("Элемент categories не объект")
+                )
+            }
+        } ?: emptyList()
     return BackupFileContent(
+        categories = categories,
         exercises = exercises,
         entries = entries,
         settings = parseBackupSettings(root)
     )
 }
 
-/** Результат разбора файла бэкапа: каталог, записи и блок настроек. */
+/** Результат разбора файла бэкапа: категории, каталог, записи и блок настроек. */
 internal data class BackupFileContent(
+    val categories: List<Category>,
     val exercises: List<Exercise>,
     val entries: List<BackupEntry>,
     val settings: BackupSettings?
@@ -321,7 +401,11 @@ private fun parseExercise(obj: JSONObject): Exercise =
     Exercise(
         id = 0L,
         name = obj.requiredString("name"),
-        category = obj.requiredEnum("category", ExerciseCategory.entries),
+        // Категория — имя-строка без enum-валидации (custom-categories,
+        // задача 3.2): файл с произвольной строкой не отвергается — резолв
+        // по (БД ∪ файл) и пропуск неизвестной категории — в mergeBackup
+        // (design D9)
+        category = obj.requiredString("category"),
         isCustom =
             obj.opt("isCustom") as? Boolean
                 ?: throw invalidFile("Поле isCustom упражнения отсутствует или не Boolean"),
@@ -342,6 +426,23 @@ private fun parseEntry(obj: JSONObject): BackupEntry =
         durationSec = obj.optionalInt("durationSec"),
         comment = obj.optionalString("comment"),
         createdAt = obj.requiredLong("createdAt")
+    )
+
+/**
+ * Элемент `categories` файла (custom-categories, design D9): `name`,
+ * `colorArgb`, `isArchived` — строгие типы (ошибка файла — нарушение
+ * любого). `isCustom` из файла игнорируется: файл недоверенный, вставленные
+ * категории всегда пользовательские (spec «Восстановление ... слиянием»).
+ */
+private fun parseCategory(obj: JSONObject): Category =
+    Category(
+        id = 0L,
+        name = obj.requiredString("name"),
+        colorArgb = obj.requiredInt("colorArgb"),
+        isCustom = true,
+        isArchived =
+            obj.opt("isArchived") as? Boolean
+                ?: throw invalidFile("Поле isArchived категории отсутствует или не Boolean")
     )
 
 private fun invalidFile(message: String): BackupException = BackupException(message, BackupError.INVALID_FILE)

@@ -6,8 +6,8 @@ import android.net.Uri
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupSettings
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.domain.model.OverviewTab
@@ -35,7 +35,7 @@ class ExportBackupUseCaseTest {
         Exercise(
             id = 1L,
             name = "Подтягивания",
-            category = ExerciseCategory.PULL,
+            category = "PULL",
             isCustom = false,
             comment = null,
             createdAt = 1_757_371_100_000L
@@ -44,7 +44,7 @@ class ExportBackupUseCaseTest {
         Exercise(
             id = 2L,
             name = "Планка",
-            category = ExerciseCategory.CORE,
+            category = "CORE",
             isCustom = true,
             comment = "Держать ровно",
             createdAt = 1_757_371_150_000L,
@@ -311,6 +311,33 @@ class ExportBackupUseCaseTest {
         }
 
     @Test
+    fun invoke_when_categories_snapshot_fails_then_failure_and_no_stream() =
+        runTest {
+            // Given — снимок категорий недоступен: экспорт не начинается
+            val dbError = RuntimeException("Сбой базы")
+            val repository = mockk<WorkoutDataRepository>(relaxed = true)
+            coEvery { repository.getAllExercises() } returns Result.success(listOf(pullUps))
+            coEvery { repository.getAllEntries() } returns Result.success(emptyList())
+            coEvery { repository.getAllCategories() } returns Result.failure(dbError)
+            val contentResolver = mockk<ContentResolver>(relaxed = true)
+            val context = mockk<Context>(relaxed = true)
+            every { context.contentResolver } returns contentResolver
+            val uri = mockk<Uri>()
+            val useCase = ExportBackupUseCase(repository, mockk(relaxed = true), context)
+
+            // When
+            val result = useCase(uri)
+
+            // Then
+            assertTrue(result.isFailure, "Ошибка снимка категорий — Result.failure")
+            assertTrue(
+                result.exceptionOrNull() === dbError,
+                "Ошибка БД проходит в Result как есть, не оборачивается"
+            )
+            verify(exactly = 0) { contentResolver.openOutputStream(any()) }
+        }
+
+    @Test
     fun invoke_when_cancelled_then_rethrows_cancellation() =
         runTest {
             // Given — SAF-поток записи прерывается отменой корутины
@@ -318,6 +345,7 @@ class ExportBackupUseCaseTest {
             val repository = mockk<WorkoutDataRepository>(relaxed = true)
             coEvery { repository.getAllExercises() } returns Result.success(listOf(pullUps))
             coEvery { repository.getAllEntries() } returns Result.success(listOf(repsEntry))
+            coEvery { repository.getAllCategories() } returns Result.success(emptyList())
             val dataStore = mockk<AppSettingsDataStore>()
             every { dataStore.overviewTabVisibility } returns
                 flowOf(OverviewTab.entries.associateWith { true })
@@ -381,6 +409,72 @@ class ExportBackupUseCaseTest {
         assertEquals(
             "STATS",
             checkNotNull(json.optJSONObject("settings")) { "Блок settings" }.optString("lastOverviewTab")
+        )
+    }
+
+    // ---------- custom-categories: секция categories[] (design D9) ----------
+
+    private val standardCategory =
+        Category(id = 10L, name = "PUSH", colorArgb = 0xFFEF5350.toInt(), isCustom = false)
+    private val customCategory =
+        Category(id = 11L, name = "Спина", colorArgb = 0xFF4E6EF2.toInt(), isCustom = true)
+    private val archivedCategory =
+        Category(id = 12L, name = "Руки", colorArgb = 0xFF9CCC65.toInt(), isCustom = true, isArchived = true)
+
+    @Test
+    fun buildBackupJson_when_categories_present_then_all_categories_with_fields() {
+        // Given — снимок категорий: стандартная, активная кастомная, архивная
+        // (spec-сценарий «Категории в файле»: массив содержит все категории
+        // БД — активные и архивные)
+        val categories = listOf(standardCategory, customCategory, archivedCategory)
+
+        // When
+        val fileCategories =
+            JSONObject(buildBackupJson(emptyList(), emptyList(), categories = categories))
+                .getJSONArray("categories")
+
+        // Then
+        assertEquals(3, fileCategories.length(), "Все категории БД попадают в файл")
+        val exported = fileCategories.getJSONObject(1)
+        assertEquals("Спина", exported.getString("name"), "Имя категории")
+        assertEquals(0xFF4E6EF2.toInt(), exported.getInt("colorArgb"), "Цвет ARGB")
+        assertFalse(exported.getBoolean("isArchived"), "Активная категория — false")
+        val exportedArchived = fileCategories.getJSONObject(2)
+        assertEquals("Руки", exportedArchived.getString("name"), "Архивная категория в файле")
+        assertTrue(exportedArchived.getBoolean("isArchived"), "Архивная категория — true")
+        assertEquals(
+            0xFF9CCC65.toInt(),
+            exportedArchived.getInt("colorArgb"),
+            "Цвет архивной категории сохраняется"
+        )
+    }
+
+    @Test
+    fun buildBackupJson_when_category_present_then_isCustom_and_id_not_written() {
+        // When
+        val exported =
+            JSONObject(
+                buildBackupJson(emptyList(), emptyList(), categories = listOf(customCategory))
+            ).getJSONArray("categories").getJSONObject(0)
+
+        // Then — isCustom в файл не пишется (файл недоверенный при импорте,
+        // вставленные категории всегда isCustom = true); id строки БД
+        // непереносим — в файле его нет
+        assertFalse(exported.has("isCustom"), "Поле isCustom категории в файл не пишется")
+        assertFalse(exported.has("id"), "id строки БД в файле быть не должно")
+        assertTrue(exported.has("isArchived"), "Поле isArchived пишется всегда")
+    }
+
+    @Test
+    fun buildBackupJson_when_no_categories_then_empty_categories_array() {
+        // When
+        val json = JSONObject(buildBackupJson(emptyList(), emptyList()))
+
+        // Then — секция присутствует всегда (стабильная форма файла)
+        assertEquals(
+            0,
+            json.getJSONArray("categories").length(),
+            "Нет категорий — пустой массив categories"
         )
     }
 }

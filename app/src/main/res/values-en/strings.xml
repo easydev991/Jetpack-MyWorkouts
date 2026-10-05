@@ -156,9 +156,32 @@
     <string name="exercise_archive_dialog_confirm">Archive</string>
     <!-- archive-alert-hide: checkbox label in archive dialog -->
     <string name="exercise_archive_dont_show_again">Don\'t show again</string>
-    <string name="exercises_archive_button">Archived exercises</string>
-    <string name="archived_exercises_title">Archived exercises</string>
     <string name="archived_exercises_empty">Archive is empty</string>
+
+    <!-- Custom categories (custom-categories: tabs, menu, dialogs, snackbars,
+         Categories tab, create screen; archive_title is shared by the
+         archive button and the archive screen title) -->
+    <string name="exercises_tab_exercises">Exercises</string>
+    <string name="exercises_tab_categories">Categories</string>
+    <string name="category_list_menu_edit">Edit</string>
+    <string name="category_list_menu_archive">Archive</string>
+    <string name="category_list_menu_delete">Delete</string>
+    <string name="category_delete_dialog_title">Delete category?</string>
+    <string name="category_delete_dialog_text">Category \"%1$s\" will be deleted</string>
+    <string name="category_archive_dialog_title">Archive category?</string>
+    <string name="category_archive_dialog_text">To use \"%1$s\" again in exercises, restore it from the archive</string>
+    <string name="category_archive_dialog_confirm">Archive</string>
+    <string name="category_delete_error_used_by_exercises">This category is used by an exercise</string>
+    <string name="category_delete_error_standard">Cannot delete a standard category</string>
+    <string name="category_delete_error_generic">Failed to delete category</string>
+    <string name="categories_list_empty">No categories</string>
+    <string name="categories_add_category">Add category</string>
+    <string name="category_create_title">New category</string>
+    <string name="category_edit_title">Edit category</string>
+    <string name="category_field_name">Name</string>
+    <string name="category_error_duplicate">A category with this name already exists</string>
+    <string name="category_save_error">Failed to save category</string>
+    <string name="archive_title">Archive</string>
 
     <!-- Entry settings screen (visibility of entry form fields) -->
     <string name="entry_settings_title">Configure screen</string>

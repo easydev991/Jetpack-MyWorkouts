@@ -9,10 +9,10 @@ import androidx.room.PrimaryKey
  *
  * Каталог общий для стандартных (prepopulate) и пользовательских упражнений
  * (design.md Decision 1, spec: «Единый каталог»). Категория хранится строкой
- * — `name` доменного enum [com.myworkouts.domain.model.ExerciseCategory];
- * маппинг в Mappers.kt. Тип `category` намеренно не типизирован в entity —
- * enum остаётся в доменном слое (design.md Decision 2). Тип измерения
- * `measured_by` хранится так же — строкой имени
+ * — имя категории (ссылка по имени без FK — custom-categories, design
+ * Decision 1); у стандартных — имя-ключ из [standardCategories]. Тип
+ * `category` — строка: стандартные ключи и кастомные имена равноправны.
+ * Тип измерения `measured_by` хранится так же — строкой имени
  * [com.myworkouts.domain.model.ExerciseMeasuredBy].
  *
  * @property id Автогенерируемый идентификатор

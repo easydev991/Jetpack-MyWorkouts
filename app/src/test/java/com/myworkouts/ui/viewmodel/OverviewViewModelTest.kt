@@ -5,8 +5,8 @@ import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryWithExercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.domain.model.OverviewTab
 import com.myworkouts.domain.usecase.ActivityPeriod
@@ -58,6 +58,12 @@ class OverviewViewModelTest {
     /** Stub Flow последней вкладки. */
     private lateinit var lastTabFlow: MutableStateFlow<OverviewTab>
 
+    /** Stub Flow активных категорий. */
+    private lateinit var categoriesFlow: MutableStateFlow<List<Category>>
+
+    /** Stub Flow архивных категорий. */
+    private lateinit var archivedCategoriesFlow: MutableStateFlow<List<Category>>
+
     @BeforeEach
     fun setUp() {
         mockRepository = mockk(relaxed = true)
@@ -65,9 +71,13 @@ class OverviewViewModelTest {
         entriesFlow = MutableStateFlow(emptyList())
         visibilityFlow = MutableStateFlow(OverviewTab.entries.associateWith { true })
         lastTabFlow = MutableStateFlow(OverviewTab.STATS)
+        categoriesFlow = MutableStateFlow(emptyList())
+        archivedCategoriesFlow = MutableStateFlow(emptyList())
         every { mockRepository.entriesWithExercise() } returns entriesFlow
         every { mockDataStore.overviewTabVisibility } returns visibilityFlow
         every { mockDataStore.lastOverviewTab } returns lastTabFlow
+        every { mockRepository.categories() } returns categoriesFlow
+        every { mockRepository.archivedCategories() } returns archivedCategoriesFlow
         testDispatcher = StandardTestDispatcher()
         Dispatchers.setMain(testDispatcher)
     }
@@ -167,7 +177,7 @@ class OverviewViewModelTest {
             val viewModel = createViewModel()
             backgroundScope.launch { viewModel.uiState.collect { } }
             advanceUntilIdle()
-            viewModel.selectStatsCategory(ExerciseCategory.PUSH)
+            viewModel.selectStatsCategory("PUSH")
             advanceUntilIdle()
 
             // When
@@ -197,12 +207,12 @@ class OverviewViewModelTest {
             advanceUntilIdle()
 
             // When
-            viewModel.selectStatsCategory(ExerciseCategory.LEGS)
+            viewModel.selectStatsCategory("LEGS")
             advanceUntilIdle()
 
             // Then — выбранная категория в состоянии статистики
             assertEquals(
-                ExerciseCategory.LEGS,
+                "LEGS",
                 viewModel.uiState.value.stats.selected,
                 "Выбранная категория в состоянии статистики"
             )
@@ -293,7 +303,7 @@ class OverviewViewModelTest {
             val state = viewModel.uiState.value
             val stats = state.stats
             assertEquals(
-                listOf(ExerciseCategory.PULL to 3),
+                listOf("PULL" to 3),
                 stats.categoryTotals.map { it.category to it.totalSets },
                 "Донат: подтягивания, 3 подхода"
             )
@@ -333,7 +343,7 @@ class OverviewViewModelTest {
             val stats = viewModel.uiState.value.stats
             assertEquals(false, stats.isEmpty, "TIME-записи за период — не пустое состояние")
             assertEquals(
-                listOf(ExerciseCategory.CORE to 3),
+                listOf("CORE" to 3),
                 stats.categoryTotals.map { it.category to it.totalSets },
                 "TIME-категория в донате, доля по подходам"
             )
@@ -373,9 +383,62 @@ class OverviewViewModelTest {
             val stats = viewModel.uiState.value.stats
             assertEquals(true, stats.isEmpty, "Вчерашняя запись вне периода «День»")
             assertEquals(
-                emptyList<ExerciseCategory>(),
+                emptyList<String>(),
                 stats.categoryTotals.map { it.category },
                 "Донат пуст за сегодня"
+            )
+        }
+
+    @Test
+    fun ui_state_when_custom_category_then_color_resolved_from_model() =
+        runTest(testDispatcher) {
+            // Given — запись кастомной категории «Спина»; категория в каталоге
+            // с цветом из модели (custom-categories design Decision 10)
+            entriesFlow.value = listOf(workoutEntry(id = 51L, daysAgo = 0, name = "Тяга", category = "Спина"))
+            categoriesFlow.value =
+                listOf(
+                    Category(id = 10L, name = "Спина", colorArgb = 0xFF112233.toInt(), isCustom = true)
+                )
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then — цвет кастомной категории доезжает в состояние статистики
+            val stats = viewModel.uiState.value.stats
+            assertEquals(
+                0xFF112233.toInt(),
+                stats.categoryColors["Спина"],
+                "Цвет кастомной категории резолвится из модели"
+            )
+        }
+
+    @Test
+    fun ui_state_when_category_archived_then_color_still_resolved() =
+        runTest(testDispatcher) {
+            // Given — архивная категория остаётся в статистике (Decision 10):
+            // цвет берётся и из архивного списка
+            entriesFlow.value =
+                listOf(workoutEntry(id = 52L, daysAgo = 0, name = "Разведение", category = "Спина"))
+            archivedCategoriesFlow.value =
+                listOf(
+                    Category(
+                        id = 11L,
+                        name = "Спина",
+                        colorArgb = 0xFF445566.toInt(),
+                        isCustom = true,
+                        isArchived = true
+                    )
+                )
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // Then
+            val stats = viewModel.uiState.value.stats
+            assertEquals(
+                0xFF445566.toInt(),
+                stats.categoryColors["Спина"],
+                "Архивная категория остаётся источником цвета"
             )
         }
 
@@ -607,7 +670,9 @@ class OverviewViewModelTest {
     /** Запись подтягиваний (PULL, REPS, 3x10) `daysAgo` дней назад в 18:30. */
     private fun workoutEntry(
         id: Long,
-        daysAgo: Long
+        daysAgo: Long,
+        name: String = "Подтягивания",
+        category: String = "PULL"
     ): EntryWithExercise {
         val date =
             LocalDate
@@ -620,8 +685,8 @@ class OverviewViewModelTest {
         return EntryWithExercise(
             id = id,
             exerciseId = 2L,
-            exerciseName = "Подтягивания",
-            category = ExerciseCategory.PULL,
+            exerciseName = name,
+            category = category,
             measuredBy = ExerciseMeasuredBy.REPS,
             sets = 3,
             reps = 10,
@@ -648,7 +713,7 @@ class OverviewViewModelTest {
             id = 1L,
             exerciseId = 2L,
             exerciseName = "Подтягивания",
-            category = ExerciseCategory.PULL,
+            category = "PULL",
             measuredBy = ExerciseMeasuredBy.REPS,
             sets = sets,
             reps = reps,
@@ -675,7 +740,7 @@ class OverviewViewModelTest {
             id = 3L,
             exerciseId = 4L,
             exerciseName = "Планка",
-            category = ExerciseCategory.CORE,
+            category = "CORE",
             measuredBy = ExerciseMeasuredBy.TIME,
             sets = sets,
             reps = null,

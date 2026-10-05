@@ -25,6 +25,12 @@ private val SHOW_EXERCISES_TAB_KEY = booleanPreferencesKey("show_exercises_tab")
 /** DataStore-ключ для глобального opt-out диалога подтверждения архивации. */
 private val DONT_SHOW_ARCHIVE_DIALOG_KEY = booleanPreferencesKey("dont_show_archive_dialog")
 
+/**
+ * DataStore-ключ для opt-out диалога архивации категории (custom-categories,
+ * design Decision 8) — ОТДЕЛЬНЫЙ от флага упражнений.
+ */
+private val DONT_SHOW_CATEGORY_ARCHIVE_DIALOG_KEY = booleanPreferencesKey("dont_show_category_archive_dialog")
+
 /** DataStore-ключ последней выбранной вкладки обзора (overview-screen, design D8). */
 private val LAST_OVERVIEW_TAB_KEY = stringPreferencesKey("last_overview_tab")
 
@@ -37,8 +43,9 @@ private val LAST_OVERVIEW_TAB_KEY = stringPreferencesKey("last_overview_tab")
  *   `PreferenceDataStoreFactory.create(produceFile = ...)`).
  *
  * @implNote class, не MyWorkoutsApplication (одна зависимость — лишняя
- * сущность). Хранит 4 ключа (theme/use_dynamic_colors/show_exercises_tab/
- * dont_show_archive_dialog). Новые ключи — точечно по фичам, имя файла
+ * сущность). Хранит 5 ключей (theme/use_dynamic_colors/show_exercises_tab/
+ * dont_show_archive_dialog/dont_show_category_archive_dialog). Новые ключи —
+ * точечно по фичам, имя файла
  * appearance_prefs НЕ менять (миграция DataStore). Если появится 2-я
  * зависимость от DataStore — вынести в MyWorkoutsApplication.
  */
@@ -139,6 +146,33 @@ class AppSettingsDataStore(
         dataStore.data
             .map { preferences ->
                 preferences[DONT_SHOW_ARCHIVE_DIALOG_KEY] ?: false
+            }
+
+    /**
+     * Сохраняет настройку opt-out диалога архивации категории
+     * (custom-categories, design Decision 8). При `true` архивация
+     * категории выполняется сразу без диалога; при `false` (по
+     * умолчанию) — диалог показывается. Флаг НЕ общий с
+     * [dontShowArchiveDialog] (упражнения).
+     *
+     * @param value Скрывать ли диалог архивации категории в будущем
+     */
+    suspend fun setDontShowCategoryArchiveDialog(value: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[DONT_SHOW_CATEGORY_ARCHIVE_DIALOG_KEY] = value
+        }
+    }
+
+    /**
+     * Flow для отслеживания настройки скрытия диалога архивации
+     * категории. При первом запуске возвращает значение по умолчанию
+     * (`false`) — пользователь видит диалог, пока сам не поставит
+     * галочку.
+     */
+    val dontShowCategoryArchiveDialog: Flow<Boolean> =
+        dataStore.data
+            .map { preferences ->
+                preferences[DONT_SHOW_CATEGORY_ARCHIVE_DIALOG_KEY] ?: false
             }
 
     /**

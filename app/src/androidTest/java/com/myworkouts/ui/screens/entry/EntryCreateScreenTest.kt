@@ -32,7 +32,6 @@ import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.domain.model.EntryField
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.navigation.Screen
@@ -72,7 +71,7 @@ class EntryCreateScreenTest {
         Exercise(
             id = 1L,
             name = "Подтягивания",
-            category = ExerciseCategory.PULL,
+            category = "PULL",
             isCustom = false,
             comment = null,
             createdAt = 0L,
@@ -83,7 +82,7 @@ class EntryCreateScreenTest {
         Exercise(
             id = 2L,
             name = "Планка",
-            category = ExerciseCategory.CORE,
+            category = "CORE",
             isCustom = false,
             comment = null,
             createdAt = 0L,
@@ -878,7 +877,7 @@ class EntryCreateScreenTest {
             Exercise(
                 id = 100L,
                 name = "Жим",
-                category = ExerciseCategory.PUSH,
+                category = "PUSH",
                 isCustom = true,
                 comment = null,
                 createdAt = 0L,
@@ -1095,7 +1094,7 @@ class EntryCreateScreenTest {
     /** Каталожное упражнение харнесса: значимы имя, тип измерения и порядок создания. */
     private fun exercise(
         name: String,
-        category: ExerciseCategory,
+        category: String,
         measuredBy: ExerciseMeasuredBy,
         createdAt: Long
     ): Exercise =
@@ -1119,14 +1118,14 @@ class EntryCreateScreenTest {
         runBlocking {
             val repsWithHistoryId =
                 repository
-                    .addExercise(exercise("Жим лёжа", ExerciseCategory.PUSH, ExerciseMeasuredBy.REPS, createdAt = 1L))
+                    .addExercise(exercise("Жим лёжа", "PUSH", ExerciseMeasuredBy.REPS, createdAt = 1L))
                     .getOrThrow()
             repository
-                .addExercise(exercise("Отжимания", ExerciseCategory.PUSH, ExerciseMeasuredBy.REPS, createdAt = 2L))
+                .addExercise(exercise("Отжимания", "PUSH", ExerciseMeasuredBy.REPS, createdAt = 2L))
                 .getOrThrow()
             val timeId =
                 repository
-                    .addExercise(exercise("Планка", ExerciseCategory.CORE, ExerciseMeasuredBy.TIME, createdAt = 3L))
+                    .addExercise(exercise("Планка", "CORE", ExerciseMeasuredBy.TIME, createdAt = 3L))
                     .getOrThrow()
             val add: suspend (ExerciseEntry) -> Unit = { repository.addEntry(it).getOrThrow() }
             add(historyEntry(repsWithHistoryId, daysAgoMillis(4), reps = 6, weightKg = 15.0, createdAt = 1L))

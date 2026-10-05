@@ -10,14 +10,12 @@ import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.state.ExerciseCreateUiState
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -55,6 +53,14 @@ class ExerciseCreateViewModel(
         )
 
     init {
+        // Реактивная подписка на активные категории (custom-categories,
+        // этап 8): категории, созданные в другой сессии, появляются в
+        // дропдауне без пересоздания экрана.
+        viewModelScope.launch {
+            repository.categories().collect { categories ->
+                mutableUiState.update { it.copy(availableCategories = categories) }
+            }
+        }
         if (exerciseId != Screen.ExerciseCreate.NO_EXERCISE_ID) {
             viewModelScope.launch {
                 repository
@@ -79,15 +85,11 @@ class ExerciseCreateViewModel(
      * UI State экрана: состояние ввода формы. Каждый колбэк ввода сбрасывает
      * `isSaveError` (spec-сценарий «Ввод после неуспешного сохранения скрывает
      * ошибку»), [save] читает [uiState] — экран и сохранение видят одно
-     * состояние.
+     * состояние. Upstream — собственный `MutableStateFlow` (за ним нет
+     * холодного источника), поэтому `asStateFlow()` без sharing-слоя:
+     * `.value` всегда свежий, в отличие от `stateIn(WhileSubscribed)`.
      */
-    val uiState: StateFlow<ExerciseCreateUiState> =
-        mutableUiState
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(defaultSubscriptionTimeoutMs()),
-                initialValue = mutableUiState.value
-            )
+    val uiState: StateFlow<ExerciseCreateUiState> = mutableUiState.asStateFlow()
 
     /** Ввод названия; сбрасывает ошибку сохранения. */
     fun onNameChange(text: String) =
@@ -95,10 +97,10 @@ class ExerciseCreateViewModel(
             it.copy(name = text, isSaveError = false)
         }
 
-    /** Выбор категории; сбрасывает ошибку сохранения. */
-    fun onCategoryChange(category: ExerciseCategory) =
+    /** Выбор категории по имени; сбрасывает ошибку сохранения. */
+    fun onCategoryChange(category: String) =
         updateState {
-            it.copy(category = category, isSaveError = false)
+            it.copy(categoryName = category, isSaveError = false)
         }
 
     /** Выбор типа измерения; сбрасывает ошибку сохранения. */
@@ -172,7 +174,7 @@ class ExerciseCreateViewModel(
         original: Exercise?
     ): Exercise? {
         val name = state.name?.trim()?.takeIf { it.isNotEmpty() }
-        val category = state.category
+        val category = state.categoryName
         if (name == null || category == null) return null
         return Exercise(
             id = original?.id ?: 0L,
@@ -193,7 +195,7 @@ class ExerciseCreateViewModel(
     ): ExerciseCreateUiState =
         state.copy(
             name = exercise.name,
-            category = exercise.category,
+            categoryName = exercise.category,
             measuredBy = exercise.measuredBy,
             comment = exercise.comment ?: "",
             iconNumber = exercise.iconNumber

@@ -1,6 +1,5 @@
 package com.myworkouts.ui.state
 
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.OverviewTab
 import com.myworkouts.domain.usecase.ActivityPeriod
 import com.myworkouts.domain.usecase.CategoryTotal
@@ -13,28 +12,32 @@ import com.myworkouts.domain.usecase.StatsPeriod
 
 /**
  * UiState вкладки «Статистика» экрана обзора (overview-screen, design
- * D9). Доменные типы расчётов ([CategoryTotal], [ExerciseTotal],
- * [DrillDateGroup]) переиспользуются как есть — в них уже есть нужные для
- * LazyColumn-ключей идентификаторы; `selected` — доменный
- * [ExerciseCategory] (драфтовый `StatsCategory` удалён).
+ * D9; custom-categories design Decision 10). Доменные типы расчётов
+ * ([CategoryTotal], [ExerciseTotal], [DrillDateGroup]) переиспользуются
+ * как есть — в них уже есть нужные для LazyColumn-ключей идентификаторы;
+ * `selected` — имя категории (стандартный ключ или кастомное имя).
  *
  * @property period Календарный период доната и легенды
  * @property visiblePeriods Видимые периоды пикера по дате самой ранней
  *  тренировки (overview-periods-and-shares, design D3); дефолт — все
  *  периоды, боевые значения приходят из [com.myworkouts.ui.viewmodel.OverviewViewModel]
- * @property selected Выбранная категория drill-down; `null` — обзор по категориям
- * @property categoryTotals Категории с REPS-объёмом > 0, убывание
+ * @property selected Имя выбранной категории drill-down; `null` — обзор по категориям
+ * @property categoryTotals Категории с суммой подходов > 0, убывание
  * @property exerciseTotals Суммы упражнений по категориям (drill-down легенда)
  * @property drillGroups Записи категорий по датам (drill-down списки)
+ * @property categoryColors Имя категории → `colorArgb` из модели (активные
+ *  и архивные — архивная остаётся в статистике, Decision 10); отсутствующее
+ *  имя — UI берёт нейтральный цвет темы
  * @property isEmpty Нет записей за период ни одного типа измерения — пустое состояние
  */
 data class StatsUiState(
     val period: StatsPeriod = StatsPeriod.WEEK,
     val visiblePeriods: List<StatsPeriod> = StatsPeriod.entries.toList(),
-    val selected: ExerciseCategory? = null,
+    val selected: String? = null,
     val categoryTotals: List<CategoryTotal> = emptyList(),
-    val exerciseTotals: Map<ExerciseCategory, List<ExerciseTotal>> = emptyMap(),
-    val drillGroups: Map<ExerciseCategory, List<DrillDateGroup>> = emptyMap(),
+    val exerciseTotals: Map<String, List<ExerciseTotal>> = emptyMap(),
+    val drillGroups: Map<String, List<DrillDateGroup>> = emptyMap(),
+    val categoryColors: Map<String, Int> = emptyMap(),
     val isEmpty: Boolean = true
 )
 

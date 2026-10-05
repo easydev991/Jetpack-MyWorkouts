@@ -136,6 +136,39 @@ sealed class Screen(
          */
         fun createRoute(exerciseId: Long = NO_EXERCISE_ID): String = "exercise_create?$ARG_EXERCISE_ID=$exerciseId"
     }
+
+    /**
+     * Экран создания/редактирования категории (custom-categories, tasks
+     * 6.1): один composable на оба режима. Опциональный query-аргумент
+     * `categoryId` выбирает режим: отсутствует/[NO_CATEGORY_ID] —
+     * создание (FAB вкладки «Категории»), иначе — переименование
+     * категории с этим id (edit-режим из long-press меню). Паттерн —
+     * [ExerciseCreate]: [arguments] передаётся в каждое место
+     * регистрации `composable(route, arguments)`.
+     */
+    object CategoryCreate : Screen(route = "category_create?categoryId={categoryId}") {
+        /** Ключ query-аргумента маршрута. */
+        const val ARG_CATEGORY_ID: String = "categoryId"
+
+        /** Id «категория не передана» — режим создания. */
+        const val NO_CATEGORY_ID: Long = -1L
+
+        /** Аргументы маршрута для регистрации в `composable(...)`. */
+        val arguments =
+            listOf(
+                navArgument(ARG_CATEGORY_ID) {
+                    type = NavType.LongType
+                    defaultValue = NO_CATEGORY_ID
+                }
+            )
+
+        /**
+         * Route для навигации: всегда `category_create?categoryId={id}` —
+         * `defaultValue` в `navArgument` подставит [NO_CATEGORY_ID] для
+         * create-режима, явный id — режим редактирования.
+         */
+        fun createRoute(categoryId: Long = NO_CATEGORY_ID): String = "category_create?$ARG_CATEGORY_ID=$categoryId"
+    }
 }
 
 /**

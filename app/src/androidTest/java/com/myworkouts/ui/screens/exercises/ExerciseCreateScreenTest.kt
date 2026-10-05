@@ -24,7 +24,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -36,10 +35,10 @@ import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.navigation.Screen
@@ -83,20 +82,19 @@ class ExerciseCreateScreenTest {
         )
 
     /**
-     * Открывает дропдаун категории и выбирает вариант [optionText].
-     *
-     * Клик по полю повторяется, пока пункт меню не появится: попап
-     * `ExposedDropdownMenu` композируется кадром позже клика, а окно
-     * открытой мягкой клавиатуры накрывает поле «Категория» (нижняя часть
-     * формы) — одиночная инъекция клика уходит в IME, и дропдаун не
-     * открывается вовсе (flake roundTrip-теста: «could not find any node
-     * that satisfies: contains 'Толкающие'»). Повторный клик безопасен:
-     * если попап открыт — пункт уже виден и клик не выполняется.
+     * Открывает дропдаун категории: клик по полю повторяется, пока пункт
+     * меню [awaitText] не появится: попап `ExposedDropdownMenu`
+     * композируется кадром позже клика, а окно открытой мягкой клавиатуры
+     * накрывает поле «Категория» (нижняя часть формы) — одиночная инъекция
+     * клика уходит в IME, и дропдаун не открывается вовсе (flake
+     * roundTrip-теста: «could not find any node that satisfies: contains
+     * 'Толкающие'»). Повторный клик безопасен: если попап открыт — пункт
+     * уже виден и клик не выполняется.
      */
-    private fun selectCategory(optionText: String) {
+    private fun openCategoryMenu(awaitText: String) {
         composeTestRule.waitUntil(10_000) {
             val optionExists =
-                composeTestRule.onAllNodesWithText(optionText).fetchSemanticsNodes().isNotEmpty()
+                composeTestRule.onAllNodesWithText(awaitText).fetchSemanticsNodes().isNotEmpty()
             if (!optionExists) {
                 composeTestRule
                     .onNode(hasText(context.getString(R.string.exercise_field_category)))
@@ -104,6 +102,11 @@ class ExerciseCreateScreenTest {
             }
             optionExists
         }
+    }
+
+    /** Открывает дропдаун категории и выбирает вариант [optionText]. */
+    private fun selectCategory(optionText: String) {
+        openCategoryMenu(optionText)
         composeTestRule.onNodeWithText(optionText).performClick()
     }
 
@@ -174,11 +177,15 @@ class ExerciseCreateScreenTest {
     fun content_when_category_selected_then_save_enabled() {
         // Given — название введено, категория не выбрана
         composeTestRule.setContent {
-            var uiState by remember { mutableStateOf(ExerciseCreateUiState(name = "Жим")) }
+            var uiState by remember {
+                mutableStateOf(
+                    ExerciseCreateUiState(name = "Жим", availableCategories = dropdownTestCategories)
+                )
+            }
             ExerciseCreateScreenContent(
                 state =
                     stateFor(uiState).copy(
-                        onCategoryChange = { category -> uiState = uiState.copy(category = category) }
+                        onCategoryChange = { category -> uiState = uiState.copy(categoryName = category) }
                     )
             )
         }
@@ -189,6 +196,39 @@ class ExerciseCreateScreenTest {
         // Then — выбранная категория отображается, Save активна
         composeTestRule.onNodeWithText(context.getString(R.string.exercise_category_push)).assertIsDisplayed()
         composeTestRule.onNodeWithText(context.getString(R.string.entry_save)).assertIsEnabled()
+    }
+
+    /** Активные категории для state-тестов дропдауна: стандартная + кастомная. */
+    private val dropdownTestCategories =
+        listOf(
+            Category(id = 1L, name = "PUSH", colorArgb = 1, isCustom = false),
+            Category(id = 2L, name = "Спина", colorArgb = 2, isCustom = true)
+        )
+
+    /**
+     * Кастомная категория из state рендерится в меню именем как есть
+     * (custom-categories: label-хелпер вернул `null` → `name`).
+     */
+    @Test
+    fun content_when_custom_category_then_shown_as_is_in_menu() {
+        // Given — форма с активными категориями из state
+        composeTestRule.setContent {
+            var uiState by remember {
+                mutableStateOf(ExerciseCreateUiState(availableCategories = dropdownTestCategories))
+            }
+            ExerciseCreateScreenContent(
+                state =
+                    stateFor(uiState).copy(
+                        onCategoryChange = { category -> uiState = uiState.copy(categoryName = category) }
+                    )
+            )
+        }
+
+        // When — открыли меню и выбрали кастомную «Спина»
+        selectCategory("Спина")
+
+        // Then — имя отображается в поле без локализации
+        composeTestRule.onNodeWithText("Спина").assertIsDisplayed()
     }
 
     /** Переключение сегмента REPS → TIME. */
@@ -217,7 +257,7 @@ class ExerciseCreateScreenTest {
     @Test
     fun content_when_comment_empty_then_save_enabled() {
         // Given — name + category заполнены, комментарий пустой
-        setContent(ExerciseCreateUiState(name = "Жим", category = ExerciseCategory.PUSH))
+        setContent(ExerciseCreateUiState(name = "Жим", categoryName = "PUSH"))
 
         // Then — комментарий необязателен, Save активна
         composeTestRule.onNodeWithText(context.getString(R.string.entry_save)).assertIsEnabled()
@@ -227,7 +267,7 @@ class ExerciseCreateScreenTest {
     @Test
     fun content_when_save_error_then_shows_error_message() {
         // Given — провал сохранения
-        setContent(ExerciseCreateUiState(name = "Жим", category = ExerciseCategory.PUSH, isSaveError = true))
+        setContent(ExerciseCreateUiState(name = "Жим", categoryName = "PUSH", isSaveError = true))
 
         // Then — сообщение об ошибке под кнопкой «Сохранить»
         composeTestRule.onNodeWithText(context.getString(R.string.exercise_save_error)).assertIsDisplayed()
@@ -359,7 +399,7 @@ class ExerciseCreateScreenTest {
         Exercise(
             id = 100L,
             name = "Жим лёжа",
-            category = ExerciseCategory.PUSH,
+            category = "PUSH",
             isCustom = true,
             comment = "3 подхода",
             createdAt = 1_721_200_000_000L,
@@ -418,6 +458,7 @@ class ExerciseCreateScreenTest {
             Result.success(emptyList())
 
         override suspend fun importData(
+            categories: List<Category>,
             exercises: List<Exercise>,
             entries: List<BackupEntry>
         ): Result<Unit> = Result.success(Unit)
@@ -434,7 +475,31 @@ class ExerciseCreateScreenTest {
 
         override fun archivedExercises(): Flow<List<Exercise>> = MutableStateFlow(emptyList())
 
-        override fun archivedCount(): Flow<Int> = MutableStateFlow(0)
+        override fun hasArchived(): Flow<Boolean> = MutableStateFlow(false)
+
+        // Новый контракт категорий (custom-categories, этап 2): заглушки.
+        override suspend fun addCategory(name: String): Result<Category> =
+            Result.success(Category(id = 0L, name = name.trim(), colorArgb = 0, isCustom = true))
+
+        override suspend fun renameCategory(
+            id: Long,
+            newName: String
+        ): Result<Unit> = Result.success(Unit)
+
+        override suspend fun deleteCategory(id: Long): Result<Unit> = Result.success(Unit)
+
+        override suspend fun setCategoryArchived(
+            id: Long,
+            isArchived: Boolean
+        ): Result<Unit> = Result.success(Unit)
+
+        override fun categories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+        override fun archivedCategories(): Flow<List<Category>> = MutableStateFlow(emptyList())
+
+        override fun categoryNamesWithLinkedExercises(): Flow<Set<String>> = MutableStateFlow(emptySet())
+
+        override suspend fun getAllCategories(): Result<List<Category>> = Result.success(emptyList())
     }
 
     /**
@@ -621,6 +686,102 @@ class ExerciseCreateScreenTest {
     }
     // endregion
 
+    // region custom-categories §8.3: дропдаун категорий из БД
+
+    /**
+     * Create-режим: архивные категории скрыты в дропдауне (spec «Архивные
+     * категории скрыты при создании»); активная категория видна. Категории
+     * создаются явно в Room — тестовая БД строится без seed-callback.
+     */
+    @Test
+    fun dropdown_in_create_mode_hides_archived_categories() =
+        runBlocking<Unit> {
+            val (database, repository) = roundTripRepository()
+            try {
+                // Given — архивная «Плечи» в БД; активные стандартные (PUSH и
+                // др.) предзаполнены seed-callback-ом createInMemory
+                val shoulders = repository.addCategory("Плечи").getOrThrow()
+                repository.setCategoryArchived(shoulders.id, true)
+
+                lateinit var navController: NavHostController
+                composeTestRule.setContent {
+                    JetpackMyWorkoutsTheme {
+                        ExerciseCreateScreenWithNavHost(repository) { navController = it }
+                    }
+                }
+                composeTestRule.runOnIdle {
+                    navController.navigate(Screen.ExerciseCreate.createRoute())
+                }
+
+                // When — открыт дропдаун (ждём активную PUSH в меню)
+                openCategoryMenu(context.getString(R.string.exercise_category_push))
+
+                // Then — активная видна, архивная отсутствует
+                composeTestRule
+                    .onNodeWithText(context.getString(R.string.exercise_category_push))
+                    .assertIsDisplayed()
+                composeTestRule.onAllNodesWithText("Плечи").assertCountEquals(0)
+            } finally {
+                database.close()
+            }
+        }
+
+    /**
+     * Edit-режим упражнения архивной категории «Плечи»: она видна в
+     * дропдауне (spec «Текущая архивная категория видна при редактировании»),
+     * прочая архивная «Шея» скрыта, активная PUSH видна.
+     */
+    @Test
+    fun dropdown_in_edit_mode_shows_archived_current_and_hides_other_archived() =
+        runBlocking<Unit> {
+            val (database, repository) = roundTripRepository()
+            try {
+                // Given — упражнение категории «Плечи»; «Плечи» и «Шея»
+                // архивны; активные стандартные (PUSH) — из seed. Имя
+                // «Шея» не совпадает с ru-лейблом стандартной CORE («Кор»)
+                val shoulders = repository.addCategory("Плечи").getOrThrow()
+                val neck = repository.addCategory("Шея").getOrThrow()
+                val exerciseId =
+                    repository
+                        .addExercise(
+                            Exercise(
+                                id = 0L,
+                                name = "Махи гантелью",
+                                category = "Плечи",
+                                isCustom = true,
+                                comment = null,
+                                createdAt = 1_700_000_000_000L,
+                                measuredBy = ExerciseMeasuredBy.REPS
+                            )
+                        ).getOrThrow()
+                repository.setCategoryArchived(shoulders.id, true)
+                repository.setCategoryArchived(neck.id, true)
+
+                // When — открыт edit-режим: ждём предзаполнение поля «Плечи»
+                openEdit(repository, exerciseId)
+                composeTestRule.waitUntil(5_000) {
+                    composeTestRule.onAllNodesWithText("Плечи").fetchSemanticsNodes().isNotEmpty()
+                }
+
+                // When — открыт дропдаун (ждём активную PUSH в меню)
+                openCategoryMenu(context.getString(R.string.exercise_category_push))
+
+                // Then — активная PUSH видна, текущая архивная «Плечи» видна
+                // (поле + пункт меню), прочая архивная «Шея» скрыта
+                composeTestRule
+                    .onNodeWithText(context.getString(R.string.exercise_category_push))
+                    .assertIsDisplayed()
+                composeTestRule.waitUntil(5_000) {
+                    composeTestRule.onAllNodesWithText("Плечи").fetchSemanticsNodes().size >= 2
+                }
+                composeTestRule.onAllNodesWithText("Плечи").assertCountEquals(2)
+                composeTestRule.onAllNodesWithText("Шея").assertCountEquals(0)
+            } finally {
+                database.close()
+            }
+        }
+    // endregion
+
     // region exercise-icon-selection: секция выбора иконки (§4.2 AndroidTest)
 
     /**
@@ -752,21 +913,25 @@ class ExerciseCreateScreenTest {
 
     // region exercise-icon-selection: round-trip через Room in-memory (§4.3)
 
-    /** Локальный Room in-memory + репозиторий для round-trip кейсов. */
+    /** Локальный Room in-memory + репозиторий для round-trip кейсов.
+     * `createInMemory` — продовый путь сборки: seed-callback предзаполняет
+     * 5 стандартных категорий — дропдаун формы (custom-categories, этап 8)
+     * наполнен так же, как у пользователя. */
     private fun roundTripRepository(): Pair<WorkoutDatabase, RoomWorkoutDataRepository> {
         val database =
-            Room
-                .inMemoryDatabaseBuilder(
-                    ApplicationProvider.getApplicationContext(),
-                    WorkoutDatabase::class.java
-                ).allowMainThreadQueries()
-                .build()
+            WorkoutDatabase.createInMemory(
+                ApplicationProvider.getApplicationContext(),
+                standardExercises =
+                    listOf(
+                        StandardExercise(name = "Подтягивания", category = "PULL")
+                    )
+            )
         val repository =
             RoomWorkoutDataRepository(
                 database = database,
                 standardExercises =
                     listOf(
-                        StandardExercise(name = "Подтягивания", category = ExerciseCategory.PULL)
+                        StandardExercise(name = "Подтягивания", category = "PULL")
                     )
             )
         return database to repository
@@ -872,7 +1037,7 @@ class ExerciseCreateScreenTest {
                             Exercise(
                                 id = 0L,
                                 name = "Подтягивания wide",
-                                category = ExerciseCategory.PULL,
+                                category = "PULL",
                                 isCustom = true,
                                 comment = "широкий хват",
                                 createdAt = 1_700_000_000_000L,

@@ -13,7 +13,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseCategory
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.EntryCreateUiState
@@ -29,7 +28,7 @@ private val previewRepsExercise =
     Exercise(
         id = 1L,
         name = "Подтягивания",
-        category = ExerciseCategory.PULL,
+        category = "PULL",
         isCustom = false,
         comment = null,
         createdAt = 0L,
@@ -41,7 +40,7 @@ private val previewTimeExercise =
     Exercise(
         id = 2L,
         name = "Планка",
-        category = ExerciseCategory.CORE,
+        category = "CORE",
         isCustom = false,
         comment = null,
         createdAt = 0L,

@@ -7,8 +7,8 @@
 статический `when` в `ui/theme/Color.kt`, статистика группирует по enum,
 импорт бэкапа валидирует категорию `requiredEnum` и отвергает весь файл.
 Room v3, миграций ещё не было (правило: первая рукописная `Migration` —
-в паре с `MigrationTest` + `room-testing`). Экран упражнений — список + FAB
-+ long-press меню; архив упражнений — отдельный экран; паттерн табов —
+в паре с `MigrationTest` + `room-testing`). Экран упражнений — список +
+FAB + long-press меню; архив упражнений — отдельный экран; паттерн табов —
 `OverviewScreen` (`SecondaryTabRow` + `when`, таб-бар при ≥ 2 видимых).
 
 ## Goals / Non-Goals
@@ -115,8 +115,8 @@ ARGB Int. Чистая функция → JVM-тест без моков (фун
 
 `ExercisesTab { EXERCISES, CATEGORIES }`; `selectedTab:
 MutableStateFlow<ExercisesTab>` в `ExercisesViewModel` (не персистится).
-`combine` уже занят 5 потоками — новые (categories,
-archivedCategoriesCount, pendingCategory*, selectedTab) группируются во
+`combine` уже занят 5 потоками — новые (categories, hasArchived,
+pendingCategory*, selectedTab) группируются во
 второй `combine` или vararg-вариант (детали — на усмотрение реализации,
 главное один `stateIn`). `ExercisesScreen` получает колбэки
 `onAddCategoryClick` / `onEditCategory` (навигация на

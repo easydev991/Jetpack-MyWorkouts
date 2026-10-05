@@ -1,7 +1,6 @@
 package com.myworkouts.domain.usecase
 
 import com.myworkouts.domain.model.EntryWithExercise
-import com.myworkouts.domain.model.ExerciseCategory
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -9,7 +8,7 @@ import kotlin.math.roundToInt
 
 /** Доля категории в донате: сумма подходов её записей за период. */
 data class CategoryTotal(
-    val category: ExerciseCategory,
+    val category: String,
     val totalSets: Int = 0
 )
 
@@ -39,8 +38,8 @@ data class DrillDateGroup(
  */
 data class CategoryStatsResult(
     val categoryTotals: List<CategoryTotal>,
-    val exerciseTotals: Map<ExerciseCategory, List<ExerciseTotal>>,
-    val drillGroups: Map<ExerciseCategory, List<DrillDateGroup>>
+    val exerciseTotals: Map<String, List<ExerciseTotal>>,
+    val drillGroups: Map<String, List<DrillDateGroup>>
 )
 
 /**
@@ -105,7 +104,7 @@ internal fun computeCategoryStats(
                     totalSets = list.sumOf { it.sets }
                 )
             }.filter { it.totalSets > 0 }
-            .sortedWith(compareByDescending<CategoryTotal> { it.totalSets }.thenBy { it.category.name })
+            .sortedWith(compareByDescending<CategoryTotal> { it.totalSets }.thenBy { it.category })
     val exerciseTotals =
         inPeriod
             .groupBy { it.category }

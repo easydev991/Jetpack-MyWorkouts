@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -25,7 +23,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -61,10 +58,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
-import com.myworkouts.domain.model.ExerciseCategory
+import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.ui.components.SaveBottomBar
 import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.ExerciseCreateUiState
+import com.myworkouts.ui.util.categoryLabel
 import com.myworkouts.ui.viewmodel.ExerciseCreateViewModel
 
 /**
@@ -107,7 +106,7 @@ fun ExerciseCreateScreen(
 internal data class ExerciseCreateScreenState(
     val uiState: ExerciseCreateUiState,
     val onNameChange: (String) -> Unit,
-    val onCategoryChange: (ExerciseCategory) -> Unit,
+    val onCategoryChange: (String) -> Unit,
     val onMeasuredByChange: (ExerciseMeasuredBy) -> Unit,
     val onCommentChange: (String) -> Unit,
     val onIconNumberChange: (Int?) -> Unit,
@@ -168,7 +167,24 @@ internal fun ExerciseCreateScreenContent(
                 }
             )
         },
-        bottomBar = { ExerciseCreateSaveBottomBar(state = state) }
+        bottomBar = {
+            SaveBottomBar(
+                canSave = state.uiState.canSave,
+                onSave = state.onSaveClick,
+                showError = state.uiState.isSaveError,
+                errorRes = R.string.exercise_save_error,
+                // Decision 5 (edit-delete-exercise): упражнение не найдено —
+                // кнопка недостижимо неактивна (guard `!isExerciseMissing`
+                // в canSave), подсказка объясняет почему (паттерн
+                // `isEntryMissing`)
+                hintRes =
+                    if (state.uiState.isExerciseMissing) {
+                        R.string.exercise_hint_exercise_missing
+                    } else {
+                        null
+                    }
+            )
+        }
     ) { paddingValues ->
         ExerciseCreateForm(state = state, paddingValues = paddingValues)
     }
@@ -256,7 +272,8 @@ internal fun ExerciseCreateForm(
         )
 
         CategoryDropdownField(
-            selectedCategory = uiState.category,
+            categories = uiState.dropdownCategories,
+            selectedCategory = uiState.categoryName,
             onCategoryChange = state.onCategoryChange
         )
 
@@ -291,14 +308,19 @@ internal fun ExerciseCreateForm(
 /**
  * Выпадающий список категорий (`ExposedDropdownMenuBox`) —
  * паттерн-близнец `DurationDropdownField`. Пока категория не выбрана,
- * показывается placeholder; сами категории — локализованные лейблы
- * через [labelResId], в БД сохраняется enum.
+ * показывается placeholder; категории — локализованные лейблы стандартных
+ * через [standardCategoryLabelResId], кастомные — имя как есть.
+ *
+ * Список приходит из состояния (`uiState.dropdownCategories`): активные
+ * категории БД, в edit-режиме плюс архивная текущая (custom-categories,
+ * этап 8).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CategoryDropdownField(
-    selectedCategory: ExerciseCategory?,
-    onCategoryChange: (ExerciseCategory) -> Unit
+    categories: List<Category>,
+    selectedCategory: String?,
+    onCategoryChange: (String) -> Unit
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
 
@@ -309,7 +331,7 @@ internal fun CategoryDropdownField(
         OutlinedTextField(
             value =
                 selectedCategory
-                    ?.let { stringResource(it.labelResId) }
+                    ?.let { categoryLabel(it) }
                     .orEmpty(),
             onValueChange = {},
             readOnly = true,
@@ -328,60 +350,15 @@ internal fun CategoryDropdownField(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
-            ExerciseCategory.entries.forEach { category ->
+            categories.forEach { category ->
                 DropdownMenuItem(
-                    text = { Text(stringResource(category.labelResId)) },
+                    text = { Text(categoryLabel(category.name)) },
                     onClick = {
-                        onCategoryChange(category)
+                        onCategoryChange(category.name)
                         expanded = false
                     }
                 )
             }
-        }
-    }
-}
-
-/**
- * Нижняя панель экрана: единственная кнопка «Сохранить» поверх
- * клавиатуры (`navigationBarsPadding` + `imePadding` — максимум
- * инсетов, не сумма) и блок ошибки под ней при `isSaveError = true`
- * (паттерн — `EntryCreateScreen.SaveBottomBar`, без секции подсказок).
- */
-@Composable
-internal fun ExerciseCreateSaveBottomBar(state: ExerciseCreateScreenState) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .imePadding()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Button(
-            onClick = state.onSaveClick,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = state.uiState.canSave
-        ) {
-            Text(stringResource(R.string.entry_save))
-        }
-
-        // Decision 5 (edit-delete-exercise): упражнение не найдено — кнопка
-        // недостижимо неактивна (guard `!isExerciseMissing` в canSave),
-        // подсказка объясняет почему (паттерн `isEntryMissing`)
-        if (state.uiState.isExerciseMissing) {
-            Text(
-                text = stringResource(R.string.exercise_hint_exercise_missing),
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-
-        if (state.uiState.isSaveError) {
-            Text(
-                text = stringResource(R.string.exercise_save_error),
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
-            )
         }
     }
 }
