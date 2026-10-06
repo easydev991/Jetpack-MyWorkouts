@@ -4,24 +4,6 @@
 
 ### Requirement: Screen sealed class holds only route
 
-**Reason**: добавление `Screen.CategoryCreate` (ADDED ниже) расширяет
-перечень зарегистрированных в `NavHost` destinations — канон должен
-отражать это изменение.
-
-**Migration**: перечень маршрутов в существующем требовании
-(`openspec/specs/non-tab-screen-navigation/spec.md`, L17–21) заменяется
-на расширенный, включающий `Screen.CategoryCreate.route`:
-
-> the navigation graph in `RootScreen` SHALL use `Screen.Main.route`,
-> `Screen.Exercises.route`, `Screen.More.route`, `Screen.Appearance.route`,
-> `Screen.AppData.route`, `Screen.EntryCreate.route`,
-> `Screen.ExerciseCreate.route`, `Screen.ArchivedExercises.route`,
-> `Screen.EntrySettings.route`, `Screen.CategoryCreate.route` as the
-> registered destinations.
-
-Scenarios существующего требования переезжают в MODIFIED-требование
-как есть (без изменений).
-
 `Screen` SHALL be `sealed class Screen(val route: String)` and SHALL
 NOT contain `icon`, `titleResId`, or other UI metadata. Each subclass
 is an `object` with a unique `route` string. `Screen` SHALL be the

@@ -17,8 +17,8 @@ single source of truth for navigation route strings; the navigation
 graph in `RootScreen` SHALL use `Screen.Main.route`, `Screen.Exercises.route`,
 `Screen.More.route`, `Screen.Appearance.route`, `Screen.AppData.route`,
 `Screen.EntryCreate.route`, `Screen.ExerciseCreate.route`,
-`Screen.ArchivedExercises.route`, `Screen.EntrySettings.route` as the
-registered destinations.
+`Screen.ArchivedExercises.route`, `Screen.EntrySettings.route`,
+`Screen.CategoryCreate.route` as the registered destinations.
 
 #### Scenario: Screen has only route parameter
 
@@ -211,3 +211,55 @@ UI-метаданных, `Screen` остаётся единственным ис
 
 - **WHEN** на экране обзора нажимается кнопка настроек, затем системный Back
 - **THEN** открывается `Screen.OverviewSettings.route`, затем Back возвращает на экран обзора
+
+### Requirement: CategoryCreate object added to sealed Screen
+
+`Screen.CategoryCreate` SHALL быть `object CategoryCreate : Screen(route =
+"category_create?categoryId={categoryId}")` с query-параметром
+`categoryId` — паттерн `Screen.ExerciseCreate`. Объект SHALL содержать:
+константу `const val ARG_CATEGORY_ID: String = "categoryId"`, `const val
+NO_CATEGORY_ID: Long = -1L`, фабрику маршрута `fun createRoute(categoryId:
+Long = NO_CATEGORY_ID) = "category_create?$ARG_CATEGORY_ID=$categoryId"` и
+`val arguments = listOf(navArgument(ARG_CATEGORY_ID) { type =
+NavType.LongType; defaultValue = NO_CATEGORY_ID })`. Регистрация в
+`NavHost` `RootScreen`: `composable(Screen.CategoryCreate.route, arguments
+= Screen.CategoryCreate.arguments) { ... }`; значение `categoryId` SHALL
+читаться из `backStackEntry.arguments?.getLong(ARG_CATEGORY_ID,
+Screen.CategoryCreate.NO_CATEGORY_ID)` и передаваться в фабрику
+`CategoryCreateViewModel`. Create-режим использует фабрику маршрута без
+параметра. `Screen` остаётся единственным источником истины для строк
+навигационных маршрутов. `screenForRoute` SHALL отображать маршрут на
+значение `AppScreen.CategoryCreateScreen` для аналитики просмотра экранов.
+Нижняя навигация SHALL быть скрыта при активном маршруте (контракт
+`shouldShowBottomBar = currentRoute in tabs.map { it.route }` —
+`category_create` не входит в список, правок `RootScreen` для скрытия бара
+не требуется).
+
+#### Scenario: CategoryCreate object added to sealed Screen
+
+- **WHEN** `Screen.CategoryCreate` is referenced
+- **THEN** `Screen.CategoryCreate.route ==
+  "category_create?categoryId={categoryId}"`
+- **AND** `Screen.CategoryCreate` declared as `object` inside sealed
+  `Screen`
+
+#### Scenario: Фабрика маршрута с categoryId
+
+- **WHEN** `Screen.CategoryCreate.createRoute(3)` вычислен
+- **THEN** результат `"category_create?categoryId=3"`
+- **AND** `Screen.CategoryCreate.NO_CATEGORY_ID == -1L`
+
+#### Scenario: NavHost registers CategoryCreate destination
+
+- **WHEN** `RootScreen` is composed
+- **THEN** `NavHost` has a `composable(Screen.CategoryCreate.route,
+  arguments = ...) { ... }` destination рядом с `ExerciseCreate`
+- **AND** `categoryId` из аргументов backStackEntry передаётся в фабрику
+  `CategoryCreateViewModel`
+
+#### Scenario: Bottom navigation скрыта на CategoryCreate
+
+- **WHEN** активный route is `Screen.CategoryCreate.route`
+- **THEN** нижний бар навигации скрыт
+- **AND** активный экран — `CategoryCreateScreen` (см. capability
+  `category-create-screen`)
