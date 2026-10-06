@@ -94,7 +94,7 @@ interface ExerciseDao {
      * Переименовывает категорию во всём каталоге упражнений — активных
      * и архивных (custom-categories, design Decision 1): без FK
      * целостность имён держит транзакция вместе с
-     * [CategoryDao.updateName].
+     * [CategoryDao.updateNameAndColor].
      */
     @Query("UPDATE exercises SET category = :newName WHERE category = :oldName")
     suspend fun updateCategoryName(

@@ -2,6 +2,25 @@
 
 ## ADDED Requirements
 
+### Requirement: BackHandler + hasChanges
+
+`CategoryCreateScreenContent` SHALL использовать `BackHandler` и диалог
+подтверждения при несохранённых изменениях — канон требования «BackHandler +
+hasUnsavedChanges — подтверждение закрытия» спеки `exercise-create-screen`
+(локальный `showConfirmDialog`, `attemptClose`, переиспользование строк
+`entry_confirm_close_dialog_title` / `entry_confirm_close_dialog_message` /
+`entry_confirm_close` / `cancel` без новых ключей).
+
+#### Scenario: Системный back с введённым именем — диалог
+
+- **WHEN** `hasChanges == true` AND нажимается системный back
+- **THEN** показывается диалог подтверждения закрытия
+
+#### Scenario: Пустая форма закрывается без диалога
+
+- **WHEN** create-форма не тронута AND нажимается системный back
+- **THEN** экран закрывается без диалога
+
 ### Requirement: CategoryColorPicker — отображение и регенерация цвета
 
 Форма SHALL содержать компонент `CategoryColorPicker` под полем
@@ -113,8 +132,8 @@ create-режиме, `R.string.category_edit_title` («Изменить кате
 Форма SHALL содержать поле «Название» и `CategoryColorPicker` под ним
 (требование «CategoryColorPicker — отображение и регенерация цвета»).
 `attemptClose` — единая точка входа для системного back и стрелки
-`TopAppBar` (требование «BackHandler + hasUnsavedChanges» основной
-спеки, не меняется).
+`TopAppBar` (требование «BackHandler + hasChanges» — переименовано
+в этой дельте, поведение не меняется).
 Обёртка `CategoryCreateScreen` делегирует в Content через
 `CategoryCreateScreenState` (паттерн `ExerciseCreateScreen — обёртка +
 Content + ScreenState`: `collectAsState` + data class state с колбэками
@@ -154,8 +173,7 @@ null`, `isEditMode: Boolean = false`, `hasChanges: Boolean = false`,
 create-режиме терм `(!isEditMode || hasChanges)` истинен по построению
 — `canSave` от `hasChanges` не зависит). `hasChanges` — единый флаг
 изменения относительно стартовой линии: имя после `trim()` ИЛИ цвет по
-значению `colorArgb` (в обоих режимах). `hasUnsavedChanges` —
-computed-свойство, равно `hasChanges`. Колбэк `onNameChange`
+значению `colorArgb` (в обоих режимах). Колбэк `onNameChange`
 SHALL сбрасывать `isDuplicateName` и `isSaveError = false` при каждом
 вводе (перепроверка дубликата — по актуальному списку имён; паттерн
 `ExerciseCreateViewModel.onXChange`); колбэк `onRegenerateColorClick`
@@ -174,7 +192,7 @@ SHALL сбрасывать `isSaveError = false`. В create-режиме VM SHAL
 #### Scenario: Edit без изменений — canSave = false
 
 - **WHEN** `isEditMode == true` AND форма не менялась
-- **THEN** `canSave == false` AND `hasUnsavedChanges == false`
+- **THEN** `canSave == false` AND `hasChanges == false`
 
 #### Scenario: Изменённый только цвет включает Сохранить в edit
 
@@ -186,14 +204,14 @@ SHALL сбрасывать `isSaveError = false`. В create-режиме VM SHAL
 
 - **WHEN** регенерация вернула цвет, равный стартовому по значению
   `colorArgb`
-- **THEN** `hasChanges == false` AND `hasUnsavedChanges == false`
+- **THEN** `hasChanges == false`
   (в обоих режимах — совпадение по значению не считается изменением)
 
 #### Scenario: Регенерированный цвет в create — несохранённое изменение
 
 - **WHEN** в create-режиме имя пустое AND пользователь регенерировал цвет
   в другое значение
-- **THEN** `hasUnsavedChanges == true` (диалог подтверждения закрытия)
+- **THEN** `hasChanges == true` (диалог подтверждения закрытия)
 
 ### Requirement: Edit-режим: загрузка и предзаполнение
 
@@ -252,3 +270,14 @@ create- и edit-состояниях) и для `CategoryColorPicker` (два к
 (`updateCategory`) — сохранение в edit-режиме пишет оба поля.
 **Migration**: Требование «Сохранение — create и update с popBackStack»
 (в секции ADDED этой дельты) — полное поведение с цветом.
+
+### Requirement: BackHandler + hasUnsavedChanges
+
+**Reason**: свойство `hasUnsavedChanges` удалено из `CategoryCreateUiState`
+как чистый алиас `hasChanges` (ревью custom-categories-color-change).
+**Migration**: Требование «BackHandler + hasChanges» (в секции ADDED этой
+дельты) — переименованы требование и сценарная формула; механика диалога
+та же, но семантика `hasChanges` расширена цветом: в create регенерация
+цвета при пустом имени тоже даёт диалог (сценарий «Регенерированный цвет
+в create — несохранённое изменение»), в edit — включает «Сохранить»
+(формула в ADDED «ViewModel, UiState и canSave»).

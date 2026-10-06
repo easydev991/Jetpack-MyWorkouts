@@ -478,12 +478,16 @@ class ExerciseCreateScreenTest {
         override fun hasArchived(): Flow<Boolean> = MutableStateFlow(false)
 
         // Новый контракт категорий (custom-categories, этап 2): заглушки.
-        override suspend fun addCategory(name: String): Result<Category> =
-            Result.success(Category(id = 0L, name = name.trim(), colorArgb = 0, isCustom = true))
+        override suspend fun addCategory(
+            name: String,
+            colorArgb: Int
+        ): Result<Category> =
+            Result.success(Category(id = 0L, name = name.trim(), colorArgb = colorArgb, isCustom = true))
 
-        override suspend fun renameCategory(
+        override suspend fun updateCategory(
             id: Long,
-            newName: String
+            newName: String,
+            colorArgb: Int
         ): Result<Unit> = Result.success(Unit)
 
         override suspend fun deleteCategory(id: Long): Result<Unit> = Result.success(Unit)
@@ -700,7 +704,7 @@ class ExerciseCreateScreenTest {
             try {
                 // Given — архивная «Плечи» в БД; активные стандартные (PUSH и
                 // др.) предзаполнены seed-callback-ом createInMemory
-                val shoulders = repository.addCategory("Плечи").getOrThrow()
+                val shoulders = repository.addCategory("Плечи", colorArgb = 0xFF123456.toInt()).getOrThrow()
                 repository.setCategoryArchived(shoulders.id, true)
 
                 lateinit var navController: NavHostController
@@ -739,8 +743,8 @@ class ExerciseCreateScreenTest {
                 // Given — упражнение категории «Плечи»; «Плечи» и «Шея»
                 // архивны; активные стандартные (PUSH) — из seed. Имя
                 // «Шея» не совпадает с ru-лейблом стандартной CORE («Кор»)
-                val shoulders = repository.addCategory("Плечи").getOrThrow()
-                val neck = repository.addCategory("Шея").getOrThrow()
+                val shoulders = repository.addCategory("Плечи", colorArgb = 0xFF123456.toInt()).getOrThrow()
+                val neck = repository.addCategory("Шея", colorArgb = 0xFF234567.toInt()).getOrThrow()
                 val exerciseId =
                     repository
                         .addExercise(

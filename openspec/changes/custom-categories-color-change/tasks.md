@@ -9,7 +9,7 @@
 
 ## 1. Data-слой: addCategory с цветом и updateCategory
 
-- [ ] 1.1 Написать JVM-тесты `addCategory(name, colorArgb)` — красные:
+- [x] 1.1 Написать JVM-тесты `addCategory(name, colorArgb)` — красные:
   переданный `colorArgb` персистится как есть; пустое/blank имя
   отклоняется; дубль по `name.trim().lowercase()` отклоняется;
   `isCustom = true`, `isArchived = false`. В этой же задаче сменить
@@ -22,7 +22,7 @@
   игнорирует `colorArgb` (старое тело с внутренней генерацией) —
   assertion «персистит переданный цвет» красное. Верификация: тест
   падает, проект компилируется
-- [ ] 1.2 Реализовать `addCategory(name, colorArgb)`: сохранять
+- [x] 1.2 Реализовать `addCategory(name, colorArgb)`: сохранять
   переданный цвет; удалить внутреннюю генерацию и ctor-property
   `colorGenerator` репозитория; `generateCategoryColor` сделать
   `internal` (для инжекта в VM, design Decision 1). В этой же задаче
@@ -31,7 +31,7 @@
   `addCategory(name, colorArgb = testColor)`, ассерт «Цвет — из
   colorGenerator» заменить на «переданный цвет сохраняется как есть».
   Верификация: тесты 1.1 зелёные, `make test` зелёный
-- [ ] 1.3 Написать JVM-тесты `updateCategory(id, newName, colorArgb)` —
+- [x] 1.3 Написать JVM-тесты `updateCategory(id, newName, colorArgb)` —
   красные: одна транзакция обновляет имя и цвет; каскад
   `exercises.category` по старому имени (активные и архивные
   упражнения); смена только цвета НЕ трогает упражнения; стандартная
@@ -45,13 +45,13 @@
   перевести на `updateCategory(id, name, colorArgb = цвет оригинала)`
   (минимальная правка для компиляции, полный переход VM — задача 2.2).
   Верификация: тесты падают, проект компилируется
-- [ ] 1.4 Реализовать `updateCategory`: транзакция по образцу
+- [x] 1.4 Реализовать `updateCategory`: транзакция по образцу
   `renameCategory` (guard `isCustom`, проверки имени); DAO-метод
   `CategoryDao.updateName` заменить на `updateNameAndColor(id, name,
   colorArgb)`, вызываемый репозиторным `updateCategory`; каскад
   `exerciseDao.updateCategoryName` без изменений.
   Верификация: тесты 1.3 зелёные, `make test` зелёный
-- [ ] 1.5 Актуализировать KDoc под новые сигнатуры:
+- [x] 1.5 Актуализировать KDoc под новые сигнатуры:
   `Category.colorArgb` («задел под будущую ручную настройку» → цвет
   выбирается на экране категории — пикер: стартовый + refresh — и
   передаётся в операцию готовым; ручной выбор из палитры вне scope);
@@ -66,7 +66,7 @@
 
 ## 2. ViewModel и UiState: цвет в состоянии
 
-- [ ] 2.1 Написать JVM-тесты `CategoryCreateViewModel` /
+- [x] 2.1 Написать JVM-тесты `CategoryCreateViewModel` /
   `CategoryCreateUiState` — красные: create — начальная генерация при
   первой эмиссии категорий (stub-генератор → фикс. цвет в
   `colorArgb`); edit — предзаполнение `colorArgb` оригинала;
@@ -80,7 +80,7 @@
   от стартового);
   save: create → `addCategory(name, colorArgb)`, edit →
   `updateCategory(id, name, colorArgb)`. Верификация: тесты падают
-- [ ] 2.2 Реализовать: `CategoryCreateUiState` — поле `colorArgb:
+- [x] 2.2 Реализовать: `CategoryCreateUiState` — поле `colorArgb:
   Int?`, формулы `canSave` / `hasChanges` / `hasUnsavedChanges`
   (design Decision 3); `CategoryCreateViewModel` —
   `categoryColorGenerator` default-параметр, стартовый цвет create при
@@ -90,11 +90,11 @@
 
 ## 3. UI: пикер, строки, превью
 
-- [ ] 3.1 Добавить строки ru/en: `category_field_color` («Цвет» /
+- [x] 3.1 Добавить строки ru/en: `category_field_color` («Цвет» /
   "Color"), `category_color_regenerate` («Обновить цвет» / "Regenerate
   color"), `category_color_current` («Текущий цвет» / "Current color").
   Верификация: ключи в `values/` и `values-en/`, сборка без ошибок
-- [ ] 3.2 Реализовать `CategoryColorPicker` (Row: заголовок
+- [x] 3.2 Реализовать `CategoryColorPicker` (Row: заголовок
   `weight(1f)` + IconButton `Icons.Default.Refresh` + кружок
   `CircleShape` c `Modifier.semantics { contentDescription = ... }`,
   `null` → плейсхолдер темы) и разместить в
@@ -105,7 +105,7 @@
   экрана с кружком в create и edit (`*Preview.kt`, `locale = "ru"`).
   Верификация: превью-файлы компилируются, `make lint` без новых
   предупреждений
-- [ ] 3.3 Написать androidTest (Room in-memory, реальные
+- [x] 3.3 Написать androidTest (Room in-memory, реальные
   `WorkoutDatabase` / `RoomWorkoutDataRepository`): пикер виден в
   create- и edit-режимах; refresh перерисовывает кружок; сохранение в
   edit-режиме обновляет в БД имя И цвет (updateCategory). Верификация:
@@ -113,9 +113,11 @@
 
 ## 4. Интеграционная проверка
 
-- [ ] 4.1 Полный прогон: `make format && make lint && make test`,
+- [x] 4.1 Полный прогон: `make format && make lint && make test`,
   затем `make android-test`; detekt без новых предупреждений (лимит
   `maxIssues: 5` не поднимается). Верификация: все команды зелёные
+  (format/lint чистые, JVM 1074/1074, androidTest
+  CategoryCreateScreenTest 6/6)
 
 ## 5. Архивация
 

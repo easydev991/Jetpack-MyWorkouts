@@ -30,9 +30,7 @@ import org.junit.jupiter.api.Test
  * транзакционное переименование, пре-чек удаления, архивация и
  * реактивные запросы — делегирование к MockK-DAO.
  *
- * `colorGenerator` подменяется стабом: `android.graphics.Color` на JVM —
- * stub, реальная конвертация ARGB ↔ HSV проверяется инструментально.
- * Room-транзакция подменяется прямым выполнением блока — реальная БД
+ * `Room`-транзакция подменяется прямым выполнением блока — реальная БД
  * на JVM не поднимается.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -42,7 +40,7 @@ class RoomWorkoutDataRepositoryCategoryTest {
     private lateinit var exerciseDao: ExerciseDao
     private lateinit var repository: RoomWorkoutDataRepository
 
-    /** Тестовый цвет из стаба [RoomWorkoutDataRepository.colorGenerator]. */
+    /** Цвет, передаваемый в `addCategory` — персистится операцией как есть. */
     private val testColor: Int = 0xFF123456.toInt()
 
     private val spineCategory =
@@ -65,8 +63,7 @@ class RoomWorkoutDataRepositoryCategoryTest {
         repository =
             RoomWorkoutDataRepository(
                 database = database,
-                standardExercises = emptyList(),
-                colorGenerator = { _, _ -> testColor }
+                standardExercises = emptyList()
             )
     }
 
@@ -112,7 +109,7 @@ class RoomWorkoutDataRepositoryCategoryTest {
     fun add_category_when_blank_name_then_failure_without_insert() =
         runTest {
             // When
-            val result = repository.addCategory("   ")
+            val result = repository.addCategory("   ", colorArgb = testColor)
 
             // Then
             assertTrue(result.isFailure, "Blank-имя отклоняется")
@@ -127,7 +124,7 @@ class RoomWorkoutDataRepositoryCategoryTest {
             coEvery { categoryDao.getAll() } returns listOf(spineCategory)
 
             // When: «  СПИНА » — тот же ключ после trim().lowercase()
-            val result = repository.addCategory("  СПИНА ")
+            val result = repository.addCategory("  СПИНА ", colorArgb = testColor)
 
             // Then
             assertTrue(result.isFailure, "Дубль по name.trim().lowercase() отклоняется")
@@ -135,7 +132,7 @@ class RoomWorkoutDataRepositoryCategoryTest {
         }
 
     @Test
-    fun add_category_when_success_then_saves_custom_active_category_with_generated_color() =
+    fun add_category_when_success_then_saves_custom_active_category_with_passed_color() =
         runTest {
             // Given
             val inserted = slot<CategoryEntity>()
@@ -143,26 +140,26 @@ class RoomWorkoutDataRepositoryCategoryTest {
             coEvery { categoryDao.insert(capture(inserted)) } returns 42L
 
             // When
-            val result = repository.addCategory("Плечи")
+            val result = repository.addCategory("Плечи", colorArgb = testColor)
 
             // Then
             assertTrue(result.isSuccess, "Уникальное имя создаётся")
             val created = checkNotNull(result.getOrNull())
             assertEquals(42L, created.id, "В модели — id из вставки")
             assertEquals("Плечи", created.name, "Имя после trim()")
-            assertEquals(testColor, created.colorArgb, "Цвет — из colorGenerator")
+            assertEquals(testColor, created.colorArgb, "Переданный цвет сохраняется как есть")
             assertTrue(created.isCustom, "Создана пользователем — isCustom = true")
             assertFalse(created.isArchived, "Новая категория не в архиве")
             assertEquals("Плечи", inserted.captured.name, "В БД пишется trim()-имя")
-            assertEquals(testColor, inserted.captured.colorArgb, "В БД пишется сгенерированный цвет")
+            assertEquals(testColor, inserted.captured.colorArgb, "В БД пишется переданный цвет")
             assertTrue(inserted.captured.isCustom, "В БД — isCustom = true")
             assertFalse(inserted.captured.isArchived, "В БД — isArchived = false")
         }
 
-    // ---------- renameCategory (задачи 2.5/2.6) ----------
+    // ---------- updateCategory (tasks 1.3/1.4) ----------
 
     @Test
-    fun rename_category_updates_name_and_linked_exercises_in_one_transaction() =
+    fun update_category_updates_name_color_and_linked_exercises_in_one_transaction() =
         runTest {
             // Given
             mockRoomTransaction()
@@ -170,18 +167,36 @@ class RoomWorkoutDataRepositoryCategoryTest {
             coEvery { categoryDao.getAll() } returns listOf(spineCategory)
 
             // When
-            val result = repository.renameCategory(5L, "Спина и поясница")
+            val result = repository.updateCategory(5L, "Спина и поясница", testColor)
 
             // Then: обе таблицы обновлены внутри одной транзакции; UPDATE
             // упражнений без фильтра архива накрывает активные и архивные
-            assertTrue(result.isSuccess, "Уникальное новое имя переименовывается")
+            assertTrue(result.isSuccess, "Уникальное новое имя обновляется")
             coVerify(exactly = 1) { database.withTransaction(any<suspend () -> Unit>()) }
-            coVerify(exactly = 1) { categoryDao.updateName(5L, "Спина и поясница") }
+            coVerify(exactly = 1) { categoryDao.updateNameAndColor(5L, "Спина и поясница", testColor) }
             coVerify(exactly = 1) { exerciseDao.updateCategoryName("Спина", "Спина и поясница") }
         }
 
     @Test
-    fun rename_category_when_standard_then_standard_category_deletion_exception() =
+    fun update_category_when_only_color_changed_then_exercises_keep_their_links() =
+        runTest {
+            // Given: имя то же, цвет новый
+            mockRoomTransaction()
+            coEvery { categoryDao.getById(5L) } returns spineCategory
+            coEvery { categoryDao.getAll() } returns listOf(spineCategory)
+
+            // When
+            val result = repository.updateCategory(5L, "Спина", testColor)
+
+            // Then: цвет сохранён; каскад безусловен, по тому же имени —
+            // практический no-op, ссылки упражнений не меняются
+            assertTrue(result.isSuccess, "Смена только цвета — успех")
+            coVerify(exactly = 1) { categoryDao.updateNameAndColor(5L, "Спина", testColor) }
+            coVerify(exactly = 1) { exerciseDao.updateCategoryName("Спина", "Спина") }
+        }
+
+    @Test
+    fun update_category_when_standard_then_standard_category_deletion_exception() =
         runTest {
             // Given
             mockRoomTransaction()
@@ -189,20 +204,20 @@ class RoomWorkoutDataRepositoryCategoryTest {
                 spineCategory.copy(id = 1L, name = "PUSH", isCustom = false)
 
             // When
-            val result = repository.renameCategory(1L, "Новое имя")
+            val result = repository.updateCategory(1L, "Новое имя", testColor)
 
             // Then
             val exception = checkNotNull(result.exceptionOrNull())
             assertTrue(
                 exception is StandardCategoryDeletionException,
-                "Стандартная категория не переименовывается тем же типом ошибки, что и удаление"
+                "Стандартная категория не обновляется тем же типом ошибки, что и удаление"
             )
-            coVerify(exactly = 0) { categoryDao.updateName(any(), any()) }
+            coVerify(exactly = 0) { categoryDao.updateNameAndColor(any(), any(), any()) }
             coVerify(exactly = 0) { exerciseDao.updateCategoryName(any(), any()) }
         }
 
     @Test
-    fun rename_category_when_duplicate_new_name_then_failure_and_no_changes() =
+    fun update_category_when_duplicate_new_name_then_failure_and_no_changes() =
         runTest {
             // Given: другая категория «Грудь»
             mockRoomTransaction()
@@ -214,59 +229,59 @@ class RoomWorkoutDataRepositoryCategoryTest {
                 )
 
             // When
-            val result = repository.renameCategory(5L, "грудь")
+            val result = repository.updateCategory(5L, "грудь", testColor)
 
             // Then: транзакция откатывается — ни категория, ни упражнения
             assertTrue(result.isFailure, "Дубль имени отклоняется")
-            coVerify(exactly = 0) { categoryDao.updateName(any(), any()) }
+            coVerify(exactly = 0) { categoryDao.updateNameAndColor(any(), any(), any()) }
             coVerify(exactly = 0) { exerciseDao.updateCategoryName(any(), any()) }
         }
 
     @Test
-    fun rename_category_when_unknown_id_then_failure() =
+    fun update_category_when_unknown_id_then_failure() =
         runTest {
             // Given
             mockRoomTransaction()
             coEvery { categoryDao.getById(99L) } returns null
 
             // When
-            val result = repository.renameCategory(99L, "Что-то")
+            val result = repository.updateCategory(99L, "Что-то", testColor)
 
             // Then
             assertTrue(result.isFailure, "Несуществующая категория — ошибка")
-            coVerify(exactly = 0) { categoryDao.updateName(any(), any()) }
+            coVerify(exactly = 0) { categoryDao.updateNameAndColor(any(), any(), any()) }
         }
 
     @Test
-    fun rename_category_when_blank_new_name_then_failure_and_no_changes() =
+    fun update_category_when_blank_new_name_then_failure_and_no_changes() =
         runTest {
             // Given
             mockRoomTransaction()
             coEvery { categoryDao.getById(5L) } returns spineCategory
 
             // When
-            val result = repository.renameCategory(5L, "   ")
+            val result = repository.updateCategory(5L, "   ", testColor)
 
             // Then: новое имя проходит те же проверки, что при создании
             assertTrue(result.isFailure, "Blank-имя отклоняется")
-            coVerify(exactly = 0) { categoryDao.updateName(any(), any()) }
+            coVerify(exactly = 0) { categoryDao.updateNameAndColor(any(), any(), any()) }
             coVerify(exactly = 0) { exerciseDao.updateCategoryName(any(), any()) }
         }
 
     @Test
-    fun rename_category_when_same_normalized_name_of_self_then_success() =
+    fun update_category_when_same_normalized_name_of_self_then_success() =
         runTest {
-            // Given: дубль исключает саму переименуемую категорию
+            // Given: дубль исключает саму обновляемую категорию
             mockRoomTransaction()
             coEvery { categoryDao.getById(5L) } returns spineCategory
             coEvery { categoryDao.getAll() } returns listOf(spineCategory)
 
             // When
-            val result = repository.renameCategory(5L, "  спина ")
+            val result = repository.updateCategory(5L, "  спина ", testColor)
 
             // Then
             assertTrue(result.isSuccess, "Своё же имя (после trim/lowercase) — не дубль")
-            coVerify(exactly = 1) { categoryDao.updateName(5L, "спина") }
+            coVerify(exactly = 1) { categoryDao.updateNameAndColor(5L, "спина", testColor) }
         }
 
     // ---------- deleteCategory (задачи 2.7/2.8) ----------

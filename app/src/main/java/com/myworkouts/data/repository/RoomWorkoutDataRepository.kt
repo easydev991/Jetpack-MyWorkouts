@@ -40,10 +40,6 @@ import kotlin.random.Random
  * @property standardExercises стандартный набор для восстановления в
  *   [deleteAllData] — тот же список, что передаётся в
  *   [com.myworkouts.data.db.WorkoutDatabase.create]
- * @property colorGenerator генератор цвета новой категории — по умолчанию
- *   [generateCategoryColor]; `internal`-шов для JVM-тестов: подмена
- *   стабом, т.к. `android.graphics.Color` на JVM недоступен
- *   (custom-categories, design Decision 3)
  *
  * `TooManyFunctions` подавлен осознанно: методы — единый контракт
  * [WorkoutDataRepository] (app-data-screen, exercises-archive,
@@ -52,9 +48,7 @@ import kotlin.random.Random
 @Suppress("TooManyFunctions")
 class RoomWorkoutDataRepository(
     private val database: WorkoutDatabase,
-    private val standardExercises: List<StandardExercise>,
-    internal val colorGenerator: (existingColors: List<Int>, random: Random) -> Int =
-        ::generateCategoryColor
+    private val standardExercises: List<StandardExercise>
 ) : WorkoutDataRepository {
     private val exerciseDao: ExerciseDao = database.exerciseDao()
     private val exerciseEntryDao: ExerciseEntryDao = database.exerciseEntryDao()
@@ -305,14 +299,20 @@ class RoomWorkoutDataRepository(
         }
 
     /**
-     * Создаёт кастомную категорию (custom-categories, design Decision 3).
-     * Проверки до записи в БД: непустое после `trim()` имя и уникальность
-     * по `name.trim().lowercase()` среди всех категорий (снимок
+     * Создаёт кастомную категорию (custom-categories, design Decision 3;
+     * tasks `custom-categories-color-change` 1.2). Проверки до записи в БД:
+     * непустое после `trim()` имя и уникальность по
+     * `name.trim().lowercase()` среди всех категорий (снимок
      * [CategoryDao.getAll] — активные и архивные); unique-индекс БД —
-     * запасная страховка по точному совпадению. Цвет генерируется от
-     * цветов всех существующих категорий.
+     * запасная страховка по точному совпадению. Цвет передаётся готовым
+     * из формы категории и сохраняется как есть — операция не
+     * генерирует цвет (спека `category-data` «Создание категории с
+     * цветом из формы»).
      */
-    override suspend fun addCategory(name: String): Result<Category> =
+    override suspend fun addCategory(
+        name: String,
+        colorArgb: Int
+    ): Result<Category> =
         runCatching {
             val trimmedName = name.trim()
             if (trimmedName.isEmpty()) {
@@ -326,11 +326,6 @@ class RoomWorkoutDataRepository(
             ) {
                 error("Категория «$trimmedName» уже существует")
             }
-            val colorArgb =
-                colorGenerator(
-                    existingCategories.map { existing -> existing.colorArgb },
-                    Random.Default
-                )
             val entity =
                 CategoryEntity(
                     name = trimmedName,
@@ -343,18 +338,21 @@ class RoomWorkoutDataRepository(
         }
 
     /**
-     * Переименовывает кастомную категорию одной транзакцией
-     * (custom-categories, design Decision 1): [CategoryDao.updateName] +
+     * Обновляет имя и цвет кастомной категории одной транзакцией
+     * (tasks `custom-categories-color-change` 1.4): guard `isCustom`,
+     * проверки имени — как в [addCategory] (дубль исключает саму
+     * обновляемую категорию). Внутри транзакции:
+     * [CategoryDao.updateNameAndColor] +
      * [ExerciseDao.updateCategoryName] — активные и архивные упражнения
-     * одним UPDATE без фильтра архива. Проверки — как в [addCategory]
-     * (дубль исключает саму переименуемую категорию); при любой ошибке
-     * транзакция откатывается. Стандартная категория —
-     * [StandardCategoryDeletionException]; in-use-блокировка для rename
-     * не применима — ссылки упражнений обновляются той же транзакцией.
+     * одним UPDATE без фильтра архива, каскад выполняется безусловно
+     * (при неизменном имени — практический no-op). Стандартная
+     * категория — [StandardCategoryDeletionException]; при любой ошибке
+     * транзакция откатывается.
      */
-    override suspend fun renameCategory(
+    override suspend fun updateCategory(
         id: Long,
-        newName: String
+        newName: String,
+        colorArgb: Int
     ): Result<Unit> =
         runCatching {
             database.withTransaction {
@@ -379,7 +377,7 @@ class RoomWorkoutDataRepository(
                 if (hasDuplicate) {
                     error("Категория «$trimmedName» уже существует")
                 }
-                categoryDao.updateName(id, trimmedName)
+                categoryDao.updateNameAndColor(id, trimmedName, colorArgb)
                 exerciseDao.updateCategoryName(category.name, trimmedName)
             }
         }
@@ -611,18 +609,20 @@ internal fun pickCategoryHue(
 }
 
 /**
- * Генерирует ARGB-цвет новой категории (custom-categories, design
- * Decision 3): существующие цвета → hue через `Color.colorToHSV`
- * (единая модель HSV во всех расчётах), hue — [pickCategoryHue],
- * S/V фиксированные. По умолчанию подставляется в
- * [RoomWorkoutDataRepository.colorGenerator]; JVM-тесты подменяют шов
- * целиком — `android.graphics.Color` на JVM недоступен.
+ * Генерирует ARGB-цвет категории по правилам custom-categories (design
+ * Decision 3 архивного change `custom-categories`): существующие цвета →
+ * hue через `Color.colorToHSV` (единая модель HSV во всех расчётах),
+ * hue — [pickCategoryHue], S/V фиксированные. `internal` — для инжекта
+ * в `CategoryCreateViewModel` как генератора цвета пикера
+ * (custom-categories-color-change, design Decision 1); операции создания
+ * цвет больше не генерируют — `android.graphics.Color` на JVM
+ * недоступен, поэтому VM-тесты подменяют генератор lambda-стабом.
  *
  * @param existingColors ARGB-цвета существующих категорий
  * @param random injectable источник случайности
  * @return ARGB-цвет новой категории
  */
-private fun generateCategoryColor(
+internal fun generateCategoryColor(
     existingColors: List<Int>,
     random: Random
 ): Int {

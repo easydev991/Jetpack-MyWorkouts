@@ -87,15 +87,16 @@ interface CategoryDao {
     ): Int
 
     /**
-     * Переименовывает категорию. Только внутри транзакции
-     * `renameCategory` вместе с обновлением `exercises.category`
-     * (custom-categories, design Decision 1) — целостность имён без FK
-     * держит транзакция.
+     * Обновляет имя и цвет категории одним запросом. Только внутри
+     * транзакции `updateCategory` вместе с обновлением
+     * `exercises.category` — целостность имён без FK держит транзакция
+     * (custom-categories, design Decision 1).
      */
-    @Query("UPDATE categories SET name = :name WHERE id = :id")
-    suspend fun updateName(
+    @Query("UPDATE categories SET name = :name, color_argb = :colorArgb WHERE id = :id")
+    suspend fun updateNameAndColor(
         id: Long,
-        name: String
+        name: String,
+        colorArgb: Int
     )
 
     /**

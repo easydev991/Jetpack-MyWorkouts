@@ -150,27 +150,34 @@ interface WorkoutDataRepository {
     suspend fun exerciseHistory(exerciseId: Long): Result<List<ExerciseEntry>>
 
     /**
-     * Создаёт кастомную категорию с сгенерированным цветом
-     * (custom-categories, spec «Создание категории с генерацией цвета»).
-     * Имя — непустое после `trim()` и уникальное по
+     * Создаёт кастомную категорию с переданным цветом (спека
+     * `category-data`, «Создание категории с цветом из формы» — цвет
+     * выбирается на экране категории, операция его не генерирует и
+     * сохраняет как есть). Имя — непустое после `trim()` и уникальное по
      * `name.trim().lowercase()` среди всех категорий (активных и
      * архивных); пустое или дублирующее — `Result.failure`.
      * Созданная категория: `isCustom = true`, `isArchived = false`.
      */
-    suspend fun addCategory(name: String): Result<Category>
+    suspend fun addCategory(
+        name: String,
+        colorArgb: Int
+    ): Result<Category>
 
     /**
-     * Переименовывает кастомную категорию одной транзакцией
-     * (custom-categories, design Decision 1): обновляет
-     * `categories.name` и `category` всех ссылающихся упражнений —
-     * активных и архивных. Стандартная категория
-     * ([StandardCategoryDeletionException]), пустое или дублирующее имя,
-     * отсутствующий id — `Result.failure`; при любой ошибке транзакция
-     * откатывается целиком.
+     * Обновляет кастомную категорию — имя и цвет одной транзакцией
+     * (спека `category-data`, «Обновление категории — имя и цвет одной
+     * транзакцией»; заменяет `renameCategory`): обновляет
+     * `categories.name` и `categories.colorArgb` и `category` всех
+     * ссылающихся упражнений — активных и архивных. Смена цвета ссылки
+     * упражнений не трогает (упражнения хранят только имя категории).
+     * Стандартная категория ([StandardCategoryDeletionException]),
+     * пустое или дублирующее имя, отсутствующий id — `Result.failure`;
+     * при любой ошибке транзакция откатывается целиком.
      */
-    suspend fun renameCategory(
+    suspend fun updateCategory(
         id: Long,
-        newName: String
+        newName: String,
+        colorArgb: Int
     ): Result<Unit>
 
     /**

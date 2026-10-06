@@ -174,12 +174,15 @@ private class ExercisesViewModelFakeRepository(
     // Новый контракт категорий (custom-categories, этапы 2 и 5):
     // управляемые потоки и запись вызовов для тестов §5.
 
-    override suspend fun addCategory(name: String): Result<Category> =
-        Result.success(Category(id = 0L, name = name.trim(), colorArgb = 0, isCustom = true))
+    override suspend fun addCategory(
+        name: String,
+        colorArgb: Int
+    ): Result<Category> = Result.success(Category(id = 0L, name = name.trim(), colorArgb = colorArgb, isCustom = true))
 
-    override suspend fun renameCategory(
+    override suspend fun updateCategory(
         id: Long,
-        newName: String
+        newName: String,
+        colorArgb: Int
     ): Result<Unit> = Result.success(Unit)
 
     override suspend fun deleteCategory(id: Long): Result<Unit> {

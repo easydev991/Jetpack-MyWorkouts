@@ -28,12 +28,11 @@ class LinkedEntriesDeletionException : IllegalStateException("У этого уп
 /**
  * Операция с категорией отклонена дизайном: категория стандартная
  * (custom-categories, design Decision 4). Бросается и удалением
- * ([WorkoutDataRepository.deleteCategory]), и переименованием
- * ([WorkoutDataRepository.renameCategory]) — стандартные имена-ключи
+ * ([WorkoutDataRepository.deleteCategory]), и обновлением
+ * ([WorkoutDataRepository.updateCategory]) — стандартные имена-ключи
  * `PUSH`/`PULL`/… хранятся в БД и бэкапах и не меняются.
  */
-class StandardCategoryDeletionException :
-    IllegalStateException("Стандартную категорию нельзя удалить или переименовать")
+class StandardCategoryDeletionException : IllegalStateException("Стандартную категорию нельзя удалить или обновить")
 
 /**
  * Удаление категории отклонено: на неё ссылаются упражнения — активные

@@ -1,14 +1,20 @@
 package com.myworkouts.ui.screens.exercises
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,8 +29,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
 import com.myworkouts.ui.components.SaveBottomBar
@@ -54,6 +65,7 @@ fun CategoryCreateScreen(
             CategoryCreateScreenState(
                 uiState = uiState,
                 onNameChange = viewModel::onNameChange,
+                onRegenerateColorClick = viewModel::onRegenerateColorClick,
                 onSaveClick = { viewModel.save(onSaved = onBackClick) },
                 onBackClick = onBackClick
             ),
@@ -69,14 +81,16 @@ fun CategoryCreateScreen(
 internal data class CategoryCreateScreenState(
     val uiState: CategoryCreateUiState,
     val onNameChange: (String) -> Unit,
+    val onRegenerateColorClick: () -> Unit,
     val onSaveClick: () -> Unit,
     val onBackClick: () -> Unit
 )
 
 /**
  * Контент экрана создания/редактирования категории: TopAppBar со стрелкой
- * «назад» (заголовок зависит от режима), форма с единственным полем
- * «Название» и нижняя панель с кнопкой «Сохранить».
+ * «назад» (заголовок зависит от режима), форма с полем «Название» и пикером
+ * цвета под ним ([CategoryColorPicker], custom-categories-color-change)
+ * и нижняя панель с кнопкой «Сохранить».
  *
  * Закрытие — единая точка [attemptClose] (стрелка TopAppBar и системный
  * back): при несохранённых изменениях показывается диалог подтверждения
@@ -91,12 +105,12 @@ internal fun CategoryCreateScreenContent(
 ) {
     var showConfirmDialog by remember { mutableStateOf(false) }
     val attemptClose = {
-        if (state.uiState.hasUnsavedChanges) showConfirmDialog = true else state.onBackClick()
+        if (state.uiState.hasChanges) showConfirmDialog = true else state.onBackClick()
     }
 
     // Системный «назад» идёт через то же подтверждение, что и стрелка
     // TopAppBar; без несохранённых изменений обработчик отключён
-    BackHandler(enabled = state.uiState.hasUnsavedChanges) { attemptClose() }
+    BackHandler(enabled = state.uiState.hasChanges) { attemptClose() }
 
     Scaffold(
         modifier = modifier,
@@ -162,6 +176,10 @@ internal fun CategoryCreateScreenContent(
                 },
                 modifier = Modifier.fillMaxWidth()
             )
+            CategoryColorPicker(
+                colorArgb = state.uiState.colorArgb,
+                onRegenerateColorClick = state.onRegenerateColorClick
+            )
         }
     }
 
@@ -172,6 +190,53 @@ internal fun CategoryCreateScreenContent(
                 state.onBackClick()
             },
             onDismiss = { showConfirmDialog = false }
+        )
+    }
+}
+
+/**
+ * Пикер цвета категории (custom-categories-color-change, design Decision 4):
+ * заголовок «Цвет», кнопка регенерации (стандартная иконка refresh) и
+ * кружок текущего цвета. Работает в обоих режимах экрана (create/edit) —
+ * цвет виден до сохранения; тап по кнопке вызывает [onRegenerateColorClick]
+ * (регенерация — правила спеки `category-data` в ViewModel).
+ *
+ * @param colorArgb Текущий цвет кружка; `null` — нейтральный плейсхолдер
+ *   цвета темы (цвет ещё не сгенерирован/не загружен)
+ * @param onRegenerateColorClick Колбэк регенерации цвета
+ * @param modifier внешний модификатор
+ */
+@Composable
+internal fun CategoryColorPicker(
+    colorArgb: Int?,
+    onRegenerateColorClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // A11y-строки вычисляются в @Composable-контексте — внутри .semantics {}
+    // это нельзя (канон HeatmapCard, ActivityScreen).
+    val regenerateA11y = stringResource(R.string.category_color_regenerate)
+    val currentColorA11y = stringResource(R.string.category_color_current)
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(R.string.category_field_color),
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = onRegenerateColorClick) {
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = regenerateA11y
+            )
+        }
+        Box(
+            modifier =
+                Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(colorArgb?.let(::Color) ?: MaterialTheme.colorScheme.outlineVariant)
+                    .semantics { contentDescription = currentColorA11y }
         )
     }
 }

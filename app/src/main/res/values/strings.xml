@@ -183,6 +183,9 @@
     <string name="category_create_title">Новая категория</string>
     <string name="category_edit_title">Изменить категорию</string>
     <string name="category_field_name">Название</string>
+    <string name="category_field_color">Цвет</string>
+    <string name="category_color_regenerate">Обновить цвет</string>
+    <string name="category_color_current">Текущий цвет</string>
     <string name="category_error_duplicate">Категория с таким названием уже существует</string>
     <string name="category_save_error">Не удалось сохранить категорию</string>
     <string name="archive_title">Архив</string>

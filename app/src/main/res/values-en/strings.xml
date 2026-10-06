@@ -179,6 +179,9 @@
     <string name="category_create_title">New category</string>
     <string name="category_edit_title">Edit category</string>
     <string name="category_field_name">Name</string>
+    <string name="category_field_color">Color</string>
+    <string name="category_color_regenerate">Regenerate color</string>
+    <string name="category_color_current">Current color</string>
     <string name="category_error_duplicate">A category with this name already exists</string>
     <string name="category_save_error">Failed to save category</string>
     <string name="archive_title">Archive</string>

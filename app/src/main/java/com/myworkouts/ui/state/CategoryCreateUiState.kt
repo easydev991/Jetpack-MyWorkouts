@@ -12,9 +12,10 @@ package com.myworkouts.ui.state
  * @property isEditMode Истина, если экран открыт с `categoryId != -1`
  *   (режим переименования), — в том числе пока категория ещё не загружена
  *   или не найдена
- * @property hasChanges Есть отличия имени от загруженной категории
- *   (вычисляется ViewModel сравнением после `trim()`; всегда `false`
- *   в режиме создания)
+ * @property hasChanges Есть изменения относительно стартовой линии — имя
+ *   после `trim()` ИЛИ цвет по значению [colorArgb] (вычисляется ViewModel;
+ *   стартовая линия: в create — blank-имя и первый сгенерированный цвет,
+ *   в edit — оригинал; custom-categories-color-change, design Decision 3)
  * @property isDuplicateName Имя совпадает (`name.trim().lowercase()`) с
  *   другой существующей категорией — активной или архивной; в edit-режиме
  *   сама редактируемая категория исключена. Сбрасывается и пересчитывается
@@ -24,6 +25,9 @@ package com.myworkouts.ui.state
  *   (поведение по паттерну `isExerciseMissing`). Не меняется после
  *   `init {}` — отражает результат однократной загрузки при открытии
  * @property isSaveError Признак провала последнего сохранения
+ * @property colorArgb Текущий цвет кружка пикера (`null` — ещё не
+ *   сгенерирован в create или не загружен в edit — плейсхолдер цвета темы;
+ *   custom-categories-color-change)
  */
 data class CategoryCreateUiState(
     val name: String? = null,
@@ -31,14 +35,16 @@ data class CategoryCreateUiState(
     val hasChanges: Boolean = false,
     val isDuplicateName: Boolean = false,
     val isCategoryMissing: Boolean = false,
-    val isSaveError: Boolean = false
+    val isSaveError: Boolean = false,
+    val colorArgb: Int? = null
 ) {
     /**
      * Вычисляемая доступность сохранения: имя непустое, не дубликат; в
-     * edit-режиме дополнительно требуются изменения относительно оригинала;
-     * `isCategoryMissing` — защитный guard. `isSaveError` НЕ входит в
-     * формулу — ошибка не блокирует кнопку, только показывается
-     * (spec «ViewModel, UiState и canSave»).
+     * edit-режиме дополнительно требуются изменения относительно оригинала
+     * (имя ИЛИ цвет); `isCategoryMissing` — защитный guard. `isSaveError`
+     * НЕ входит в формулу — ошибка не блокирует кнопку, только показывается;
+     * в create-режиме терм `(!isEditMode || hasChanges)` истинен
+     * по построению (spec «ViewModel, UiState и canSave»).
      */
     val canSave: Boolean
         get() =
@@ -46,17 +52,4 @@ data class CategoryCreateUiState(
                 !isDuplicateName &&
                 (!isEditMode || hasChanges) &&
                 !isCategoryMissing
-
-    /**
-     * Вычисляемое «есть несохранённые изменения»: в режиме создания —
-     * введено непустое имя; в режиме редактирования — [hasChanges]
-     * (предзаполненное имя само по себе не блокирует закрытие экрана).
-     */
-    val hasUnsavedChanges: Boolean
-        get() =
-            if (isEditMode) {
-                hasChanges
-            } else {
-                !name.isNullOrBlank()
-            }
 }

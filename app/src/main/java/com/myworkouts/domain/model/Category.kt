@@ -9,8 +9,10 @@ package com.myworkouts.domain.model
  *
  * @property id Идентификатор; `0` — для новой, БД присвоит свой
  * @property name Имя-ключ категории (уникально по `trim().lowercase()`)
- * @property colorArgb Цвет ARGB — генерируется при создании (design
- *   Decision 3), задел под будущую ручную настройку
+ * @property colorArgb Цвет ARGB — выбирается на экране категории (пикер:
+ *   стартовый + refresh) и передаётся в операции создания/обновления
+ *   готовым; ручной выбор из палитры вне scope
+ *   (custom-categories-color-change, tasks 1.5)
  * @property isCustom `true` — создана пользователем, `false` — стандартная
  * @property isArchived `false` по умолчанию; архивация не меняет
  *   ссылающиеся упражнения
