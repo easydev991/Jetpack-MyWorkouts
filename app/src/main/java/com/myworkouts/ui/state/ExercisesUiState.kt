@@ -53,6 +53,11 @@ sealed class ExercisesUiState {
      * @property deleteError Причина ошибки удаления упражнения для
      *   одноразового снекбара; `null` — нет ошибки. Сбрасывается
      *   в `null` через `onErrorShown()` после показа.
+     * @property archiveError Флаг ошибки архивации упражнения для
+     *   одноразового снекбара (guard последнего активного,
+     *   prevent-from-archiving-all design Decision 4); `false` — нет
+     *   ошибки. Сбрасывается через `onErrorShown()` вместе с
+     *   `deleteError` (пара каналов на сущность).
      * @property pendingArchiveId Идентификатор упражнения, для которого
      *   открыт алерт подтверждения архивации (`null` — закрыт).
      *   Паттерн — `pendingDeleteId` (exercises-archive design Decision 7).
@@ -63,6 +68,11 @@ sealed class ExercisesUiState {
      *   для одноразового снекбара; `null` — нет ошибки. Sealed-тип
      *   [DeleteCategoryError] (custom-categories, design Decision 4);
      *   сбрасывается через `onCategoryErrorShown()` после показа.
+     * @property categoryArchiveError Флаг ошибки архивации категории
+     *   для одноразового снекбара (guard последней активной,
+     *   prevent-from-archiving-all design Decision 4); `false` — нет
+     *   ошибки. Сбрасывается через `onCategoryErrorShown()` вместе с
+     *   `categoryDeleteError`.
      * @property pendingCategoryArchiveId Идентификатор категории, для
      *   которой открыт алерт подтверждения архивации (`null` — закрыт).
      * @property hasArchived Реактивный признак «в архиве есть
@@ -76,9 +86,11 @@ sealed class ExercisesUiState {
         val selectedTab: ExercisesTab = ExercisesTab.EXERCISES,
         val pendingDeleteId: Long? = null,
         val deleteError: DeleteExerciseError? = null,
+        val archiveError: Boolean = false,
         val pendingArchiveId: Long? = null,
         val pendingCategoryDeleteId: Long? = null,
         val categoryDeleteError: DeleteCategoryError? = null,
+        val categoryArchiveError: Boolean = false,
         val pendingCategoryArchiveId: Long? = null,
         val hasArchived: Boolean = false
     ) : ExercisesUiState()

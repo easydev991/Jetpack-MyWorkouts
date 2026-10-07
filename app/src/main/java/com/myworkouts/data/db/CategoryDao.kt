@@ -48,6 +48,13 @@ interface CategoryDao {
     fun observeArchivedCount(): Flow<Int>
 
     /**
+     * Non-reactive счётчик активных категорий (prevent-from-archiving-all,
+     * design Decision 3) — по образцу [ExerciseDao.activeCount].
+     */
+    @Query("SELECT COUNT(*) FROM categories WHERE is_archived = 0")
+    suspend fun activeCount(): Int
+
+    /**
      * Вставляет новую категорию. Конфликт unique-индекса `name`
      * (точное совпадение) завершится ошибкой (`ABORT`);
      * регистронезависимый дедуп выполняется в репозитории до вставки.

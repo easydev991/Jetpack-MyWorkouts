@@ -7,6 +7,8 @@ import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.CategoryInUseDeletionException
+import com.myworkouts.data.repository.LastActiveCategoryException
+import com.myworkouts.data.repository.LastActiveExerciseException
 import com.myworkouts.data.repository.LinkedEntriesDeletionException
 import com.myworkouts.data.repository.StandardCategoryDeletionException
 import com.myworkouts.data.repository.WorkoutDataRepository
@@ -1063,9 +1065,9 @@ class ExercisesViewModelTest {
             val appError =
                 analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().single()
             assertEquals(
-                AppErrorOperation.CATEGORY_DELETE,
+                AppErrorOperation.DELETE_CATEGORY,
                 appError.operation,
-                "Сбой удаления категории — событие AppError(CATEGORY_DELETE)"
+                "Сбой удаления категории — событие AppError(DELETE_CATEGORY)"
             )
             assertSame(failure, appError.throwable, "В событии — итоговое исключение")
 
@@ -1284,6 +1286,318 @@ class ExercisesViewModelTest {
                 shoulders.id,
                 (viewModel.uiState.value as ExercisesUiState.Success).pendingCategoryArchiveId,
                 "Повторный requestCategoryArchive открывает новый pending"
+            )
+        }
+
+    // ---------- §7. Guard последнего активного: маппинг в UiState
+    // (prevent-from-archiving-all, tasks §4.2; design Decision 5) ----------
+
+    /**
+     * `confirmDelete()` при `Result.failure(LastActiveExerciseException)`:
+     * `deleteError == DeleteExerciseError.LastActive`, телеметрия —
+     * существующий канал `DELETE_EXERCISE`; `onErrorShown()` сбрасывает
+     * пару каналов упражнения (`deleteError` + `archiveError`).
+     */
+    @Test
+    fun confirmDelete_onLastActiveFailure_mapsLastActive_andOnErrorShownResetsExercisePair() =
+        runTest(testDispatcher) {
+            // Given
+            val failure = LastActiveExerciseException()
+            repository.deleteExerciseResult = Result.failure(failure)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestDelete(pullups)
+            advanceUntilIdle()
+
+            // When
+            viewModel.confirmDelete()
+            advanceUntilIdle()
+
+            // Then
+            val afterConfirm = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                DeleteExerciseError.LastActive,
+                afterConfirm.deleteError,
+                "Guard последнего активного → DeleteExerciseError.LastActive"
+            )
+            val appError =
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().single()
+            assertEquals(
+                AppErrorOperation.DELETE_EXERCISE,
+                appError.operation,
+                "Сбой удаления — существующий канал AppError(DELETE_EXERCISE)"
+            )
+            assertSame(failure, appError.throwable, "В событии — итоговое исключение")
+
+            // When — onErrorShown() сбрасывает пару каналов упражнения
+            viewModel.onErrorShown()
+            advanceUntilIdle()
+
+            // Then
+            val afterShown = viewModel.uiState.value as ExercisesUiState.Success
+            assertNull(afterShown.deleteError, "onErrorShown() сбрасывает deleteError")
+            assertFalse(
+                afterShown.archiveError,
+                "onErrorShown() сбрасывает и archiveError (пара каналов)"
+            )
+        }
+
+    /**
+     * `confirmCategoryDelete()` при `Result.failure(LastActiveCategoryException)`:
+     * `categoryDeleteError == DeleteCategoryError.LastActive`, телеметрия —
+     * канал `DELETE_CATEGORY`; `onCategoryErrorShown()` сбрасывает пару
+     * каналов категории (`categoryDeleteError` + `categoryArchiveError`).
+     */
+    @Test
+    fun confirmCategoryDelete_onLastActiveFailure_mapsLastActive_andOnCategoryErrorShownResetsCategoryPair() =
+        runTest(testDispatcher) {
+            // Given
+            val failure = LastActiveCategoryException()
+            repository.deleteCategoryResult = Result.failure(failure)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestCategoryDelete(shoulders)
+            advanceUntilIdle()
+
+            // When
+            viewModel.confirmCategoryDelete()
+            advanceUntilIdle()
+
+            // Then
+            val afterConfirm = viewModel.uiState.value as ExercisesUiState.Success
+            assertEquals(
+                DeleteCategoryError.LastActive,
+                afterConfirm.categoryDeleteError,
+                "Guard последней активной → DeleteCategoryError.LastActive"
+            )
+            val appError =
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().single()
+            assertEquals(
+                AppErrorOperation.DELETE_CATEGORY,
+                appError.operation,
+                "Сбой удаления категории — канал AppError(DELETE_CATEGORY)"
+            )
+            assertSame(failure, appError.throwable, "В событии — итоговое исключение")
+
+            // When — onCategoryErrorShown() сбрасывает пару каналов категории
+            viewModel.onCategoryErrorShown()
+            advanceUntilIdle()
+
+            // Then
+            val afterShown = viewModel.uiState.value as ExercisesUiState.Success
+            assertNull(
+                afterShown.categoryDeleteError,
+                "onCategoryErrorShown() сбрасывает categoryDeleteError"
+            )
+            assertFalse(
+                afterShown.categoryArchiveError,
+                "onCategoryErrorShown() сбрасывает и categoryArchiveError (пара каналов)"
+            )
+        }
+
+    /**
+     * `confirmArchive()`: failure race («не найдено») остаётся тихим —
+     * `archiveError` не выставляется, `AppError` не эмитится; failure
+     * guard'а (`LastActiveExerciseException`) выставляет
+     * `archiveError` и эмитит
+     * `AppError(ARCHIVE_EXERCISE)` (design Decision 5).
+     */
+    @Test
+    fun confirmArchive_onLastActiveFailure_setsArchiveError_andRaceStaysSilent() =
+        runTest(testDispatcher) {
+            // Given — race-failure: тишина (spec «Failure при подтверждении»)
+            repository.setArchivedResult =
+                Result.failure(IllegalStateException("Упражнение не найдено"))
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestArchive(pullups)
+            advanceUntilIdle()
+            viewModel.confirmArchive()
+            advanceUntilIdle()
+
+            // Then — archiveError не выставлен, AppError нет
+            val afterRace = viewModel.uiState.value as ExercisesUiState.Success
+            assertFalse(
+                afterRace.archiveError,
+                "Race-failure архивации остаётся тихим (design Decision 5)"
+            )
+            assertTrue(
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().isEmpty(),
+                "Race-failure не эмитит AppError"
+            )
+
+            // When — guard-failure
+            val failure = LastActiveExerciseException()
+            repository.setArchivedResult = Result.failure(failure)
+            viewModel.requestArchive(plank)
+            advanceUntilIdle()
+            viewModel.confirmArchive()
+            advanceUntilIdle()
+
+            // Then
+            val afterGuard = viewModel.uiState.value as ExercisesUiState.Success
+            assertTrue(
+                afterGuard.archiveError,
+                "Guard последнего активного → archiveError выставлен"
+            )
+            val appError =
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().single()
+            assertEquals(
+                AppErrorOperation.ARCHIVE_EXERCISE,
+                appError.operation,
+                "Сбой архивации — новое событие AppError(ARCHIVE_EXERCISE)"
+            )
+            assertSame(failure, appError.throwable, "В событии — итоговое исключение")
+
+            // When — onErrorShown() сбрасывает пару каналов упражнения
+            viewModel.onErrorShown()
+            advanceUntilIdle()
+
+            // Then
+            val afterShown = viewModel.uiState.value as ExercisesUiState.Success
+            assertFalse(afterShown.archiveError, "onErrorShown() сбрасывает archiveError")
+            assertNull(
+                afterShown.deleteError,
+                "onErrorShown() сбрасывает и deleteError (пара каналов)"
+            )
+        }
+
+    /**
+     * Прямой путь архивации (suppress-режим): `requestArchive` при
+     * `dontShowArchiveDialog == true` архивирует сразу; guard-failure —
+     * `archiveError` выставлен + `AppError(
+     * ARCHIVE_EXERCISE)` (design Decision 1 — второй барьер).
+     */
+    @Test
+    fun requestArchive_when_dontShowDialog_true_onLastActiveFailure_setsArchiveError() =
+        runTest(testDispatcher) {
+            // Given
+            every { dataStore.dontShowArchiveDialog } returns flowOf(true)
+            val failure = LastActiveExerciseException()
+            repository.setArchivedResult = Result.failure(failure)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — suppress-путь: архивация без диалога
+            viewModel.requestArchive(pullups)
+            advanceUntilIdle()
+
+            // Then
+            val state = viewModel.uiState.value as ExercisesUiState.Success
+            assertTrue(
+                state.archiveError,
+                "Suppress-путь доходит до guard'а — archiveError выставлен"
+            )
+            assertEquals(
+                listOf(pullups.id to true),
+                repository.setArchivedCalls,
+                "Архивация действительно вызывалась (failure после вызова)"
+            )
+            val appError =
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().single()
+            assertEquals(
+                AppErrorOperation.ARCHIVE_EXERCISE,
+                appError.operation,
+                "Suppress-путь эмитит AppError(ARCHIVE_EXERCISE)"
+            )
+        }
+
+    /**
+     * `confirmCategoryArchive()` при
+     * `Result.failure(LastActiveCategoryException)`:
+     * `categoryArchiveError` выставлен,
+     * `AppError(ARCHIVE_CATEGORY)`; `onCategoryErrorShown()` сбрасывает
+     * пару каналов категории.
+     */
+    @Test
+    fun confirmCategoryArchive_onLastActiveFailure_setsCategoryArchiveError() =
+        runTest(testDispatcher) {
+            // Given
+            val failure = LastActiveCategoryException()
+            repository.setCategoryArchivedResult = Result.failure(failure)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestCategoryArchive(push.id)
+            advanceUntilIdle()
+
+            // When
+            viewModel.confirmCategoryArchive()
+            advanceUntilIdle()
+
+            // Then
+            val afterConfirm = viewModel.uiState.value as ExercisesUiState.Success
+            assertTrue(
+                afterConfirm.categoryArchiveError,
+                "Guard последней активной → categoryArchiveError выставлен"
+            )
+            val appError =
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().single()
+            assertEquals(
+                AppErrorOperation.ARCHIVE_CATEGORY,
+                appError.operation,
+                "Сбой архивации категории — AppError(ARCHIVE_CATEGORY)"
+            )
+            assertSame(failure, appError.throwable, "В событии — итоговое исключение")
+
+            // When — onCategoryErrorShown() сбрасывает пару каналов
+            viewModel.onCategoryErrorShown()
+            advanceUntilIdle()
+
+            // Then
+            val afterShown = viewModel.uiState.value as ExercisesUiState.Success
+            assertFalse(
+                afterShown.categoryArchiveError,
+                "onCategoryErrorShown() сбрасывает categoryArchiveError"
+            )
+            assertNull(
+                afterShown.categoryDeleteError,
+                "onCategoryErrorShown() сбрасывает и categoryDeleteError (пара каналов)"
+            )
+        }
+
+    /**
+     * Прямой категорийный путь (suppress-режим): `requestCategoryArchive`
+     * при `dontShowCategoryArchiveDialog == true`; guard-failure —
+     * `categoryArchiveError` выставлен +
+     * `AppError(ARCHIVE_CATEGORY)`.
+     */
+    @Test
+    fun requestCategoryArchive_whenCategoryFlagTrue_onLastActiveFailure_setsCategoryArchiveError() =
+        runTest(testDispatcher) {
+            // Given
+            every { dataStore.dontShowCategoryArchiveDialog } returns flowOf(true)
+            val failure = LastActiveCategoryException()
+            repository.setCategoryArchivedResult = Result.failure(failure)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — suppress-путь: архивация без диалога
+            viewModel.requestCategoryArchive(push.id)
+            advanceUntilIdle()
+
+            // Then
+            val state = viewModel.uiState.value as ExercisesUiState.Success
+            assertTrue(
+                state.categoryArchiveError,
+                "Suppress-путь доходит до guard'а — categoryArchiveError выставлен"
+            )
+            assertEquals(
+                listOf(push.id to true),
+                repository.setCategoryArchivedCalls,
+                "Архивация категории действительно вызывалась"
+            )
+            val appError =
+                analyticsProvider.events.filterIsInstance<AnalyticsEvent.AppError>().single()
+            assertEquals(
+                AppErrorOperation.ARCHIVE_CATEGORY,
+                appError.operation,
+                "Suppress-путь эмитит AppError(ARCHIVE_CATEGORY)"
             )
         }
 }

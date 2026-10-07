@@ -15,6 +15,13 @@ sealed class DeleteCategoryError {
     /** Удаление стандартной категории (safety net — UI не предлагает). */
     object StandardCategory : DeleteCategoryError()
 
+    /**
+     * Категория — последняя активная (guard репозитория,
+     * prevent-from-archiving-all; safety net — UI скрывает пункт меню,
+     * дойти можно через race или suppress-путь).
+     */
+    object LastActive : DeleteCategoryError()
+
     /** Прочее (включая «категория не найдена»): текст исключения в логе. */
     object Other : DeleteCategoryError()
 }

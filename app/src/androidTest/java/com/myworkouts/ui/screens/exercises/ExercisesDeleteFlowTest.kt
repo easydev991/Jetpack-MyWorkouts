@@ -68,6 +68,17 @@ class ExercisesDeleteFlowTest {
      * `exerciseIdsWithLinkedEntries` управляется через [linkedEntries]
      * (для тестов §4.8 pre-check UX).
      */
+    private val plankExercise =
+        Exercise(
+            id = 200L,
+            name = "Планка",
+            category = "CORE",
+            isCustom = false,
+            comment = null,
+            createdAt = 1_721_300_000_000L,
+            measuredBy = ExerciseMeasuredBy.TIME
+        )
+
     private class FakeRepository(
         initialCatalog: List<Exercise>
     ) : WorkoutDataRepository {
@@ -202,7 +213,7 @@ class ExercisesDeleteFlowTest {
     @Test
     fun delete_flow_when_confirm_then_exercise_removed_from_list() {
         // Given — кастомное упражнение в каталоге
-        val fake = FakeRepository(initialCatalog = listOf(customExercise))
+        val fake = FakeRepository(initialCatalog = listOf(customExercise, plankExercise))
         setUpScreen(fake)
         composeTestRule
             .onNodeWithText("Жим")
@@ -234,8 +245,8 @@ class ExercisesDeleteFlowTest {
             .onAllNodesWithText(context.getString(R.string.exercise_delete_dialog_title))
             .assertCountEquals(0)
         assertEquals(
-            "Каталог fake-репозитория пуст после удаления",
-            emptyList<Exercise>(),
+            "После удаления в каталоге остаётся только Планка",
+            listOf(plankExercise),
             fake.catalog.value
         )
     }
@@ -267,6 +278,18 @@ class ExercisesErrorSnackbarTest(
             comment = null,
             createdAt = 1_721_200_000_000L,
             measuredBy = ExerciseMeasuredBy.REPS
+        )
+
+    // Стандартное второе активное: строка теста не «последний активный»
+    private val plankExercise =
+        Exercise(
+            id = 200L,
+            name = "Планка",
+            category = "CORE",
+            isCustom = false,
+            comment = null,
+            createdAt = 1_721_300_000_000L,
+            measuredBy = ExerciseMeasuredBy.TIME
         )
 
     private class FakeRepository(
@@ -367,7 +390,7 @@ class ExercisesErrorSnackbarTest(
     fun delete_failure_then_snackbar_text_then_one_shot_resets_per_failure() {
         // Given — fake возвращает конкретную failure на deleteExercise
         val fake =
-            FakeRepository(initialCatalog = listOf(customExercise)).apply {
+            FakeRepository(initialCatalog = listOf(customExercise, plankExercise)).apply {
                 deleteResult = Result.failure(failure)
             }
         composeTestRule.setContent {
@@ -494,6 +517,18 @@ class ExercisesPreCheckSnackbarTest {
             measuredBy = ExerciseMeasuredBy.REPS
         )
 
+    // Стандартное второе активное: строка теста не «последний активный»
+    private val plankExercise =
+        Exercise(
+            id = 200L,
+            name = "Планка",
+            category = "CORE",
+            isCustom = false,
+            comment = null,
+            createdAt = 1_721_300_000_000L,
+            measuredBy = ExerciseMeasuredBy.TIME
+        )
+
     private class FakeRepository(
         initialCatalog: List<Exercise>,
         initialLinked: Set<Long> = emptySet()
@@ -594,7 +629,7 @@ class ExercisesPreCheckSnackbarTest {
         // Given — кастомное упражнение помечено как «с записями»
         val fake =
             FakeRepository(
-                initialCatalog = listOf(customExerciseWithEntries),
+                initialCatalog = listOf(customExerciseWithEntries, plankExercise),
                 initialLinked = setOf(customExerciseWithEntries.id)
             )
         composeTestRule.setContent {

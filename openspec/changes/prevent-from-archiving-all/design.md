@@ -118,13 +118,14 @@ WHERE is_archived = 0 AND id != :id) == 0` — компактнее в SQL, но
   `DeleteCategoryError` + вариант `object LastActive` — переиспользуют
   существующие каналы `deleteError` / `categoryDeleteError` и
   снекбар-пайплайн `confirmDelete` / `confirmCategoryDelete`.
-- Новые sealed-типы в `domain/model/`:
-  `ArchiveExerciseError.LastActive`, `ArchiveCategoryError.LastActive`
-  (по образцу `DeleteExerciseError`). Sealed с одним вариантом —
-  осознанно: паттерн консистентен, `when`-маппинг в UI явный, точка
-  расширения для будущих причин отказа архивации.
-- `ExercisesUiState.Success`: + `archiveError: ArchiveExerciseError? = null`,
-  + `categoryArchiveError: ArchiveCategoryError? = null`.
+- Причина архивации — Boolean-флаг в UiState, а не sealed-тип
+  (ревизия Decision 4 после ревью): оба реалистичных кандидата на
+  «вторую причину» (race «не найдено», generic-ошибка БД) уже решены
+  быть тихими (Decision 5) — точка расширения пуста, YAGNI.
+  Типизированные sealed-варианты `LastActive` остаются только в
+  delete-каналах, где реальных причин четыре.
+- `ExercisesUiState.Success`: + `archiveError: Boolean = false`,
+  - `categoryArchiveError: Boolean = false`.
 - `onErrorShown()` сбрасывает `deleteError` и `archiveError`;
   `onCategoryErrorShown()` — `categoryDeleteError` и
   `categoryArchiveError` (пар каналов на сущность, one-shot семантика
@@ -154,7 +155,7 @@ repository.setArchived(id, true)
             Log.e(LOG_TAG, "Архивация упражнения заблокирована: id=$id, ${error.message}", error)
             // archiveError — приватный MutableStateFlow по образцу
             // существующего deleteError; комбинируется в Success
-            archiveError.value = ArchiveExerciseError.LastActive
+            archiveError.value = true
         } // прочие failure — тихо, как раньше
     }
 ```

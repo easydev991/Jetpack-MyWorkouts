@@ -191,6 +191,43 @@ internal fun ExerciseContextMenuPreview() {
 }
 
 /**
+ * Состояние «последний активный» long-press меню
+ * (prevent-from-archiving-all, design Decision 7) рядом: у кастомного
+ * упражнения остаётся один пункт («Изменить»), у стандартного меню
+ * пустое и не открывается — вместо него подпись.
+ */
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun ExerciseLastActiveContextMenuPreview() {
+    JetpackMyWorkoutsTheme {
+        Surface {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(text = "Кастомное, последний активный (1 пункт): ${previewBench.name}")
+                Box {
+                    Text(text = previewBench.name)
+                    ActiveContextMenu(
+                        offset = DpOffset.Zero,
+                        isCustom = true,
+                        showArchive = false,
+                        showDelete = false,
+                        onMenuDismiss = {},
+                        onEditClick = {},
+                        onArchiveClick = {},
+                        onDeleteClick = {}
+                    )
+                }
+                Text(
+                    text =
+                        "Стандартное, последний активный: меню не открывается " +
+                            "(${previewRunning.name})"
+                )
+            }
+        }
+    }
+}
+
+/**
  * Windowless-сэмпл контента [ExerciseConfirmDialog]: окно AlertDialog
  * не рендерится в Compose Preview (диалог живёт в отдельном окне,
  * Layoutlib рисует только основное), поэтому алерт-превью показывают

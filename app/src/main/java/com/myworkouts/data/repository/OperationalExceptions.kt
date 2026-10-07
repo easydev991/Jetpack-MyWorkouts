@@ -2,8 +2,11 @@ package com.myworkouts.data.repository
 
 // ponytail: файловый комментарий — `//`, а не KDoc, чтобы избежать
 // `no-consecutive-comments` (ktlint: KDoc не может идти под KDoc).
-// Типизированные исключения для [WorkoutDataRepository.deleteExercise]
-// (edit-delete-exercise, tasks §1.5, design Decision 3). Заменяют
+// Типизированные исключения операций с каталогом: удаление
+// ([WorkoutDataRepository.deleteExercise], edit-delete-exercise;
+// [WorkoutDataRepository.deleteCategory], custom-categories) и guard
+// последнего активного элемента для архивации и удаления
+// (prevent-from-archiving-all, design Decision 2). Заменяют
 // generic `IllegalStateException` + парсинг текста
 // `SQLiteConstraintException`: VM маппит подклассы в
 // [com.myworkouts.domain.model.DeleteExerciseError], UI — в конкретный
@@ -42,3 +45,21 @@ class StandardCategoryDeletionException : IllegalStateException("Стандар�
  * той же транзакцией.
  */
 class CategoryInUseDeletionException : IllegalStateException("Эту категорию используют упражнения, удалите их сначала")
+
+/**
+ * Операция (архивация или удаление) отклонена: упражнение — последнее
+ * активное в каталоге, операция опустошила бы активный список
+ * (prevent-from-archiving-all, design Decision 2). По одному типу на
+ * сущность, а не на операцию: и архивация, и удаление отклоняются одним
+ * фактом, различие операции восстанавливается на стороне VM.
+ */
+class LastActiveExerciseException :
+    IllegalStateException("Нельзя архивировать или удалять единственное активное упражнение")
+
+/**
+ * Операция (архивация или удаление) отклонена: категория — последняя
+ * активная в списке (prevent-from-archiving-all, design Decision 2) —
+ * по образцу [LastActiveExerciseException].
+ */
+class LastActiveCategoryException :
+    IllegalStateException("Нельзя архивировать или удалять единственную активную категорию")

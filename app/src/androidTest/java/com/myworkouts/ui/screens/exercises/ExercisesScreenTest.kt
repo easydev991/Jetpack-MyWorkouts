@@ -390,7 +390,7 @@ class ExercisesScreenTest {
             ExercisesScreenContent(
                 state =
                     ExercisesScreenState(
-                        uiState = ExercisesUiState.Success(exercises = listOf(pullups)),
+                        uiState = ExercisesUiState.Success(exercises = listOf(pullups, plank)),
                         contextMenu = menu,
                         onAddExerciseClick = {},
                         onContextMenuItemChange = { menu = it },
@@ -443,7 +443,7 @@ class ExercisesScreenTest {
             ExercisesScreenContent(
                 state =
                     ExercisesScreenState(
-                        uiState = ExercisesUiState.Success(exercises = listOf(bench)),
+                        uiState = ExercisesUiState.Success(exercises = listOf(bench, plank)),
                         contextMenu = menu,
                         onAddExerciseClick = {},
                         onContextMenuItemChange = { menu = it },
@@ -495,7 +495,7 @@ class ExercisesScreenTest {
             ExercisesScreenContent(
                 state =
                     ExercisesScreenState(
-                        uiState = ExercisesUiState.Success(exercises = listOf(bench)),
+                        uiState = ExercisesUiState.Success(exercises = listOf(bench, plank)),
                         contextMenu = menu,
                         onAddExerciseClick = {},
                         onContextMenuItemChange = { menu = it },
@@ -553,7 +553,7 @@ class ExercisesScreenTest {
             var pendingId by remember { mutableStateOf<Long?>(null) }
             val current =
                 ExercisesUiState.Success(
-                    exercises = listOf(bench),
+                    exercises = listOf(bench, plank),
                     pendingDeleteId = pendingId
                 )
             ExercisesScreenContent(
@@ -702,7 +702,7 @@ class ExercisesScreenTest {
             var pendingArchiveId by remember { mutableStateOf<Long?>(null) }
             val current =
                 ExercisesUiState.Success(
-                    exercises = listOf(bench),
+                    exercises = listOf(bench, plank),
                     pendingArchiveId = pendingArchiveId
                 )
             ExercisesScreenContent(
@@ -785,7 +785,7 @@ class ExercisesScreenTest {
             var pendingArchiveId by remember { mutableStateOf<Long?>(null) }
             // Имитация реактивного обновления: после confirm —
             // упражнение пропадает из списка
-            val exercisesAfterArchive = remember { mutableStateOf<List<Exercise>>(listOf(bench)) }
+            val exercisesAfterArchive = remember { mutableStateOf<List<Exercise>>(listOf(bench, plank)) }
             val current =
                 ExercisesUiState.Success(
                     exercises = exercisesAfterArchive.value,
@@ -809,7 +809,7 @@ class ExercisesScreenTest {
                         onConfirmArchive = {
                             confirmed = true
                             pendingArchiveId = null
-                            exercisesAfterArchive.value = emptyList()
+                            exercisesAfterArchive.value = listOf(plank)
                         },
                         onCancelArchive = { pendingArchiveId = null },
                         onArchivedExercisesClick = {}
@@ -866,7 +866,7 @@ class ExercisesScreenTest {
                     ExercisesScreenState(
                         uiState =
                             ExercisesUiState.Success(
-                                exercises = listOf(bench),
+                                exercises = listOf(bench, plank),
                                 pendingArchiveId = pendingArchiveId
                             ),
                         contextMenu = menu,
@@ -1063,4 +1063,140 @@ class ExercisesScreenTest {
     private var uiStateRef: androidx.compose.runtime.MutableState<ExercisesUiState> =
         androidx.compose.runtime.mutableStateOf(ExercisesUiState.Loading)
     // endregion
+
+    /**
+     * Guard последнего активного (prevent-from-archiving-all, 6.1):
+     * у последнего активного КАСТОМНОГО упражнения в меню скрыты
+     * «Архивировать» и «Удалить» — остаётся только «Изменить».
+     */
+    @Test
+    fun row_long_press_when_last_active_custom_then_menu_with_edit_only() {
+        // Given — единственное (последнее активное) упражнение кастомное +
+        // локальная state-машина
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState = ExercisesUiState.Success(exercises = listOf(bench)),
+                        contextMenu = menu,
+                        onAddExerciseClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestEdit = {},
+                        onRequestArchive = {},
+                        onRequestDelete = {}
+                    )
+            )
+        }
+
+        // When — long-press на строке последнего активного
+        composeTestRule
+            .onNodeWithText("Жим")
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+
+        // Then — «Изменить» есть, «Архивировать»/«Удалить» нет
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_list_menu_edit))
+            .assertExists()
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_list_menu_archive))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_list_menu_delete))
+            .assertCountEquals(0)
+    }
+
+    /**
+     * Guard последнего активного (prevent-from-archiving-all, 6.1):
+     * у последнего активного СТАНДАРТНОГО упражнения состав меню пуст —
+     * long-press не открывает меню (ранний return до смены state).
+     */
+    @Test
+    fun row_long_press_when_last_active_standard_then_menu_not_opened() {
+        // Given — единственное (последнее активное) упражнение стандартное
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState = ExercisesUiState.Success(exercises = listOf(pullups)),
+                        contextMenu = menu,
+                        onAddExerciseClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestEdit = {},
+                        onRequestArchive = {},
+                        onRequestDelete = {}
+                    )
+            )
+        }
+
+        // When — long-press на строке последнего активного
+        composeTestRule
+            .onNodeWithText("Подтягивания")
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+
+        // Then — меню не открылось: ни одного пункта нет
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_list_menu_archive))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_list_menu_edit))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_list_menu_delete))
+            .assertCountEquals(0)
+    }
+
+    /**
+     * Guard последнего активного (prevent-from-archiving-all, 6.1):
+     * accessibility-канал — custom-действие «Открыть меню» у последнего
+     * активного стандартного упражнения не открывает пустое меню.
+     */
+    @Test
+    fun row_when_a11y_action_invoked_when_last_active_standard_then_menu_not_opened() {
+        // Given — единственное (последнее активное) упражнение стандартное
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
+            ExercisesScreenContent(
+                state =
+                    ExercisesScreenState(
+                        uiState = ExercisesUiState.Success(exercises = listOf(pullups)),
+                        contextMenu = menu,
+                        onAddExerciseClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestEdit = {},
+                        onRequestArchive = {},
+                        onRequestDelete = {}
+                    )
+            )
+        }
+
+        // When — выполнение custom-действия «Открыть меню»
+        val openMenuAction =
+            composeTestRule
+                .onNodeWithText("Подтягивания")
+                .fetchSemanticsNode()
+                .config
+                .getOrNull(SemanticsActions.CustomActions)
+                ?.firstOrNull { it.label == context.getString(R.string.a11y_open_menu) }
+        assertNotNull(
+            "Строка каталога должна предоставлять custom-действие «Открыть меню»",
+            openMenuAction
+        )
+        checkNotNull(openMenuAction).action.invoke()
+        composeTestRule.waitForIdle()
+
+        // Then — меню не открылось: ни одного пункта нет
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_list_menu_archive))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_list_menu_edit))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.exercise_list_menu_delete))
+            .assertCountEquals(0)
+    }
 }

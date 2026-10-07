@@ -134,6 +134,8 @@
     <string name="exercise_delete_error_used_in_workouts">Это упражнение уже используется в тренировках</string>
     <string name="exercise_delete_error_standard">Нельзя удалить стандартное упражнение</string>
     <string name="exercise_delete_error_generic">Не удалось удалить упражнение</string>
+    <string name="exercise_last_active_archive_error">Нельзя архивировать единственное упражнение</string>
+    <string name="exercise_last_active_delete_error">Нельзя удалить единственное упражнение</string>
     <string name="exercise_hint_exercise_missing">Упражнение не найдено</string>
 
     <!-- App data screen (экспорт, восстановление, удаление данных) -->
@@ -178,6 +180,8 @@
     <string name="category_delete_error_used_by_exercises">Эта категория уже используется в упражнении</string>
     <string name="category_delete_error_standard">Нельзя удалить стандартную категорию</string>
     <string name="category_delete_error_generic">Не удалось удалить категорию</string>
+    <string name="category_last_active_archive_error">Нельзя архивировать единственную категорию</string>
+    <string name="category_last_active_delete_error">Нельзя удалить единственную категорию</string>
     <string name="categories_list_empty">Нет категорий</string>
     <string name="categories_add_category">Добавить категорию</string>
     <string name="category_create_title">Новая категория</string>

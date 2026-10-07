@@ -58,6 +58,15 @@ interface ExerciseDao {
     fun observeArchivedCount(): Flow<Int>
 
     /**
+     * Non-reactive счётчик активных упражнений (prevent-from-archiving-all,
+     * design Decision 3): guard «последний активный» в репозитории —
+     * одноразовая проверка перед записью, Flow не нужен (по образцу
+     * non-reactive pre-check'ов репозитория).
+     */
+    @Query("SELECT COUNT(*) FROM exercises WHERE is_archived = 0")
+    suspend fun activeCount(): Int
+
+    /**
      * Вставляет новое упражнение. Конфликт по `id` завершится ошибкой
      * (`ABORT`); на практике не достигается — Room генерирует id сам.
      *

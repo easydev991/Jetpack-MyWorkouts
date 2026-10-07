@@ -71,13 +71,22 @@ class RoomWorkoutDataRepository(
      * через [ExerciseDao.updateArchived]. Отсутствующий id →
      * `Result.failure(IllegalStateException("Упражнение не найдено"))` —
      * race между сбором списка и подтверждением алерта (паттерн
-     * [deleteExercise]); прочие ошибки БД — generic `Result.failure`.
+     * [deleteExercise]); архивация последнего активного →
+     * `Result.failure(LastActiveExerciseException())` — guard, чтобы
+     * активный каталог не опустел (prevent-from-archiving-all, design
+     * Decision 3; restore не ограничен); прочие ошибки БД — generic
+     * `Result.failure`.
      */
     override suspend fun setArchived(
         id: Long,
         isArchived: Boolean
     ): Result<Unit> =
         runCatching {
+            val entity =
+                exerciseDao.getById(id) ?: error("Упражнение не найдено")
+            if (isArchived && !entity.isArchived && exerciseDao.activeCount() == 1) {
+                throw LastActiveExerciseException()
+            }
             if (exerciseDao.updateArchived(id, isArchived) == 0) {
                 error("Упражнение не найдено")
             }
@@ -248,13 +257,19 @@ class RoomWorkoutDataRepository(
      *   `SQLiteConstraintException` остаётся как safety net для race
      *   между pre-check и `deleteById` (запись добавлена в другой
      *   сессии) — маппится в тот же `HasLinkedEntries`.
+     * - последнее активное (`!isArchived && activeCount() == 1`,
+     *   pre-check через [ExerciseDao.activeCount]) → `Result.failure(
+     *   LastActiveExerciseException())` — удаление опустошило бы
+     *   активный каталог (prevent-from-archiving-all, design Decision 3);
+     *   архивное упражнение удаляется свободно — не снижает число
+     *   активных.
      * - прочие исключения — generic `Result.failure`.
      */
     @Suppress("ReturnCount")
     override suspend fun deleteExercise(id: Long): Result<Unit> {
-        // 3 ранних return — сами бизнес-правила (нет id / стандартное /
-        // есть записи); разворачивать их во вложенные условия хуже
-        // (ponytail).
+        // 4 ранних return — сами бизнес-правила (нет id / стандартное /
+        // есть записи / последний активный); разворачивать их во
+        // вложенные условия хуже (ponytail).
         val exercise =
             exerciseDao.getById(id)?.toDomain()
                 ?: return Result.failure(
@@ -265,6 +280,9 @@ class RoomWorkoutDataRepository(
         }
         if (exerciseEntryDao.countByExerciseId(id) > 0) {
             return Result.failure(LinkedEntriesDeletionException())
+        }
+        if (!exercise.isArchived && exerciseDao.activeCount() == 1) {
+            return Result.failure(LastActiveExerciseException())
         }
         return runCatching { exerciseDao.deleteById(id) }.recoverCatching { e ->
             // Safety net для race между pre-check и deleteById:
@@ -388,7 +406,12 @@ class RoomWorkoutDataRepository(
      * ссылающиеся упражнения (активные или архивные) — типизированные
      * ошибки; VM маппит их в sealed `DeleteCategoryError`. Ссылок по
      * имени без FK нет — целостность держит порядок проверок в
-     * транзакции.
+     * транзакции. Последняя активная (pre-check через
+     * [CategoryDao.activeCount]) →
+     * `Result.failure(LastActiveCategoryException())` — удаление
+     * опустошило бы активный список (prevent-from-archiving-all, design
+     * Decision 3); архивная категория удаляется свободно — не снижает
+     * число активных.
      */
     override suspend fun deleteCategory(id: Long): Result<Unit> =
         runCatching {
@@ -402,6 +425,9 @@ class RoomWorkoutDataRepository(
                 if (exerciseDao.countByCategoryName(category.name) > 0) {
                     throw CategoryInUseDeletionException()
                 }
+                if (!category.isArchived && categoryDao.activeCount() == 1) {
+                    throw LastActiveCategoryException()
+                }
                 categoryDao.deleteById(id)
             }
         }
@@ -412,13 +438,21 @@ class RoomWorkoutDataRepository(
      * [CategoryDao.updateArchived] — паттерн [setArchived]. Упражнения
      * категории не трогаются; отсутствующий id —
      * `Result.failure(IllegalStateException("Категория не найдена"))` —
-     * race между сбором списка и подтверждением.
+     * race между сбором списка и подтверждением; архивация последней
+     * активной → `Result.failure(LastActiveCategoryException())` —
+     * guard, чтобы активный список не опустел (prevent-from-archiving-all,
+     * design Decision 3; restore не ограничен).
      */
     override suspend fun setCategoryArchived(
         id: Long,
         isArchived: Boolean
     ): Result<Unit> =
         runCatching {
+            val entity =
+                categoryDao.getById(id) ?: error("Категория не найдена")
+            if (isArchived && !entity.isArchived && categoryDao.activeCount() == 1) {
+                throw LastActiveCategoryException()
+            }
             if (categoryDao.updateArchived(id, isArchived) == 0) {
                 error("Категория не найдена")
             }

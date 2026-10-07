@@ -18,6 +18,13 @@ sealed class DeleteExerciseError {
     /** Удаление стандартного упражнения (UI не должен дойти сюда, safety net). */
     object StandardExercise : DeleteExerciseError()
 
+    /**
+     * Упражнение — последнее активное (guard репозитория,
+     * prevent-from-archiving-all; safety net — UI скрывает пункт меню,
+     * дойти можно через race или suppress-путь).
+     */
+    object LastActive : DeleteExerciseError()
+
     /** Прочее (включая «упражнение не найдено»): текст исключения в логе. */
     object Other : DeleteExerciseError()
 }

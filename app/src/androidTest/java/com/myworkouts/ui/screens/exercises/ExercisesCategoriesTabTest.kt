@@ -6,6 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
@@ -32,6 +34,7 @@ import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.state.ExercisesTab
 import com.myworkouts.ui.state.ExercisesUiState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -238,7 +241,7 @@ class ExercisesCategoriesTabTest {
     fun categoryRow_longPress_whenStandard_thenMenuWithArchiveOnly() {
         // Given
         composeTestRule.setContent {
-            CategoriesTabWithMenuMachine(categories = listOf(push))
+            CategoriesTabWithMenuMachine(categories = listOf(push, shoulders))
         }
 
         // When — long-press на строке стандартной категории
@@ -267,7 +270,7 @@ class ExercisesCategoriesTabTest {
     fun categoryRow_longPress_whenCustom_thenMenuWithEditArchiveDeleteInOrder() {
         // Given
         composeTestRule.setContent {
-            CategoriesTabWithMenuMachine(categories = listOf(shoulders))
+            CategoriesTabWithMenuMachine(categories = listOf(push, shoulders))
         }
 
         // When — long-press на строке кастомной категории
@@ -313,7 +316,7 @@ class ExercisesCategoriesTabTest {
         var cancelled = 0
         composeTestRule.setContent {
             CategoriesTabWithMenuMachine(
-                categories = listOf(shoulders),
+                categories = listOf(push, shoulders),
                 onCancelCategoryDelete = { cancelled += 1 }
             )
         }
@@ -360,7 +363,7 @@ class ExercisesCategoriesTabTest {
     fun categoryRow_longPress_whenCustom_tapArchive_thenAlertWithSuppressCheckbox() {
         // Given
         composeTestRule.setContent {
-            CategoriesTabWithMenuMachine(categories = listOf(shoulders))
+            CategoriesTabWithMenuMachine(categories = listOf(push, shoulders))
         }
         composeTestRule
             .onNodeWithText("Плечи")
@@ -504,6 +507,169 @@ class ExercisesCategoriesTabTest {
         composeTestRule.runOnIdle {
             assertEquals(
                 "FAB на вкладке категорий должен навигировать на Screen.CategoryCreate.route",
+                Screen.CategoryCreate.route,
+                navController.currentDestination?.route
+            )
+        }
+    }
+
+    /**
+     * Guard последней активной категории (prevent-from-archiving-all,
+     * 6.2): у последней активной КАСТОМНОЙ категории в меню скрыты
+     * «Архивировать» и «Удалить» — остаётся только «Изменить».
+     */
+    @Test
+    fun categoryRow_longPress_whenLastActiveCustom_thenMenuWithEditOnly() {
+        // Given — единственная (последняя активная) категория кастомная
+        composeTestRule.setContent {
+            CategoriesTabWithMenuMachine(categories = listOf(shoulders))
+        }
+
+        // When — long-press на строке последней активной
+        composeTestRule
+            .onNodeWithText("Плечи")
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+
+        // Then — «Изменить» есть, «Архивировать»/«Удалить» нет
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.category_list_menu_edit))
+            .assertExists()
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.category_list_menu_archive))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.category_list_menu_delete))
+            .assertCountEquals(0)
+    }
+
+    /**
+     * Guard последней активной категории (prevent-from-archiving-all,
+     * 6.2): у последней активной СТАНДАРТНОЙ состав меню пуст —
+     * long-press не открывает меню (ранний return до смены state).
+     */
+    @Test
+    fun categoryRow_longPress_whenLastActiveStandard_thenMenuNotOpened() {
+        // Given — единственная (последняя активная) категория стандартная
+        composeTestRule.setContent {
+            CategoriesTabWithMenuMachine(categories = listOf(push))
+        }
+
+        // When — long-press на строке последней активной
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.exercise_category_push))
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+
+        // Then — меню не открылось: ни одного пункта нет
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.category_list_menu_archive))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.category_list_menu_edit))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.category_list_menu_delete))
+            .assertCountEquals(0)
+    }
+
+    /**
+     * Guard последней активной категории (prevent-from-archiving-all,
+     * 6.2): accessibility-канал — custom-действие «Открыть меню» у
+     * последней активной стандартной категории не открывает пустое меню.
+     */
+    @Test
+    fun categoryRow_whenA11yActionInvoked_whenLastActiveStandard_thenMenuNotOpened() {
+        // Given — единственная (последняя активная) категория стандартная
+        composeTestRule.setContent {
+            CategoriesTabWithMenuMachine(categories = listOf(push))
+        }
+
+        // When — выполнение custom-действия «Открыть меню»
+        val openMenuAction =
+            composeTestRule
+                .onNodeWithText(context.getString(R.string.exercise_category_push))
+                .fetchSemanticsNode()
+                .config
+                .getOrNull(SemanticsActions.CustomActions)
+                ?.firstOrNull { it.label == context.getString(R.string.a11y_open_menu) }
+        assertNotNull(
+            "Строка категории должна предоставлять custom-действие «Открыть меню»",
+            openMenuAction
+        )
+        checkNotNull(openMenuAction).action.invoke()
+        composeTestRule.waitForIdle()
+
+        // Then — меню не открылось: ни одного пункта нет
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.category_list_menu_archive))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.category_list_menu_edit))
+            .assertCountEquals(0)
+        composeTestRule
+            .onAllNodesWithText(context.getString(R.string.category_list_menu_delete))
+            .assertCountEquals(0)
+    }
+
+    /**
+     * Guard последней активной категории (prevent-from-archiving-all,
+     * 6.2): «Изменить» у последней активной кастомной категории
+     * навигирует на edit-экран (`CategoryCreate` с id) как раньше —
+     * скрытие архивационных пунктов не задело edit-канал.
+     */
+    @Test
+    fun categoryRow_longPress_whenLastActiveCustom_tapEdit_thenNavigatesToCategoryEditRoute() {
+        // Given — NavHost-harness с заглушкой destination (паттерн FAB-теста);
+        // локальная state-машина контекст-меню — как в CategoriesTabWithMenuMachine
+        lateinit var navController: NavHostController
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<CategoryContextMenuState?>(null) }
+            navController = rememberNavController()
+            NavHost(navController = navController, startDestination = Screen.Exercises.route) {
+                composable(Screen.Exercises.route) {
+                    ExercisesScreenContent(
+                        state =
+                            ExercisesScreenState(
+                                uiState =
+                                    ExercisesUiState.Success(
+                                        exercises = listOf(pullups),
+                                        categories = listOf(shoulders),
+                                        selectedTab = ExercisesTab.CATEGORIES
+                                    ),
+                                categoryContextMenu = menu,
+                                onCategoryContextMenuItemChange = { menu = it },
+                                onAddExerciseClick = {},
+                                onAddCategoryClick = {},
+                                onRequestCategoryEdit = { category ->
+                                    menu = null
+                                    navController.navigate(
+                                        Screen.CategoryCreate.createRoute(category.id)
+                                    )
+                                }
+                            )
+                    )
+                }
+                composable(Screen.CategoryCreate.route, arguments = Screen.CategoryCreate.arguments) {
+                    // Заглушка destination (форма категории — вне сценария).
+                }
+            }
+        }
+
+        // When — long-press на последней активной и тап «Изменить»
+        composeTestRule
+            .onNodeWithText("Плечи")
+            .performTouchInput { longClick() }
+        composeTestRule.waitForIdle()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.category_list_menu_edit))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        // Then — активный маршрут — edit-экран категории
+        composeTestRule.runOnIdle {
+            assertEquals(
+                "«Изменить» у последней активной категории должен навигировать на Screen.CategoryCreate.route",
                 Screen.CategoryCreate.route,
                 navController.currentDestination?.route
             )

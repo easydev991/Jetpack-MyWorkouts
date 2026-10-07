@@ -13,6 +13,8 @@ import com.myworkouts.analytics.UserActionType
 import com.myworkouts.crash.CrashlyticsHelper
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.data.repository.CategoryInUseDeletionException
+import com.myworkouts.data.repository.LastActiveCategoryException
+import com.myworkouts.data.repository.LastActiveExerciseException
 import com.myworkouts.data.repository.LinkedEntriesDeletionException
 import com.myworkouts.data.repository.StandardCategoryDeletionException
 import com.myworkouts.data.repository.StandardExerciseDeletionException
@@ -80,6 +82,16 @@ class ExercisesViewModel(
     private val deleteError: MutableStateFlow<DeleteExerciseError?> = MutableStateFlow(null)
 
     /**
+     * One-shot флаг ошибки архивации упражнения для снекбара; `false` —
+     * нет ошибки. Выставляется только guard-фейлом
+     * (`LastActiveExerciseException`, design Decision 5); race-failure
+     * остаётся тихим. Сбрасывается в `false` через [onErrorShown] вместе
+     * с [deleteError] (пара каналов на сущность, prevent-from-archiving-all
+     * design Decision 4).
+     */
+    private val archiveError: MutableStateFlow<Boolean> = MutableStateFlow(false)
+
+    /**
      * Id упражнения, для которого сейчас показан алерт подтверждения
      * архивации; `null` — алерт закрыт. Обновляется через [requestArchive]
      * / [confirmArchive] / [cancelArchive] (exercises-archive design
@@ -111,6 +123,15 @@ class ExercisesViewModel(
      */
     private val categoryDeleteError: MutableStateFlow<DeleteCategoryError?> =
         MutableStateFlow(null)
+
+    /**
+     * One-shot флаг ошибки архивации категории для снекбара; `false` —
+     * нет ошибки. Выставляется только guard-фейлом
+     * (`LastActiveCategoryException`); race-failure остаётся тихим.
+     * Сбрасывается через [onCategoryErrorShown] вместе с
+     * [categoryDeleteError] (паттерн [archiveError]).
+     */
+    private val categoryArchiveError: MutableStateFlow<Boolean> = MutableStateFlow(false)
 
     /**
      * Id категории, для которой открыт алерт подтверждения архивации;
@@ -179,11 +200,13 @@ class ExercisesViewModel(
      * pending-состояниями подтверждений, one-shot ошибками и признаком
      * непустого архива.
      *
-     * 10 потоков — выше типизированного overload `combine`, поэтому
+     * 12 потоков — выше типизированного overload `combine`, поэтому
      * группировка в каскад (design Decision 6, Risks): списочные данные
-     * ([ExercisesCatalog]) и диалоговые состояния ([ExercisesDialogs])
-     * собираются типизированными `combine(5)`, финальный vararg-`combine`
-     * склеивает их с [pendingCategoryArchiveId] в один `stateIn`.
+     * ([ExercisesCatalog]), диалоговые состояния — упражнения
+     * ([ExercisesDialogs]) и категории ([ExercisesCategoryDialogs]) —
+     * собираются типизированными `combine(≤5)`; финальный типизированный
+     * `combine(5)` склеивает группы с каналами архивных ошибок
+     * ([archiveError], [categoryArchiveError]) в один `stateIn`.
      */
     val uiState: StateFlow<ExercisesUiState> =
         combine(
@@ -198,24 +221,38 @@ class ExercisesViewModel(
             combine(
                 pendingDeleteId,
                 deleteError,
-                pendingArchiveId,
-                pendingCategoryDeleteId,
-                categoryDeleteError
-            ) { pendingId, error, pendingArchive, pendingCategoryId, categoryError ->
-                ExercisesDialogs(pendingId, error, pendingArchive, pendingCategoryId, categoryError)
+                pendingArchiveId
+            ) { pendingId, error, pendingArchive ->
+                ExercisesDialogs(pendingId, error, pendingArchive)
             },
-            pendingCategoryArchiveId
-        ) { catalog, dialogs, pendingCategoryArchive ->
+            archiveError,
+            combine(
+                pendingCategoryDeleteId,
+                categoryDeleteError,
+                categoryArchiveError,
+                pendingCategoryArchiveId
+            ) { pendingCategoryId, categoryError, categoryArchive, pendingCategoryArchive ->
+                ExercisesCategoryDialogs(
+                    pendingCategoryId,
+                    categoryError,
+                    categoryArchive,
+                    pendingCategoryArchive
+                )
+            },
+            categoryArchiveError
+        ) { catalog, dialogs, archive, categoryDialogs, categoryArchive ->
             ExercisesUiState.Success(
                 exercises = catalog.exercises,
                 categories = catalog.categories,
                 selectedTab = catalog.selectedTab,
                 pendingDeleteId = dialogs.pendingDeleteId,
                 deleteError = dialogs.deleteError,
+                archiveError = archive,
                 pendingArchiveId = dialogs.pendingArchiveId,
-                pendingCategoryDeleteId = dialogs.pendingCategoryDeleteId,
-                categoryDeleteError = dialogs.categoryDeleteError,
-                pendingCategoryArchiveId = pendingCategoryArchive,
+                pendingCategoryDeleteId = categoryDialogs.pendingCategoryDeleteId,
+                categoryDeleteError = categoryDialogs.categoryDeleteError,
+                categoryArchiveError = categoryArchive,
+                pendingCategoryArchiveId = categoryDialogs.pendingCategoryArchiveId,
                 hasArchived = catalog.hasArchived
             )
         }.stateIn(
@@ -258,6 +295,8 @@ class ExercisesViewModel(
      * - [LinkedEntriesDeletionException] → `HasLinkedEntries` (race pre-check);
      * - [StandardExerciseDeletionException] → `StandardExercise`
      *   (safety net — UI не должен сюда дойти, Decision 4);
+     * - [LastActiveExerciseException] → `LastActive` — guard последнего
+     *   активного (prevent-from-archiving-all);
      * - прочее — `Other` (включая «упражнение не найдено» —
      *   race между pre-check и confirm).
      *
@@ -278,6 +317,7 @@ class ExercisesViewModel(
                         when (error) {
                             is LinkedEntriesDeletionException -> DeleteExerciseError.HasLinkedEntries
                             is StandardExerciseDeletionException -> DeleteExerciseError.StandardExercise
+                            is LastActiveExerciseException -> DeleteExerciseError.LastActive
                             else -> DeleteExerciseError.Other
                         }
                     CrashlyticsHelper.logException(error, "Удаление упражнения")
@@ -291,14 +331,37 @@ class ExercisesViewModel(
     }
 
     /**
-     * Сбрасывает [ExercisesUiState.Success.deleteError] после показа
-     * снекбара — one-shot семантика (design Decision 6).
+     * Сбрасывает пару каналов ошибок упражнения —
+     * [ExercisesUiState.Success.deleteError] и
+     * [ExercisesUiState.Success.archiveError] — после показа снекбара,
+     * one-shot семантика (design Decision 6; пара каналов на сущность,
+     * prevent-from-archiving-all design Decision 4).
      */
     fun onErrorShown() {
         deleteError.value = null
+        archiveError.value = false
     }
 
     // ---------- Архивация (exercises-archive, §3.5) ----------
+
+    /**
+     * Единый обработчик guard-фейла «последний активный»
+     * (prevent-from-archiving-all): Crashlytics + `AppError` + `Log.e` +
+     * выставление ошибки в канал UiState. Вызывается только после
+     * `is`-проверки конкретного исключения на call-site — прочие фейлы
+     * (race «не найдено», design Decision 5) остаются тихими.
+     */
+    private fun onArchiveGuardFailure(
+        error: IllegalStateException,
+        operation: AppErrorOperation,
+        logMessage: String,
+        set: () -> Unit
+    ) {
+        CrashlyticsHelper.logException(error, logMessage)
+        analyticsProvider.log(AnalyticsEvent.AppError(operation, error))
+        Log.e(LOG_TAG, "$logMessage, ${error.message}", error)
+        set()
+    }
 
     /**
      * Запрашивает архивацию упражнения: открывает алерт подтверждения
@@ -310,17 +373,29 @@ class ExercisesViewModel(
      * Opt-out (archive-alert-hide): если пользователь ранее отметил
      * «больше не показывать» и флаг `dontShowArchiveDialog == true` —
      * архивация выполняется сразу (`repository.setArchived(item.id,
-     * true)`), диалог НЕ открывается. Иначе — обычный путь через
-     * pendingArchiveId (tasks §3.1).
+     * true)`), диалог НЕ открывается; guard-фейл на этом пути — тот же
+     * `archiveError` (design Decision 1 — второй барьер). Иначе —
+     * обычный путь через pendingArchiveId (tasks §3.1).
      */
     fun requestArchive(item: Exercise) {
         viewModelScope.launch {
             val dontShow = dataStore.dontShowArchiveDialog.first()
             if (dontShow) {
                 // Диалог не показывается: фактическое действие — здесь
-                // (design D10 — user_action на точке действия).
+                // (design D10 — user_action на точке действия). Suppress-путь
+                // доходит до guard'а (design Decision 1 — второй барьер).
                 analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.ARCHIVE))
-                repository.setArchived(item.id, true)
+                repository
+                    .setArchived(item.id, true)
+                    .onFailure { error ->
+                        if (error is LastActiveExerciseException) {
+                            onArchiveGuardFailure(
+                                error,
+                                AppErrorOperation.ARCHIVE_EXERCISE,
+                                "Архивация упражнения заблокирована: id=${item.id}"
+                            ) { archiveError.value = true }
+                        }
+                    }
             } else {
                 pendingArchiveId.value = item.id
             }
@@ -341,8 +416,12 @@ class ExercisesViewModel(
      * `Result.success` и `Result.failure` pending сбрасывается — failure
      * НЕ показывается пользователю (архивация обратима, повторный
      * `requestArchive` достаточен; spec «Failure при подтверждении —
-     * алерт закрыт, каталог без изменений»; tasks §3.3). `success` —
-     * реактивный `Flow` каталога сам уберёт упражнение из списка.
+     * алерт закрыт, каталог без изменений»; tasks §3.3) —
+     * единственное исключение: guard-фейл последнего активного
+     * ([LastActiveExerciseException]) выставляет `archiveError` для
+     * снекбара + `AppError(ARCHIVE_EXERCISE)` (prevent-from-archiving-all,
+     * design Decision 5). `success` — реактивный `Flow` каталога сам
+     * уберёт упражнение из списка.
      *
      * @param suppress `true` — вместе с архивацией записать флаг
      *   «больше не показывать диалог» в [AppSettingsDataStore]
@@ -355,7 +434,19 @@ class ExercisesViewModel(
         val id = pendingArchiveId.value ?: return
         analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.ARCHIVE))
         viewModelScope.launch {
-            repository.setArchived(id, true)
+            repository
+                .setArchived(id, true)
+                .onFailure { error ->
+                    // Только guard-фейл ломает тишину (design Decision 5):
+                    // race «не найдено» остаётся тихим — повторный запрос.
+                    if (error is LastActiveExerciseException) {
+                        onArchiveGuardFailure(
+                            error,
+                            AppErrorOperation.ARCHIVE_EXERCISE,
+                            "Архивация упражнения заблокирована: id=$id"
+                        ) { archiveError.value = true }
+                    }
+                }
             pendingArchiveId.value = null
             if (suppress) {
                 dataStore.setDontShowArchiveDialog(true)
@@ -409,6 +500,8 @@ class ExercisesViewModel(
      *   после пре-чека);
      * - [StandardCategoryDeletionException] → `StandardCategory`
      *   (safety net — UI не предлагает удаление стандартных);
+     * - [LastActiveCategoryException] → `LastActive` — guard последней
+     *   активной (prevent-from-archiving-all);
      * - прочее — `Other`.
      *
      * Каждая failure-ветка логирует текст исключения через [Log.e].
@@ -428,11 +521,12 @@ class ExercisesViewModel(
                         when (error) {
                             is CategoryInUseDeletionException -> DeleteCategoryError.UsedByExercises
                             is StandardCategoryDeletionException -> DeleteCategoryError.StandardCategory
+                            is LastActiveCategoryException -> DeleteCategoryError.LastActive
                             else -> DeleteCategoryError.Other
                         }
                     CrashlyticsHelper.logException(error, "Удаление категории")
                     analyticsProvider.log(
-                        AnalyticsEvent.AppError(AppErrorOperation.CATEGORY_DELETE, error)
+                        AnalyticsEvent.AppError(AppErrorOperation.DELETE_CATEGORY, error)
                     )
                     Log.e(LOG_TAG, "deleteCategory failed for id=$id: ${error.message}", error)
                     categoryDeleteError.value = mapped
@@ -441,19 +535,24 @@ class ExercisesViewModel(
     }
 
     /**
-     * Сбрасывает [ExercisesUiState.Success.categoryDeleteError] после
-     * показа снекбара — one-shot семантика (паттерн [onErrorShown]).
+     * Сбрасывает пару каналов ошибок категории —
+     * [ExercisesUiState.Success.categoryDeleteError] и
+     * [ExercisesUiState.Success.categoryArchiveError] — после показа
+     * снекбара, one-shot семантика (паттерн [onErrorShown]).
      */
     fun onCategoryErrorShown() {
         categoryDeleteError.value = null
+        categoryArchiveError.value = false
     }
 
     /**
      * Запрашивает архивацию категории: при
      * `dataStore.dontShowCategoryArchiveDialog == true` — немедленно
-     * `repository.setCategoryArchived(id, true)` без алерта; иначе
-     * открывает алерт через [pendingCategoryArchiveId] (custom-categories,
-     * design Decision 8, паттерн [requestArchive]). Флаг упражнений
+     * `repository.setCategoryArchived(id, true)` без алерта; guard-фейл
+     * на этом пути — тот же `categoryArchiveError` (design Decision 1 —
+     * второй барьер); иначе открывает алерт через
+     * [pendingCategoryArchiveId] (custom-categories, design Decision 8,
+     * паттерн [requestArchive]). Флаг упражнений
      * [AppSettingsDataStore.dontShowArchiveDialog] НЕ читается — ключи
      * независимы.
      *
@@ -464,9 +563,20 @@ class ExercisesViewModel(
             val dontShow = dataStore.dontShowCategoryArchiveDialog.first()
             if (dontShow) {
                 // Диалог не показывается: фактическое действие — здесь
-                // (design D10 — канон requestArchive)
+                // (design D10 — канон requestArchive). Suppress-путь доходит
+                // до guard'а (design Decision 1 — второй барьер).
                 analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.ARCHIVE_CATEGORY))
-                repository.setCategoryArchived(id, true)
+                repository
+                    .setCategoryArchived(id, true)
+                    .onFailure { error ->
+                        if (error is LastActiveCategoryException) {
+                            onArchiveGuardFailure(
+                                error,
+                                AppErrorOperation.ARCHIVE_CATEGORY,
+                                "Архивация категории заблокирована: id=$id"
+                            ) { categoryArchiveError.value = true }
+                        }
+                    }
             } else {
                 pendingCategoryArchiveId.value = id
             }
@@ -482,7 +592,10 @@ class ExercisesViewModel(
      * Подтверждает архивацию категории из алерта: вызывает
      * [WorkoutDataRepository.setCategoryArchived] с `isArchived = true`.
      * При любом исходе pending сбрасывается — failure не показывается
-     * (архивация обратима, паттерн [confirmArchive]).
+     * (архивация обратима, паттерн [confirmArchive]); единственное
+     * исключение: guard-фейл последней активной
+     * ([LastActiveCategoryException]) выставляет `categoryArchiveError`
+     * + `AppError(ARCHIVE_CATEGORY)` (design Decision 5).
      *
      * @param suppress `true` — вместе с архивацией записать отдельный
      *   категорийный флаг «больше не показывать»
@@ -493,7 +606,18 @@ class ExercisesViewModel(
         // На вызове операции, до/независимо от исхода (design D10 — канон confirmArchive)
         analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.ARCHIVE_CATEGORY))
         viewModelScope.launch {
-            repository.setCategoryArchived(id, true)
+            repository
+                .setCategoryArchived(id, true)
+                .onFailure { error ->
+                    // Только guard-фейл ломает тишину (design Decision 5).
+                    if (error is LastActiveCategoryException) {
+                        onArchiveGuardFailure(
+                            error,
+                            AppErrorOperation.ARCHIVE_CATEGORY,
+                            "Архивация категории заблокирована: id=$id"
+                        ) { categoryArchiveError.value = true }
+                    }
+                }
             pendingCategoryArchiveId.value = null
             if (suppress) {
                 dataStore.setDontShowCategoryArchiveDialog(true)
@@ -536,13 +660,24 @@ private data class ExercisesCatalog(
 )
 
 /**
- * Диалоговые состояния Success для каскада [ExercisesViewModel.uiState]:
- * pending-подтверждения и one-shot ошибки удаления упражнений и категорий.
+ * Диалоговые состояния Success (упражнения) для каскада
+ * [ExercisesViewModel.uiState]: pending-подтверждения и one-shot ошибка
+ * удаления упражнения.
  */
 private data class ExercisesDialogs(
     val pendingDeleteId: Long?,
     val deleteError: DeleteExerciseError?,
-    val pendingArchiveId: Long?,
+    val pendingArchiveId: Long?
+)
+
+/**
+ * Диалоговые состояния Success (категории) для каскада
+ * [ExercisesViewModel.uiState]: pending-подтверждения и one-shot ошибка
+ * удаления категории.
+ */
+private data class ExercisesCategoryDialogs(
     val pendingCategoryDeleteId: Long?,
-    val categoryDeleteError: DeleteCategoryError?
+    val categoryDeleteError: DeleteCategoryError?,
+    val categoryArchiveError: Boolean,
+    val pendingCategoryArchiveId: Long?
 )

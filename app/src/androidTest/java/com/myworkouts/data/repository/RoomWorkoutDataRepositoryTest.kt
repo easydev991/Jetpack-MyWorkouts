@@ -51,6 +51,10 @@ import java.util.concurrent.CopyOnWriteArrayList
  *   без записей удаляется; стандартное и упражнение с записями
  *   неудаляемы (`Result.isFailure`); несуществующий id упражнения —
  *   ошибка.
+ * - Guard последнего активного (prevent-from-archiving-all) —
+ *   архивация и удаление последнего активного элемента отклоняются
+ *   (`LastActiveExerciseException` / `LastActiveCategoryException`),
+ *   restore и удаление архивного при единственном активном разрешены.
  */
 @RunWith(AndroidJUnit4::class)
 class RoomWorkoutDataRepositoryTest {
@@ -1461,6 +1465,366 @@ class RoomWorkoutDataRepositoryTest {
                 bySubstring.firstOrNull { it.id == archivedId }
             )
             assertNotNull(bySubstring.firstOrNull { it.name == "Подтягивания" })
+        }
+
+    // Guard «последний активный» (prevent-from-archiving-all, tasks §2):
+    // архивация и удаление не могут опустошить активный каталог.
+
+    /**
+     * `setArchived(id, true)` последнего активного упражнения →
+     * `Result.failure(LastActiveExerciseException)`, упражнение остаётся
+     * активным (spec-сценарий «Архивация последнего активного упражнения
+     * отклоняется»). Первый `setArchived` легален: активных два.
+     */
+    @Test
+    fun setArchived_whenLastActiveExercise_returnsFailure_andExerciseRemainsActive() =
+        runBlocking {
+            // Given — из двух активных (setUp) одно заархивировано:
+            // «Подтягивания» — последний активный
+            val pullupsId =
+                database
+                    .exerciseDao()
+                    .getAll()
+                    .single { it.name == "Подтягивания" }
+                    .id
+            val plankId =
+                database
+                    .exerciseDao()
+                    .getAll()
+                    .single { it.name == "Планка" }
+                    .id
+            repository.setArchived(plankId, true).getOrThrow()
+
+            // When
+            val result = repository.setArchived(pullupsId, true)
+
+            // Then — отказ типизированным guard-исключением, активно
+            assertTrue(
+                "Архивация последнего активного должна быть отклонена",
+                result.isFailure
+            )
+            assertTrue(
+                "Ожидается LastActiveExerciseException для маппинга в sealed-тип",
+                result.exceptionOrNull() is LastActiveExerciseException
+            )
+            assertEquals(
+                pullupsId,
+                repository
+                    .exercises("")
+                    .first()
+                    .single { it.name == "Подтягивания" }
+                    .id
+            )
+        }
+
+    /**
+     * `deleteExercise` последнего активного → `Result.failure(
+     * LastActiveExerciseException)`, упражнение остаётся в БД
+     * (spec-сценарий «Удаление последнего активного упражнения
+     * отклоняется»). Упражнение кастомное и без записей — pre-check'и
+     * «стандартное»/«есть записи» проходят, срабатывает только guard.
+     */
+    @Test
+    fun deleteExercise_whenLastActiveExercise_returnsFailure_andExerciseRemains() =
+        runBlocking {
+            // Given — кастомное упражнение; оба стандартных из setUp
+            // заархивированы → кастомное стало последним активным
+            val customId =
+                repository
+                    .addExercise(
+                        Exercise(
+                            id = 0L,
+                            name = "Становая тяга",
+                            category = "PULL",
+                            isCustom = true,
+                            comment = null,
+                            createdAt = 1_700_000_000_000L
+                        )
+                    ).getOrThrow()
+            database
+                .exerciseDao()
+                .getAll()
+                .filter { !it.isCustom }
+                .forEach { repository.setArchived(it.id, true).getOrThrow() }
+
+            // When
+            val result = repository.deleteExercise(customId)
+
+            // Then — отказ guard'ом, упражнение не удалено
+            assertTrue(
+                "Удаление последнего активного должно быть отклонено",
+                result.isFailure
+            )
+            assertTrue(
+                "Ожидается LastActiveExerciseException для маппинга в sealed-тип",
+                result.exceptionOrNull() is LastActiveExerciseException
+            )
+            assertEquals(customId, database.exerciseDao().getById(customId)?.id)
+        }
+
+    /** `setArchived` не последнего активного — успех (guard не мешает). */
+    @Test
+    fun setArchived_whenOtherActiveRemains_thenSucceeds() =
+        runBlocking {
+            // Given — два активных из setUp
+            val plankId =
+                database
+                    .exerciseDao()
+                    .getAll()
+                    .single { it.name == "Планка" }
+                    .id
+
+            // When
+            val result = repository.setArchived(plankId, true)
+
+            // Then — успех: активный каталог не опустошён
+            assertTrue(result.isSuccess)
+            assertEquals(1, repository.exercises("").first().size)
+        }
+
+    /** `deleteExercise` не последнего активного — успех (guard не мешает). */
+    @Test
+    fun deleteExercise_whenOtherActiveRemains_thenSucceeds() =
+        runBlocking {
+            // Given — кастомное при двух активных стандартных из setUp
+            val customId =
+                repository
+                    .addExercise(
+                        Exercise(
+                            id = 0L,
+                            name = "Отжимания на турнике",
+                            category = "PULL",
+                            isCustom = true,
+                            comment = null,
+                            createdAt = 1_700_000_000_000L
+                        )
+                    ).getOrThrow()
+
+            // When
+            val result = repository.deleteExercise(customId)
+
+            // Then — успех, из БД удалено
+            assertTrue(result.isSuccess)
+            assertEquals(null, database.exerciseDao().getById(customId))
+        }
+
+    /**
+     * Restore архивного при единственном активном — успех: guard
+     * срабатывает только на переход «активное → архивное», restore
+     * число активных не уменьшает (spec-сценарий «Восстановление
+     * последнего активного упражнения разрешено»).
+     */
+    @Test
+    fun setArchived_whenRestoreAtSingleActive_thenSucceeds() =
+        runBlocking {
+            // Given — единственный активный: «Планка» заархивирована
+            val plankId =
+                database
+                    .exerciseDao()
+                    .getAll()
+                    .single { it.name == "Планка" }
+                    .id
+            repository.setArchived(plankId, true).getOrThrow()
+
+            // When
+            val result = repository.setArchived(plankId, false)
+
+            // Then — успех, оба снова активны
+            assertTrue(result.isSuccess)
+            assertEquals(2, repository.exercises("").first().size)
+        }
+
+    /**
+     * Удаление архивного при единственном активном — успех: удаление
+     * архивной строки никогда не снижает число активных (spec-сценарий
+     * «Удаление архивного упражнения при последнем активном разрешено»).
+     */
+    @Test
+    fun deleteExercise_whenArchivedAtSingleActive_thenSucceeds() =
+        runBlocking {
+            // Given — кастомное заархивировано, «Планка» заархивирована:
+            // активен только «Подтягивания»
+            val customId =
+                repository
+                    .addExercise(
+                        Exercise(
+                            id = 0L,
+                            name = "Становая тяга",
+                            category = "PULL",
+                            isCustom = true,
+                            comment = null,
+                            createdAt = 1_700_000_000_000L
+                        )
+                    ).getOrThrow()
+            repository.setArchived(customId, true).getOrThrow()
+            val plankId =
+                database
+                    .exerciseDao()
+                    .getAll()
+                    .single { it.name == "Планка" }
+                    .id
+            repository.setArchived(plankId, true).getOrThrow()
+
+            // When
+            val result = repository.deleteExercise(customId)
+
+            // Then — успех, архивное удалено
+            assertTrue(result.isSuccess)
+            assertEquals(null, database.exerciseDao().getById(customId))
+        }
+
+    // Guard «последний активный» для категорий (prevent-from-archiving-all,
+    // tasks §3): симметрично упражнениям. Категории в setUp не сеются —
+    // тесты создают ровно две активные через addCategory.
+
+    /**
+     * `setCategoryArchived(id, true)` последней активной категории →
+     * `Result.failure(LastActiveCategoryException)`, категория остаётся
+     * активной. Первый `setCategoryArchived` легален: активных две.
+     */
+    @Test
+    fun setCategoryArchived_whenLastActiveCategory_returnsFailure_andCategoryRemainsActive() =
+        runBlocking {
+            // Given — из двух активных категорий одна заархивирована:
+            // «Спина» — последняя активная
+            val chestId =
+                repository.addCategory("Грудь", 0xFF6200EE.toInt()).getOrThrow().id
+            val backId =
+                repository.addCategory("Спина", 0xFF03DAC5.toInt()).getOrThrow().id
+            repository.setCategoryArchived(chestId, true).getOrThrow()
+
+            // When
+            val result = repository.setCategoryArchived(backId, true)
+
+            // Then — отказ типизированным guard-исключением, активна
+            assertTrue(
+                "Архивация последней активной категории должна быть отклонена",
+                result.isFailure
+            )
+            assertTrue(
+                "Ожидается LastActiveCategoryException для маппинга в sealed-тип",
+                result.exceptionOrNull() is LastActiveCategoryException
+            )
+            assertEquals(
+                backId,
+                repository
+                    .categories()
+                    .first()
+                    .single { it.name == "Спина" }
+                    .id
+            )
+        }
+
+    /**
+     * `deleteCategory` последней активной кастомной категории без
+     * ссылок → `Result.failure(LastActiveCategoryException)`, категория
+     * остаётся в БД. Pre-check'и «стандартная»/«есть ссылки» проходят —
+     * срабатывает только guard.
+     */
+    @Test
+    fun deleteCategory_whenLastActiveCategory_returnsFailure_andCategoryRemains() =
+        runBlocking {
+            // Given — из двух кастомных категорий одна заархивирована:
+            // «Спина» — последняя активная; упражнений с именем «Спина» нет
+            val chestId =
+                repository.addCategory("Грудь", 0xFF6200EE.toInt()).getOrThrow().id
+            val backId =
+                repository.addCategory("Спина", 0xFF03DAC5.toInt()).getOrThrow().id
+            repository.setCategoryArchived(chestId, true).getOrThrow()
+
+            // When
+            val result = repository.deleteCategory(backId)
+
+            // Then — отказ guard'ом, категория не удалена
+            assertTrue(
+                "Удаление последней активной категории должно быть отклонено",
+                result.isFailure
+            )
+            assertTrue(
+                "Ожидается LastActiveCategoryException для маппинга в sealed-тип",
+                result.exceptionOrNull() is LastActiveCategoryException
+            )
+            assertEquals(backId, database.categoryDao().getById(backId)?.id)
+        }
+
+    /** `setCategoryArchived` не последней активной — успех (guard не мешает). */
+    @Test
+    fun setCategoryArchived_whenOtherActiveRemains_thenSucceeds() =
+        runBlocking {
+            // Given — две активные категории
+            val chestId =
+                repository.addCategory("Грудь", 0xFF6200EE.toInt()).getOrThrow().id
+            repository.addCategory("Спина", 0xFF03DAC5.toInt()).getOrThrow()
+
+            // When
+            val result = repository.setCategoryArchived(chestId, true)
+
+            // Then — успех: активный список не опустошён
+            assertTrue(result.isSuccess)
+            assertEquals(1, repository.categories().first().size)
+        }
+
+    /** `deleteCategory` не последней активной — успех (guard не мешает). */
+    @Test
+    fun deleteCategory_whenOtherActiveRemains_thenSucceeds() =
+        runBlocking {
+            // Given — две кастомные категории без ссылок
+            val chestId =
+                repository.addCategory("Грудь", 0xFF6200EE.toInt()).getOrThrow().id
+            repository.addCategory("Спина", 0xFF03DAC5.toInt()).getOrThrow()
+
+            // When
+            val result = repository.deleteCategory(chestId)
+
+            // Then — успех, из БД удалена
+            assertTrue(result.isSuccess)
+            assertEquals(null, database.categoryDao().getById(chestId))
+        }
+
+    /**
+     * Restore архивной при единственной активной — успех: guard
+     * срабатывает только на переход «активная → архивная», restore
+     * число активных не уменьшает.
+     */
+    @Test
+    fun setCategoryArchived_whenRestoreAtSingleActive_thenSucceeds() =
+        runBlocking {
+            // Given — из двух категорий «Грудь» заархивирована:
+            // «Спина» — единственная активная
+            val chestId =
+                repository.addCategory("Грудь", 0xFF6200EE.toInt()).getOrThrow().id
+            repository.addCategory("Спина", 0xFF03DAC5.toInt()).getOrThrow()
+            repository.setCategoryArchived(chestId, true).getOrThrow()
+
+            // When
+            val result = repository.setCategoryArchived(chestId, false)
+
+            // Then — успех, обе снова активны
+            assertTrue(result.isSuccess)
+            assertEquals(2, repository.categories().first().size)
+        }
+
+    /**
+     * Удаление архивной категории при единственной активной — успех:
+     * удаление архивной строки никогда не снижает число активных.
+     */
+    @Test
+    fun deleteCategory_whenArchivedAtSingleActive_thenSucceeds() =
+        runBlocking {
+            // Given — «Грудь» заархивирована, «Спина» — единственная
+            // активная
+            val chestId =
+                repository.addCategory("Грудь", 0xFF6200EE.toInt()).getOrThrow().id
+            val backId =
+                repository.addCategory("Спина", 0xFF03DAC5.toInt()).getOrThrow().id
+            repository.setCategoryArchived(chestId, true).getOrThrow()
+
+            // When
+            val result = repository.deleteCategory(chestId)
+
+            // Then — успех, архивная удалена
+            assertTrue(result.isSuccess)
+            assertEquals(null, database.categoryDao().getById(chestId))
         }
 
     // Снимок истории упражнения (entry-prefilled-reps-and-duration, задача 1.3).

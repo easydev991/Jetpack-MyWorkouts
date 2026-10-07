@@ -119,7 +119,7 @@ fun ExercisesScreen(
     var categoryContextMenu by remember { mutableStateOf<CategoryContextMenuState?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    ExercisesDeleteErrorSnackbar(
+    ExercisesErrorSnackbar(
         uiState = uiState,
         snackbarHostState = snackbarHostState,
         onErrorShown = viewModel::onErrorShown,
@@ -190,16 +190,19 @@ fun ExercisesScreen(
 }
 
 /**
- * One-shot снекбар ошибки удаления (design Decision 6): локализованный
+ * One-shot снекбар ошибок каталога (design Decision 6;
+ * prevent-from-archiving-all — показывает и ошибки архивации, поэтому
+ * переименован из `ExercisesDeleteErrorSnackbar`): локализованный
  * текст резолвится на уровне композиции (`stringResource` —
  * `@Composable`), чтобы `LaunchedEffect` использовал его без повторного
  * резолва в suspend-блоке (для `Loading` — всегда `null`). Ключ эффекта —
  * текущий [uiState]: при изменении блок перезапускается, текущий снекбар
- * закрывается, показывается новый; сбрасывается та ошибка, которая была
- * показана (`deleteError` приоритетнее `categoryDeleteError`).
+ * закрывается, показывается новый; сбрасывается пара каналов той
+ * сущности, чья ошибка была показана (упражнения приоритетнее
+ * категорий — паттерн прежний).
  */
 @Composable
-private fun ExercisesDeleteErrorSnackbar(
+private fun ExercisesErrorSnackbar(
     uiState: ExercisesUiState,
     snackbarHostState: SnackbarHostState,
     onErrorShown: () -> Unit,
@@ -210,14 +213,20 @@ private fun ExercisesDeleteErrorSnackbar(
             ExercisesUiState.Loading -> null
             is ExercisesUiState.Success ->
                 s.deleteError?.let { deleteErrorText(it) }
+                    ?: s.archiveError
+                        .takeIf { it }
+                        ?.let { stringResource(R.string.exercise_last_active_archive_error) }
                     ?: s.categoryDeleteError?.let { categoryDeleteErrorText(it) }
+                    ?: s.categoryArchiveError
+                        .takeIf { it }
+                        ?.let { stringResource(R.string.category_last_active_archive_error) }
         }
     LaunchedEffect(uiState) {
         val currentSuccess = uiState as? ExercisesUiState.Success ?: return@LaunchedEffect
         val message = errorMessage ?: return@LaunchedEffect
         snackbarHostState.currentSnackbarData?.dismiss()
         snackbarHostState.showSnackbar(message)
-        if (currentSuccess.deleteError != null) {
+        if (currentSuccess.deleteError != null || currentSuccess.archiveError) {
             onErrorShown()
         } else {
             onCategoryErrorShown()
@@ -543,10 +552,28 @@ private fun SuccessBody(
 }
 
 /**
+ * «Последний активный» элемент каталога — guard видимости пунктов
+ * long-press меню (prevent-from-archiving-all, design Decision 7):
+ * вычисляется из уже загруженных списков `ExercisesUiState.Success`
+ * (активные `exercises` / `categories`), новых запросов в VM нет.
+ * Обобщён: параметр [idOf] — извлечение id (у [Exercise] и [Category]
+ * совпадает с `keyOf` списка).
+ */
+private fun <T> isLastActive(
+    item: T,
+    active: List<T>,
+    idOf: (T) -> Long
+): Boolean = active.size == 1 && idOf(active.single()) == idOf(item)
+
+/**
  * Список упражнений + контекстное меню (edit-delete-exercise
  * §4.6.b–d): long-press на кастомной строке открывает меню у
  * точки нажатия, алерт удаления управляется VM через
  * `pendingDeleteId` (рендерится в [SuccessBody], не здесь).
+ * У последнего активного упражнения «Архивировать»/«Удалить» скрыты;
+ * у стандартного последнего активного меню пустое — long-press и
+ * accessibility-действие его не открывают (prevent-from-archiving-all,
+ * design Decision 7).
  */
 @Composable
 private fun ExercisesList(
@@ -558,7 +585,13 @@ private fun ExercisesList(
         keyOf = { it.id },
         menuOffsetInRoot = state.contextMenu?.offsetInRoot,
         onLongPress = { item, offset ->
-            state.onContextMenuItemChange(ExerciseContextMenuState(item, offset))
+            // Early return до смены state: не открываем пустое меню
+            // (стандартное + последний активный) и не включаем подсветку.
+            // Паттерн закрывает и a11y-канал — custom action идёт через
+            // ту же лямбду.
+            if (item.isCustom || !isLastActive(item, success.exercises) { it.id }) {
+                state.onContextMenuItemChange(ExerciseContextMenuState(item, offset))
+            }
         },
         rowContent = { exercise, modifier ->
             ExerciseListItemRow(
@@ -569,9 +602,13 @@ private fun ExercisesList(
         },
         menu = { offset ->
             state.contextMenu?.let { menu ->
+                val lastActive =
+                    isLastActive(menu.item, success.exercises) { it.id }
                 ActiveContextMenu(
                     offset = offset,
                     isCustom = menu.item.isCustom,
+                    showArchive = !lastActive,
+                    showDelete = !lastActive,
                     onMenuDismiss = { state.onContextMenuItemChange(null) },
                     onEditClick = { state.onRequestEdit(menu.item) },
                     onArchiveClick = { state.onRequestArchive(menu.item) },
@@ -662,7 +699,11 @@ private fun CategoriesBody(
  * «Контекстное меню категории по типу»): long-press открывает меню
  * у точки нажатия — для кастомной категории три пункта
  * (Изменить/Архивировать/Удалить), для стандартной один
- * («Архивировать»). Алерты рендерятся в [CategoriesBody].
+ * («Архивировать»). У последней активной категории
+ * «Архивировать»/«Удалить» скрыты; стандартная последняя активная
+ * не открывает пустое меню (симметрично [ExercisesList];
+ * prevent-from-archiving-all, design Decision 7). Алерты рендерятся
+ * в [CategoriesBody].
  */
 @Composable
 private fun CategoriesList(
@@ -674,7 +715,9 @@ private fun CategoriesList(
         keyOf = { it.id },
         menuOffsetInRoot = state.categoryContextMenu?.offsetInRoot,
         onLongPress = { item, offset ->
-            state.onCategoryContextMenuItemChange(CategoryContextMenuState(item, offset))
+            if (item.isCustom || !isLastActive(item, success.categories) { it.id }) {
+                state.onCategoryContextMenuItemChange(CategoryContextMenuState(item, offset))
+            }
         },
         rowContent = { category, modifier ->
             CategoryListItemRow(
@@ -685,9 +728,13 @@ private fun CategoriesList(
         },
         menu = { offset ->
             state.categoryContextMenu?.let { menu ->
+                val lastActive =
+                    isLastActive(menu.item, success.categories) { it.id }
                 ActiveContextMenu(
                     offset = offset,
                     isCustom = menu.item.isCustom,
+                    showArchive = !lastActive,
+                    showDelete = !lastActive,
                     onMenuDismiss = { state.onCategoryContextMenuItemChange(null) },
                     onEditClick = { state.onRequestCategoryEdit(menu.item) },
                     onArchiveClick = { state.onRequestCategoryArchive(menu.item) },
@@ -712,12 +759,23 @@ private fun CategoriesList(
  * `contentDescription = null` — текст пункта сам читается службами
  * доступности (entry-edit-mode, design Decision 6; образец —
  * `MainScreen.EntryContextMenu`).
+ *
+ * Видимость «Архивировать»/«Удалить» выключается call-сайтами для
+ * последнего активного элемента каталога (prevent-from-archiving-all,
+ * design Decision 7); пустое меню при этом не открывается —
+ * long-press подавляется до смены state.
+ *
+ * @param showArchive Показывать пункт «Архивировать»
+ * @param showDelete Показывать пункт «Удалить» (для кастомных; через
+ *   [isCustom] и так скрыт у стандартных)
  */
 @Suppress("LongParameterList")
 @Composable
 internal fun ActiveContextMenu(
     offset: DpOffset,
     isCustom: Boolean,
+    showArchive: Boolean = true,
+    showDelete: Boolean = true,
     onMenuDismiss: () -> Unit,
     onEditClick: () -> Unit = {},
     onArchiveClick: () -> Unit = {},
@@ -740,14 +798,16 @@ internal fun ActiveContextMenu(
                 }
             )
         }
-        DropdownMenuItem(
-            text = { Text(stringResource(archiveRes)) },
-            onClick = onArchiveClick,
-            leadingIcon = {
-                Icon(imageVector = Icons.Filled.Archive, contentDescription = null)
-            }
-        )
-        if (isCustom) {
+        if (showArchive) {
+            DropdownMenuItem(
+                text = { Text(stringResource(archiveRes)) },
+                onClick = onArchiveClick,
+                leadingIcon = {
+                    Icon(imageVector = Icons.Filled.Archive, contentDescription = null)
+                }
+            )
+        }
+        if (isCustom && showDelete) {
             DropdownMenuItem(
                 text = { Text(stringResource(deleteRes)) },
                 onClick = onDeleteClick,
@@ -933,6 +993,8 @@ private fun deleteErrorText(error: DeleteExerciseError): String =
             stringResource(R.string.exercise_delete_error_used_in_workouts)
         DeleteExerciseError.StandardExercise ->
             stringResource(R.string.exercise_delete_error_standard)
+        DeleteExerciseError.LastActive ->
+            stringResource(R.string.exercise_last_active_delete_error)
         DeleteExerciseError.Other ->
             stringResource(R.string.exercise_delete_error_generic)
     }
@@ -949,6 +1011,8 @@ private fun categoryDeleteErrorText(error: DeleteCategoryError): String =
             stringResource(R.string.category_delete_error_used_by_exercises)
         DeleteCategoryError.StandardCategory ->
             stringResource(R.string.category_delete_error_standard)
+        DeleteCategoryError.LastActive ->
+            stringResource(R.string.category_last_active_delete_error)
         DeleteCategoryError.Other ->
             stringResource(R.string.category_delete_error_generic)
     }

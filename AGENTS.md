@@ -153,7 +153,7 @@ detekt-предупреждения исправляются до заверше
   интеграционный тест через `MigrationTestHelper`
 - `data/preferences/AppSettingsDataStore.kt`
 - `data/repository/` — `WorkoutDataRepository`, `RoomWorkoutDataRepository`,
-  `EntryValidator`, `DeletionExceptions`
+  `EntryValidator`, `OperationalExceptions`
 - `domain/model/` — domain-модели (упражнения, записи, настройки, периоды,
   `BackupEntry` и т.д.). Полный список — в каталоге.
 - `domain/usecase/` — use-cases: бэкап в JSON, статистика (streaks, heatmap,

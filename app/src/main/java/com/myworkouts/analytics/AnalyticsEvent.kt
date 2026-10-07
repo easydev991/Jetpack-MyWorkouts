@@ -62,13 +62,18 @@ enum class UserActionType {
 /**
  * Операции для событий app_error. Имена enum-констант — wire-значения
  * (стабильные строки UPPER_SNAKE_CASE, канон — design D9).
+ * `CATEGORY_DELETE` переименован в `DELETE_CATEGORY` (унификация
+ * формата `OPERATION_ENTITY`, prevent-from-archiving-all design
+ * Decision 6; прод-релиза нет — wire-непрерывность не требуется).
  */
 enum class AppErrorOperation {
     CREATE_BACKUP,
     RESTORE_BACKUP,
     DELETE_ALL_DATA,
     DELETE_EXERCISE,
-    CATEGORY_DELETE
+    DELETE_CATEGORY,
+    ARCHIVE_EXERCISE,
+    ARCHIVE_CATEGORY
 }
 
 /**
