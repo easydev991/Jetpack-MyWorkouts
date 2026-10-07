@@ -41,6 +41,12 @@ invalidation при паузе > таймаута. Без реального DI
 ```kotlin
 @RunWith(AndroidJUnit4::class)
 class ExerciseCreateLiveUpdateIntegrationTest {
+    companion object {
+        @JvmField
+        @ClassRule
+        val timeoutRule = SubscriptionTimeoutRule()
+    }
+
     @get:Rule
     val composeTestRule = createAndroidComposeRule<MainActivity>()
 
@@ -69,14 +75,14 @@ class ExerciseCreateLiveUpdateIntegrationTest {
             .performClick()
         composeTestRule.waitForIdle()
 
-        // When — уходим на форму создания, ждём > таймаута
-        // подписки (5 с), вставляем упражнение в файловую БД
+        // When — уходим на форму создания, ждём > пониженного rule'ом
+        // таймаута подписки (100 мс), вставляем упражнение в файловую БД
         // приложения, возвращаемся системным back
         composeTestRule
             .onNodeWithContentDescription(context.getString(R.string.exercises_add_exercise))
             .performClick()
         composeTestRule.waitForIdle()
-        runBlocking { delay(5_300L) }
+        runBlocking { delay(300L) }
         insertExerciseIntoAppDatabase()
 
         composeTestRule.runOnIdle {
@@ -138,9 +144,11 @@ class ExerciseCreateLiveUpdateIntegrationTest {
   живое обновление списка
 - Имя упражнения уникально на прогон (метка времени) — вставки
   предыдущих прогонов не маскируют замороженный список
-- Реальная пауза `delay(5_300L)` — часть сценария
-  (`WhileSubscribed(5000)`), не ожидание UI
-- Тест занимает ~8 с — это нормально для интеграционного сценария
+- Пауза `delay(300L)` — часть сценария, не ожидание UI: rule
+  `SubscriptionTimeoutRule` понижает таймаут подписки до 100 мс,
+  пауза выходит за его пределы (в проде окно — `WhileSubscribed(5000)`)
+- Тест быстрый: пауза 300 мс вместо пятисекундного ожидания
+  продового таймаута
 
 Проверка взаимного расположения элементов (`boundsInRoot`, sticky-заголовки,
 сортировка секций) — в `references/compose-selectors.md` → «Проверка

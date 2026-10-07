@@ -39,8 +39,8 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * Сценарии скриншотов маркетплейса (`docs/plans/
- * screenshot-tests-infrastructure.md`, Этап 7): главный экран,
+ * Сценарии скриншотов маркетплейса (навык `kotlin-ui-testing`,
+ * `references/screenshot-tests.md`): главный экран,
  * создание записи, обзор. Один `@Test` на сценарий — у каждого своя
  * фикстура (импорт в начале теста), общий `@After` чистит БД.
  *
@@ -339,8 +339,8 @@ class ScreenshotsTest {
     }
 
     /**
-     * Записи Сценария 1 (`1-workouts-list.png`): три дня, 9 записей,
-     * порядок списка — таблица в плане Этапа 7. Все записи собственного
+     * Записи Сценария 1 (`1-workouts-list.png`): три дня, 9 записей
+     * в порядке выполнения. Все записи собственного
      * веса (`weightKg = null`); брусья — две отдельные записи по
      * 1 подходу, планка — запись на время.
      */
@@ -448,8 +448,9 @@ class ScreenshotsTest {
      * мгновенно). Поэтому переждываем гарантированный срок жизни: тост
      * публикуется не позже ~2 с после старта activity и живёт
      * LENGTH_LONG ≈3,5 с — 5 с после якоря отрисовки покрывают его
-     * с запасом. Реальный платформенный таймаут — допустимый `delay`
-     * (канон — `delay(5_300)` в `ExerciseCreateLiveUpdateIntegrationTest`).
+     * с запасом. Задержка — часть сценария, не ожидание UI (канон
+     * сценарийного `delay` — `ExerciseCreateLiveUpdateIntegrationTest`:
+     * `SubscriptionTimeoutRule` + `delay(300L)`).
      */
     private fun captureAndValidate(fileName: String) {
         runBlocking { delay(5_000) }

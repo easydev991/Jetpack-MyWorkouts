@@ -358,6 +358,12 @@ invalidation после паузы > 5 с. Сокращённый скелет (
 ```kotlin
 @RunWith(AndroidJUnit4::class)
 class ExerciseCreateLiveUpdateIntegrationTest {
+    companion object {
+        @JvmField
+        @ClassRule
+        val timeoutRule = SubscriptionTimeoutRule()
+    }
+
     @get:Rule
     val composeTestRule = createAndroidComposeRule<MainActivity>()
 
@@ -382,13 +388,14 @@ class ExerciseCreateLiveUpdateIntegrationTest {
             .performClick()
         composeTestRule.waitForIdle()
 
-        // Уходим на форму создания, ждём > таймаута подписки (5 с),
-        // вставляем упражнение напрямую в БД приложения, возвращаемся
+        // Уходим на форму создания, ждём > пониженного rule'ом
+        // таймаута подписки (100 мс), вставляем упражнение напрямую
+        // в БД приложения, возвращаемся
         composeTestRule
             .onNodeWithContentDescription(context.getString(R.string.exercises_add_exercise))
             .performClick()
         composeTestRule.waitForIdle()
-        runBlocking { delay(5_300L) }
+        runBlocking { delay(300L) }
         insertExerciseIntoAppDatabase()
 
         composeTestRule.runOnIdle {

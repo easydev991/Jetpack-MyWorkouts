@@ -106,10 +106,11 @@ description: >
     не нужен.
 11. **Никакого `Thread.sleep` в проверках.** Для ожидания условий —
     `waitUntil(timeoutMillis = ...) { ... }` или `waitForIdle()`.
-    Единственное исключение — тесты, **воспроизводящие реальный
-    пользовательский таймаут** (например,
-    `ExerciseCreateLiveUpdateIntegrationTest` ждёт `delay(5_300L)` —
-    это часть сценария `WhileSubscribed(5000)`, не ожидание UI).
+    Единственное исключение — `delay` как **часть сценария**, а не
+    ожидание UI: `ExerciseCreateLiveUpdateIntegrationTest` rule'ом
+    `SubscriptionTimeoutRule` понижает таймаут подписки до 100 мс
+    и выдерживает `delay(300L)` за его пределами — воспроизведение
+    окна `WhileSubscribed(5000)` без пятисекундного ожидания.
 12. **ViewModel-интеграция — только в существующем тесте.**
     Новые интеграционные ViewModel-тесты **не писать** —
     логика VM покрывается unit-тестами с Fake-репозиторием
@@ -178,8 +179,10 @@ description: >
 `make android-test` упадёт (`EntryListLiveUpdateIntegrationTest`,
 воспроизведённый кейс).
 
-Локаль (per-app), фикстура, capture и deps модуля — отдельный
-reference: `references/screenshot-tests.md`.
+Локаль (per-app), окружение прогона (`adb root`, ручной `am instrument`
+вместо connected-задачи — AGP удаляет APK вместе с каталогом PNG),
+фикстуры, конвенции сценариев (якоря, IME, имена PNG), capture и deps
+модуля — отдельный reference: `references/screenshot-tests.md`.
 
 ## First 60 seconds (triage template)
 
@@ -234,7 +237,8 @@ reference: `references/screenshot-tests.md`.
   тёмного/светлого варианта по яркости →
   `references/exercise-icon-testing.md`
 - Скриншот-сценарии в `:screenshot-tests`: per-app локаль, фикстура
-  через production-репозиторий, capture и запись PNG →
+  через production-репозиторий, конвенции сценариев (якоря, IME,
+  имена PNG), окружение прогона, capture и запись PNG →
   `references/screenshot-tests.md`
 - Полные канонические примеры → `references/EXAMPLE.md`
 
