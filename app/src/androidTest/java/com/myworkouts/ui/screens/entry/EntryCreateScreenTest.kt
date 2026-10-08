@@ -289,7 +289,7 @@ class EntryCreateScreenTest {
 
         // Then — ни один узел не содержит сырого плейсхолдера
         composeTestRule
-            .onAllNodes(hasText("%1\$d", substring = true))
+            .onAllNodes(hasText($$"%1$d", substring = true))
             .assertCountEquals(0)
     }
 
@@ -1146,17 +1146,20 @@ class EntryCreateScreenTest {
         dataStore: AppSettingsDataStore,
         onBackClick: () -> Unit = {}
     ) {
+        // VM конструируется ДО setContent — не в композиции
+        // (инспекция «Constructing a view model in a composable»)
+        val viewModel =
+            EntryCreateViewModel(
+                repository = repository,
+                nowProvider = { System.currentTimeMillis() },
+                entryId = Screen.EntryCreate.NO_ENTRY_ID,
+                dataStore = dataStore,
+                analyticsProvider = NoopAnalyticsProvider()
+            )
         composeTestRule.setContent {
             JetpackMyWorkoutsTheme {
                 EntryCreateScreen(
-                    viewModel =
-                        EntryCreateViewModel(
-                            repository = repository,
-                            nowProvider = { System.currentTimeMillis() },
-                            entryId = Screen.EntryCreate.NO_ENTRY_ID,
-                            dataStore = dataStore,
-                            analyticsProvider = NoopAnalyticsProvider()
-                        ),
+                    viewModel = viewModel,
                     onBackClick = onBackClick,
                     onOpenSettings = {}
                 )

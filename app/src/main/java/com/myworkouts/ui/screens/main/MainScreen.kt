@@ -67,6 +67,9 @@ import com.myworkouts.ui.viewmodel.MainViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+// Публичный composable с опциональными навигационными колбэками —
+// параметр на переход (паттерн ExercisesScreen)
+
 /**
  * Главный экран — вкладка «Тренировки»: список записей, удаление через
  * long-press, пустое состояние, FAB создания записи
@@ -86,9 +89,6 @@ import java.time.format.DateTimeFormatter
  *   нажатия, design D10)
  * @param modifier внешний модификатор
  */
-@OptIn(ExperimentalMaterial3Api::class)
-// Публичный composable с опциональными навигационными колбэками —
-// параметр на переход (паттерн ExercisesScreen)
 @Suppress("LongParameterList")
 @Composable
 fun MainScreen(

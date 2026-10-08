@@ -23,6 +23,7 @@ import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Интеграционный репро-тест живого обновления каталога на НАСТОЯЩЕМ
@@ -91,7 +92,7 @@ class ExerciseCreateLiveUpdateIntegrationTest {
         composeTestRule
             .onNodeWithText(context.getString(R.string.exercise_create_title))
             .assertIsDisplayed()
-        runBlocking { delay(300L) }
+        runBlocking { delay(300.milliseconds) }
         insertExerciseIntoAppDatabase()
 
         composeTestRule.runOnIdle {

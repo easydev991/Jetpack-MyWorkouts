@@ -485,23 +485,19 @@ private fun JSONObject.requiredString(key: String): String {
     return value
 }
 
-private fun JSONObject.requiredLong(key: String): Long {
-    val value = opt(key)
-    return when {
-        value is Long -> value
-        value is Int -> value.toLong()
+private fun JSONObject.requiredLong(key: String): Long =
+    when (val value = opt(key)) {
+        is Long -> value
+        is Int -> value.toLong()
         else -> throw invalidFile("Поле $key отсутствует или не целое число")
     }
-}
 
-private fun JSONObject.requiredInt(key: String): Int {
-    val value = opt(key)
-    return when {
-        value is Int -> value
-        value is Long -> value.toInt()
+private fun JSONObject.requiredInt(key: String): Int =
+    when (val value = opt(key)) {
+        is Int -> value
+        is Long -> value.toInt()
         else -> throw invalidFile("Поле $key отсутствует или не целое число")
     }
-}
 
 private fun <T : Enum<T>> JSONObject.requiredEnum(
     key: String,

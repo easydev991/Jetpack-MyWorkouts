@@ -40,6 +40,7 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Fake [WorkoutDataRepository] на `MutableStateFlow` для JVM-тестов
@@ -87,7 +88,7 @@ private class FakeWorkoutDataRepository(
 
     override fun exercises(query: String): Flow<List<Exercise>> = catalog
 
-    override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow<List<EntryListItem>>(emptyList())
+    override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(emptyList())
 
     override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 
@@ -136,7 +137,7 @@ private class FakeWorkoutDataRepository(
     var exerciseHistoryDelayMs: Long = 0
 
     override suspend fun exerciseHistory(exerciseId: Long): Result<List<ExerciseEntry>> {
-        delay(exerciseHistoryDelayMs)
+        delay(exerciseHistoryDelayMs.milliseconds)
         return Result.success(historyByExerciseId[exerciseId].orEmpty())
     }
 

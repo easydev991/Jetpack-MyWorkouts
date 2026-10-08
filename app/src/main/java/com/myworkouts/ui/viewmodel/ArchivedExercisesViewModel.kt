@@ -62,12 +62,11 @@ class ArchivedExercisesViewModel(
             // выравнивание пережило рекомпозицию; повторная эмиссия
             // идемпотентна.
             val aligned =
-                when {
-                    tab == ArchivedTab.EXERCISES && exercises.isEmpty() && categories.isNotEmpty() ->
-                        ArchivedTab.CATEGORIES
-                    tab == ArchivedTab.CATEGORIES && categories.isEmpty() && exercises.isNotEmpty() ->
-                        ArchivedTab.EXERCISES
-                    else -> tab
+                when (tab) {
+                    ArchivedTab.EXERCISES ->
+                        if (exercises.isEmpty() && categories.isNotEmpty()) ArchivedTab.CATEGORIES else tab
+                    ArchivedTab.CATEGORIES ->
+                        if (categories.isEmpty() && exercises.isNotEmpty()) ArchivedTab.EXERCISES else tab
                 }
             selectedTab.value = aligned
             ArchivedExercisesUiState.Success(exercises, categories, aligned)

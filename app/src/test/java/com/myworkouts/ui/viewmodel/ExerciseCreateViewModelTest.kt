@@ -67,7 +67,7 @@ private class FakeExerciseRepository : WorkoutDataRepository {
         return addExerciseResult
     }
 
-    override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow<List<EntryListItem>>(emptyList())
+    override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(emptyList())
 
     override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 

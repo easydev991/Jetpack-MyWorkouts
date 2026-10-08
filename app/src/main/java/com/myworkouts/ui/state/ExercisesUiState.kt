@@ -7,8 +7,8 @@ import com.myworkouts.domain.model.Exercise
 
 /**
  * Вкладка экрана «Упражнения» (custom-categories, design Decision 6).
- * Только UI-состояние: хранится в [ExercisesViewModel] (переживает
- * поворот экрана), НЕ персистится между запусками приложения.
+ * Только UI-состояние: хранится в [com.myworkouts.ui.viewmodel.ExercisesViewModel]
+ * (переживает поворот экрана), НЕ персистится между запусками приложения.
  */
 enum class ExercisesTab {
     /** Список упражнений (каталог). */

@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="settings.gradle.kts" pattern="file:settings.gradle.kts" />
+</component>

@@ -39,7 +39,7 @@ import kotlin.random.Random
  *   `withTransaction` — DAO от другой базы сделали бы её бессмысленной
  * @property standardExercises стандартный набор для восстановления в
  *   [deleteAllData] — тот же список, что передаётся в
- *   [com.myworkouts.data.db.WorkoutDatabase.create]
+ *   [WorkoutDatabase.Companion.create]
  *
  * `TooManyFunctions` подавлен осознанно: методы — единый контракт
  * [WorkoutDataRepository] (app-data-screen, exercises-archive,

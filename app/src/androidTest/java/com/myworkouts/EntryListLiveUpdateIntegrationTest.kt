@@ -27,6 +27,7 @@ import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Интеграционные репро-тесты живого обновления списка ЗАПИСЕЙ на главном
@@ -178,7 +179,7 @@ class EntryListLiveUpdateIntegrationTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText(context.getString(R.string.more_title)).performClick()
         composeTestRule.waitForIdle()
-        runBlocking { delay(300L) }
+        runBlocking { delay(300.milliseconds) }
         insertIntoAppDatabase(insert)
         composeTestRule.runOnIdle {
             composeTestRule.activityRule.scenario.onActivity { activity ->

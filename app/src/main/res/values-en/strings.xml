@@ -223,7 +223,10 @@
     <string name="overview_period_halfyear">Half a year</string>
     <string name="overview_period_year">Year</string>
     <string name="overview_stats_empty">No workouts for the selected period</string>
-    <string name="overview_unit_reps">%1$d reps</string>
+    <plurals name="overview_unit_reps">
+        <item quantity="one">%1$d rep</item>
+        <item quantity="other">%1$d reps</item>
+    </plurals>
     <string name="overview_legend_percent">%1$d%%</string>
     <string name="overview_months_separator">" – "</string>
     <string name="overview_back_to_categories">Categories</string>

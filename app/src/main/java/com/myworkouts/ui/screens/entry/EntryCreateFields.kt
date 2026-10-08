@@ -202,7 +202,6 @@ internal fun entrySelectableDates(openLocalDate: LocalDate): SelectableDates =
  * открытия экрана ([openMomentMillis]) невыделяемы (spec «Даты позже дня
  * открытия недоступны в пикере»).
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DateField(
     date: LocalDate,

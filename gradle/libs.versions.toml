@@ -12,20 +12,20 @@ datastore = "1.2.1"
 coroutines = "1.11.0"
 mockk = "1.14.11"
 orgJson = "20260814"
-kotlinxSerialization = "1.8.1"
+kotlinxSerialization = "1.11.0"
 activityCompose = "1.13.0"
 navigationCompose = "2.10.2"
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 ksp = "2.3.8"
-# Не бампать без прогона make android-test: на 2026.09.00 стабильно падал
-# github-androidTest — ui-test-junit4 v2 исполняет тесты в runTest, и в длинных
-# наборах перестаёт исполняться viewModelScope-корутина сохранения
-# (EntryEditArchivedExerciseTest).
-composeBom = "2026.08.00"
+# Бампать только с полным прогоном make android-test: на 2026.09.00 раньше
+# стабильно падал github-androidTest (ui-test-junit4 v2 ломал
+# viewModelScope-корутину сохранения в EntryEditArchivedExerciseTest).
+# Проверено 2026-10-09: на 2026.09.00 полный прогон зелёный.
+composeBom = "2026.09.00"
 detekt = "1.23.8"
 ktlint = "14.2.0"
 room = "2.8.5"
-firebaseBom = "34.19.0"
+firebaseBom = "35.0.0"
 googleServices = "4.5.0"
 firebaseCrashlyticsGradle = "3.0.8"
 uiautomator = "2.4.0"

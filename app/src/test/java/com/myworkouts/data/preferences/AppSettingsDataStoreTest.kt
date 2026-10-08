@@ -7,7 +7,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.myworkouts.domain.model.EntryField
 import com.myworkouts.domain.model.OverviewTab
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -36,7 +35,6 @@ import java.nio.file.Path
  * - «dontShowArchiveDialog returns false on first launch» (default);
  * - «setDontShowArchiveDialog persists and Flow re-emits» (true и обратно).
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class AppSettingsDataStoreTest {
     @TempDir
     lateinit var tempDir: Path

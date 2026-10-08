@@ -104,7 +104,6 @@ fun OverviewScreen(
  * @param onBackClick Возврат на предыдущий экран (шапка)
  * @param modifier Модификатор корневого контейнера
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun OverviewScreenBody(
     state: OverviewUiState,

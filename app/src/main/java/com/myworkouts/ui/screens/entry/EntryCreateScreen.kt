@@ -3,7 +3,6 @@ package com.myworkouts.ui.screens.entry
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -212,7 +211,6 @@ internal fun EntryCloseConfirmDialog(
  * Скроллящаяся форма ввода записи: выбор упражнения, подходы,
  * типозависимое поле, дата, время и комментарий.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EntryCreateForm(
     state: EntryCreateScreenState,

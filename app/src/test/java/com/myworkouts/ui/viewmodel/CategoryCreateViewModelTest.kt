@@ -69,8 +69,7 @@ private class FakeCategoryRepository : WorkoutDataRepository {
             // Имитация Room: успешная вставка появляется в потоке категорий
             // (реальный репозиторий переэмитит список через observeCategories)
             val created = result.getOrNull()
-            categoriesFlow.value =
-                categoriesFlow.value +
+            categoriesFlow.value +=
                 Category(
                     id = created?.id ?: 1L,
                     name = name,

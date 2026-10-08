@@ -50,7 +50,6 @@ import com.myworkouts.ui.viewmodel.AppearanceViewModel
  * Если радиокнопка/dynamicColors понадобятся во втором экране — вынести
  * в common/.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppearanceScreen(
     viewModel: AppearanceViewModel,

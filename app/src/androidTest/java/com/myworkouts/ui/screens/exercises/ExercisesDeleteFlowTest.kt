@@ -63,9 +63,9 @@ class ExercisesDeleteFlowTest {
 
     /**
      * Fake [WorkoutDataRepository] для androidTest: реактивный каталог +
-     * `deleteExercise` управляется через [deleteResult]. При успехе —
+     * `deleteExercise` управляется через `deleteResult`. При успехе —
      * удаляет упражнение из `catalog`, имитируя реальный Room-сценарий.
-     * `exerciseIdsWithLinkedEntries` управляется через [linkedEntries]
+     * `exerciseIdsWithLinkedEntries` управляется через `linkedEntries`
      * (для тестов §4.8 pre-check UX).
      */
     private val plankExercise =

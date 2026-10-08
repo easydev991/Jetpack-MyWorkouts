@@ -157,7 +157,7 @@ class MainScreenFabNavigationTest {
                     analyticsProvider = NoopAnalyticsProvider()
                 )
             }
-            composable(Screen.EntryCreate.route, arguments = Screen.EntryCreate.arguments) {
+            composable(EntryCreate.route, arguments = EntryCreate.arguments) {
                 // Заглушка — реальный экран тестируется отдельно.
             }
         }
@@ -183,9 +183,9 @@ class MainScreenFabNavigationTest {
         composeTestRule.waitForIdle()
         val actualRoute = navController.currentDestination?.route
         assertTrue(
-            "Ожидался переход на маршрут \"${Screen.EntryCreate.route}\", " +
+            "Ожидался переход на маршрут \"${EntryCreate.route}\", " +
                 "но текущий маршрут — \"$actualRoute\"",
-            actualRoute == Screen.EntryCreate.route
+            actualRoute == EntryCreate.route
         )
     }
 }

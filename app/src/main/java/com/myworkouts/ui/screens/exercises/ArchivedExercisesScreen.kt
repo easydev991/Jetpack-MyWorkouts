@@ -54,7 +54,6 @@ import com.myworkouts.ui.viewmodel.ArchivedExercisesViewModel
  *   обратно на [com.myworkouts.navigation.Screen.Exercises]
  * @param modifier внешний модификатор
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArchivedExercisesScreen(
     viewModel: ArchivedExercisesViewModel,

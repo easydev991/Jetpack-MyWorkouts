@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -186,7 +187,12 @@ private fun RecordRow(record: ExerciseRecordData) {
 @Composable
 private fun recordValueText(record: ExerciseRecordData): String =
     when (record.measuredBy) {
-        ExerciseMeasuredBy.REPS -> stringResource(R.string.overview_unit_reps, record.value)
+        ExerciseMeasuredBy.REPS ->
+            pluralStringResource(
+                R.plurals.overview_unit_reps,
+                record.value,
+                record.value
+            )
         ExerciseMeasuredBy.TIME -> formatDurationResource(seconds = record.value)
     }
 

@@ -229,7 +229,12 @@
     <string name="overview_period_halfyear">Полгода</string>
     <string name="overview_period_year">Год</string>
     <string name="overview_stats_empty">Нет тренировок за выбранный период</string>
-    <string name="overview_unit_reps">%1$d повт.</string>
+    <plurals name="overview_unit_reps">
+        <item quantity="one">%1$d повт.</item>
+        <item quantity="few">%1$d повт.</item>
+        <item quantity="many">%1$d повт.</item>
+        <item quantity="other">%1$d повт.</item>
+    </plurals>
     <string name="overview_legend_percent">%1$d %%</string>
     <string name="overview_months_separator">" – "</string>
     <string name="overview_back_to_categories">Категории</string>

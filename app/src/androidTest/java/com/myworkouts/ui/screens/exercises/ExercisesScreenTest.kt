@@ -679,7 +679,7 @@ class ExercisesScreenTest {
                 .onNodeWithText(lower)
                 .fetchSemanticsNode()
                 .boundsInRoot.top
-        org.junit.Assert.assertTrue(
+        assertTrue(
             "«$higher» должен быть визуально выше «$lower»",
             higherTop < lowerTop
         )
@@ -785,7 +785,7 @@ class ExercisesScreenTest {
             var pendingArchiveId by remember { mutableStateOf<Long?>(null) }
             // Имитация реактивного обновления: после confirm —
             // упражнение пропадает из списка
-            val exercisesAfterArchive = remember { mutableStateOf<List<Exercise>>(listOf(bench, plank)) }
+            val exercisesAfterArchive = remember { mutableStateOf(listOf(bench, plank)) }
             val current =
                 ExercisesUiState.Success(
                     exercises = exercisesAfterArchive.value,
@@ -839,7 +839,7 @@ class ExercisesScreenTest {
         composeTestRule
             .onAllNodesWithText("Жим")
             .assertCountEquals(0)
-        org.junit.Assert.assertTrue(
+        assertTrue(
             "confirmArchive должен быть вызван",
             confirmed
         )
@@ -1011,7 +1011,7 @@ class ExercisesScreenTest {
         composeTestRule.setContent {
             val uiState: androidx.compose.runtime.MutableState<ExercisesUiState> =
                 remember {
-                    androidx.compose.runtime.mutableStateOf<ExercisesUiState>(
+                    mutableStateOf(
                         ExercisesUiState.Success(exercises = listOf(pullups))
                     )
                 }
@@ -1061,7 +1061,7 @@ class ExercisesScreenTest {
 
     /** Side-effect-ссылка на uiState для теста реактивного обновления. */
     private var uiStateRef: androidx.compose.runtime.MutableState<ExercisesUiState> =
-        androidx.compose.runtime.mutableStateOf(ExercisesUiState.Loading)
+        mutableStateOf(ExercisesUiState.Loading)
     // endregion
 
     /**

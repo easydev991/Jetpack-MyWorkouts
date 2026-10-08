@@ -2,10 +2,8 @@ package com.myworkouts.ui.screens.main
 
 import android.content.Context
 import androidx.activity.ComponentActivity
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -279,7 +277,7 @@ class MainScreenDetailCardTest {
     /**
      * Локализованное представление даты/времени карточки: паттерн
      * `d MMMM yyyy, HH:mm` в локали ru, зона — как у машины (дефолт
-     * [EntryValueFormatter.formatDetailDateTime]).
+     * [formatDetailDateTime]).
      */
     private fun expectedDetailDate(dateMillis: Long): String {
         val formatter = DateTimeFormatter.ofPattern("d MMMM yyyy, HH:mm", Locale("ru"))

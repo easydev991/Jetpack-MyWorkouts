@@ -97,7 +97,7 @@ class ExerciseDaoTest {
             database =
                 Room
                     .inMemoryDatabaseBuilder(
-                        androidx.test.core.app.ApplicationProvider
+                        ApplicationProvider
                             .getApplicationContext(),
                         WorkoutDatabase::class.java
                     ).allowMainThreadQueries()

@@ -21,7 +21,8 @@ import org.junit.runner.RunWith
 /**
  * Интеграционный сценарий «выбранная вкладка переживает поворот»
  * (custom-categories, tasks 5.5; spec `exercises-screen` «Выбранная
- * вкладка переживает поворот»): вкладка живёт в [ExercisesViewModel]
+ * вкладка переживает поворот»): вкладка живёт в
+ * [com.myworkouts.ui.viewmodel.ExercisesViewModel]
  * — после пересоздания activity активна «Категории».
  *
  * Использует реальную [MainActivity] (а не `ComponentActivity`),

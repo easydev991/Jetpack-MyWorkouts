@@ -55,7 +55,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
@@ -101,7 +100,6 @@ import com.myworkouts.ui.viewmodel.ExercisesViewModel
  *   (exercises-archive spec «Кнопка архива в TopAppBar»).
  * @param modifier внешний модификатор
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongParameterList")
 @Composable
 fun ExercisesScreen(
@@ -110,9 +108,9 @@ fun ExercisesScreen(
     onAddCategoryClick: () -> Unit,
     onArchivedExercisesClick: () -> Unit,
     analyticsProvider: AnalyticsProvider,
+    modifier: Modifier = Modifier,
     onEditExercise: (Long) -> Unit = {},
-    onEditCategory: (Long) -> Unit = {},
-    modifier: Modifier = Modifier
+    onEditCategory: (Long) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var contextMenu by remember { mutableStateOf<ExerciseContextMenuState?>(null) }
@@ -209,15 +207,15 @@ private fun ExercisesErrorSnackbar(
     onCategoryErrorShown: () -> Unit
 ) {
     val errorMessage: String? =
-        when (val s = uiState) {
+        when (uiState) {
             ExercisesUiState.Loading -> null
             is ExercisesUiState.Success ->
-                s.deleteError?.let { deleteErrorText(it) }
-                    ?: s.archiveError
+                uiState.deleteError?.let { deleteErrorText(it) }
+                    ?: uiState.archiveError
                         .takeIf { it }
                         ?.let { stringResource(R.string.exercise_last_active_archive_error) }
-                    ?: s.categoryDeleteError?.let { categoryDeleteErrorText(it) }
-                    ?: s.categoryArchiveError
+                    ?: uiState.categoryDeleteError?.let { categoryDeleteErrorText(it) }
+                    ?: uiState.categoryArchiveError
                         .takeIf { it }
                         ?.let { stringResource(R.string.category_last_active_archive_error) }
         }
@@ -443,7 +441,7 @@ private fun ExercisesFab(
 /**
  * Общий таб-бар «Упражнения / Категории» каталога и архива
  * (custom-categories, spec «Табы „Упражнения“ / „Категории“»):
- * индексная сигнатура — один рендер для [ExercisesTab] и [ArchivedTab]
+ * индексная сигнатура — один рендер для [ExercisesTab] и `ArchivedTab`
  * (паттерн OverviewTabs, [SecondaryTabRow]); call-site маппит свой
  * enum в индекс.
  */

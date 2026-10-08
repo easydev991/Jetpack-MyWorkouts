@@ -33,7 +33,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Тег для [Log.e] в failure-ветках [confirmDelete] (design Decision 3). */
+/** Тег для [Log.e] в failure-ветках `confirmDelete` (design Decision 3). */
 private const val LOG_TAG: String = "ExercisesViewModel"
 
 /**

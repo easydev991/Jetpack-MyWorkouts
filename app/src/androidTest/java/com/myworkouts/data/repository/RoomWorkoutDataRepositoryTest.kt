@@ -6,8 +6,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.myworkouts.data.db.ExerciseEntity
 import com.myworkouts.data.db.StandardExercise
 import com.myworkouts.data.db.WorkoutDatabase
-import com.myworkouts.data.repository.LinkedEntriesDeletionException
-import com.myworkouts.data.repository.StandardExerciseDeletionException
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
@@ -28,6 +26,8 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Instrumented-тест для [RoomWorkoutDataRepository] на Room in-memory.
@@ -130,8 +130,8 @@ class RoomWorkoutDataRepositoryTest {
                     repository.exercises("").collect { emissions.add(it) }
                 }
             try {
-                withTimeout(5_000L) {
-                    while (emissions.isEmpty()) delay(50L)
+                withTimeout(5.seconds) {
+                    while (emissions.isEmpty()) delay(50.milliseconds)
                 }
 
                 // When — вставка при живой подписке
@@ -148,9 +148,9 @@ class RoomWorkoutDataRepositoryTest {
                 )
 
                 // Then — вторая эмиссия содержит новое упражнение
-                withTimeout(5_000L) {
+                withTimeout(5.seconds) {
                     while (emissions.none { list -> list.any { it.name == "Жим" } }) {
-                        delay(50L)
+                        delay(50.milliseconds)
                     }
                 }
             } finally {
@@ -174,8 +174,8 @@ class RoomWorkoutDataRepositoryTest {
                     repository.entries().collect { emissions.add(it) }
                 }
             try {
-                withTimeout(5_000L) {
-                    while (emissions.isEmpty()) delay(50L)
+                withTimeout(5.seconds) {
+                    while (emissions.isEmpty()) delay(50.milliseconds)
                 }
 
                 // When — вставка при живой подписке (валидный exerciseId из setUp)
@@ -196,9 +196,9 @@ class RoomWorkoutDataRepositoryTest {
                 )
 
                 // Then — вторая эмиссия содержит новую запись
-                withTimeout(5_000L) {
+                withTimeout(5.seconds) {
                     while (emissions.none { list -> list.isNotEmpty() }) {
-                        delay(50L)
+                        delay(50.milliseconds)
                     }
                 }
             } finally {
@@ -1023,7 +1023,7 @@ class RoomWorkoutDataRepositoryTest {
      */
     @Test
     fun getExercise_withExistingId_returnsDomainExercise() =
-        runBlocking<Unit> {
+        runBlocking {
             // Given — стандартное упражнение «Подтягивания» из setUp (id = 1)
             val expectedId = 1L
 
@@ -1050,7 +1050,7 @@ class RoomWorkoutDataRepositoryTest {
      */
     @Test
     fun getExercise_withNonExistingId_returnsSuccessNull() =
-        runBlocking<Unit> {
+        runBlocking {
             // When
             val result = repository.getExercise(9_999L)
 
@@ -1815,8 +1815,7 @@ class RoomWorkoutDataRepositoryTest {
             // активная
             val chestId =
                 repository.addCategory("Грудь", 0xFF6200EE.toInt()).getOrThrow().id
-            val backId =
-                repository.addCategory("Спина", 0xFF03DAC5.toInt()).getOrThrow().id
+            repository.addCategory("Спина", 0xFF03DAC5.toInt()).getOrThrow().id
             repository.setCategoryArchived(chestId, true).getOrThrow()
 
             // When

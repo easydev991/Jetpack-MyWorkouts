@@ -92,7 +92,7 @@ internal data class CategoryCreateScreenState(
  * цвета под ним ([CategoryColorPicker], custom-categories-color-change)
  * и нижняя панель с кнопкой «Сохранить».
  *
- * Закрытие — единая точка [attemptClose] (стрелка TopAppBar и системный
+ * Закрытие — единая точка `attemptClose` (стрелка TopAppBar и системный
  * back): при несохранённых изменениях показывается диалог подтверждения
  * (канон `ExerciseCreateScreenContent`, строки `entry_confirm_close_*`
  * переиспользуются без новых ключей).

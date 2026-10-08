@@ -29,7 +29,7 @@ class ExerciseIconsTest {
     fun resolve_whenNullOrUnknownNumber_thenReturnsNull() {
         // Given — null (иконка не назначена) и номера вне таблицы:
         // 99 — за диапазоном, 0 — вне диапазона 1..19
-        listOf<Int?>(null, 99, 0).forEach { number ->
+        listOf(null, 99, 0).forEach { number ->
             // When
             val ref = ExerciseIcons.resolve(number)
 

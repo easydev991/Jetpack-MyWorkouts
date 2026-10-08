@@ -33,6 +33,7 @@ import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Интеграционный репро-тест живого обновления каталога (create-exercise,
@@ -226,7 +227,7 @@ class ExercisesLiveUpdateTest {
         // вставка, возврат popBackStack (как onSaved → popBackStack в продакшене)
         composeTestRule.runOnIdle { navController.navigate("stub") }
         composeTestRule.waitForIdle()
-        runBlocking { kotlinx.coroutines.delay(300L) }
+        runBlocking { kotlinx.coroutines.delay(300.milliseconds) }
         insertCustomExercise()
         composeTestRule.runOnIdle { navController.popBackStack() }
         composeTestRule.waitForIdle()

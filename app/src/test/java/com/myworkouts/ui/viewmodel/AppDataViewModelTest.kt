@@ -55,7 +55,7 @@ import org.junit.jupiter.api.Test
  */
 private class AppDataViewModelFakeRepository(
     entries: List<EntryListItem> = emptyList(),
-    private val exercises: List<Exercise> = emptyList(),
+    exercises: List<Exercise> = emptyList(),
     categories: List<Category> = emptyList(),
     archivedCategories: List<Category> = emptyList()
 ) : WorkoutDataRepository {

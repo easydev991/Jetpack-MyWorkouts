@@ -13,7 +13,6 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.unmockkAll
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -33,7 +32,6 @@ import org.junit.jupiter.api.Test
  * `Room`-транзакция подменяется прямым выполнением блока — реальная БД
  * на JVM не поднимается.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class RoomWorkoutDataRepositoryCategoryTest {
     private lateinit var database: WorkoutDatabase
     private lateinit var categoryDao: CategoryDao

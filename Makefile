@@ -56,15 +56,30 @@ test: _ensure_secrets
 	$(call run_tests,test,app/build/test-results)
 
 ## android-test: Запуск интеграционных тестов на Android устройстве со статистикой в консоли. Использование: make android-test FLAVOR=rustore (по умолчанию FLAVOR=github)
-android-test: _ensure_secrets
+android-test: _ensure_secrets _ensure_animations_off
 	$(call run_tests,connected$(FLAVOR_TITLE)DebugAndroidTest,app/build/outputs/androidTest-results/connected/debug)
 
-## emulator-fast: Выключить анимации на запущенном эмуляторе (ускоряет androidTest). Применять после каждого старта эмулятора
+## emulator-fast: Выключить анимации на запущенном эмуляторе (ускоряет androidTest). Применять после каждого старта эмулятора; android-test чинит их сам перед каждым прогоном
+# Запись сверяется read-back: масштабы умеют сами откатываться в 1.0 уже после
+# записи (дрейф на стороне системы эмулятора; наблюдалось 2026-10-08 — это дало
+# ×3 к длительности прогонов) — запись не прижилась → exit 1.
 emulator-fast:
-	@adb shell settings put global window_animation_scale 0
-	@adb shell settings put global transition_animation_scale 0
-	@adb shell settings put global animator_animation_scale 0
-	@printf "$(GREEN)Анимации эмулятора выключены (window/transition/animator = 0)$(RESET)\n"
+	@FAILED=0; \
+	for k in window_animation transition_animation animator_duration; do \
+		adb shell settings put global $${k}_scale 0; \
+		V=$$(adb shell settings get global $${k}_scale | tr -d '\r'); \
+		if [ "$$V" != "0" ]; then \
+			printf "$(RED)[FAIL] $${k}_scale = $$V (ожидалось 0) — запись не прижилась$(RESET)\n"; \
+			FAILED=1; \
+		fi; \
+	done; \
+	if [ $$FAILED -ne 0 ]; then exit 1; fi; \
+	printf "$(GREEN)Анимации выключены (read-back сверен)$(RESET)\n"
+
+# дрейф масштабов после записи — чиним перед каждым прогоном (эмулятора нет — no-op)
+_ensure_animations_off:
+	@if [ "$$(adb get-serialno 2>/dev/null)" = "unknown" ]; then exit 0; fi; \
+	$(MAKE) --no-print-directory emulator-fast
 
 # Скриншоты для маркетплейса
 DEVICE_PNG_DIR := /storage/emulated/0/Android/data/com.myworkouts/files/Pictures/screenshots
@@ -318,4 +333,4 @@ setup_git_hooks:
 ## all: Полная проверка (сборка + тесты + линтер) и установка APK на устройство
 all: check install
 
-.PHONY: help build clean test scripts-test lint format check install all android-test emulator-fast screenshots screenshots-ru screenshots-en setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets rustore rustore-draft rustore-commit whats-new _rustore_build_aab
+.PHONY: help build clean test scripts-test lint format check install all android-test emulator-fast _ensure_animations_off screenshots screenshots-ru screenshots-en setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets rustore rustore-draft rustore-commit whats-new _rustore_build_aab

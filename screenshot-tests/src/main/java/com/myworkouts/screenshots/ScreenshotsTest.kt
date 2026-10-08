@@ -37,6 +37,7 @@ import org.junit.runner.RunWith
 import java.io.File
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Сценарии скриншотов маркетплейса (навык `kotlin-ui-testing`,
@@ -450,10 +451,10 @@ class ScreenshotsTest {
      * LENGTH_LONG ≈3,5 с — 5 с после якоря отрисовки покрывают его
      * с запасом. Задержка — часть сценария, не ожидание UI (канон
      * сценарийного `delay` — `ExerciseCreateLiveUpdateIntegrationTest`:
-     * `SubscriptionTimeoutRule` + `delay(300L)`).
+     * `SubscriptionTimeoutRule` + `delay(300.milliseconds)`).
      */
     private fun captureAndValidate(fileName: String) {
-        runBlocking { delay(5_000) }
+        runBlocking { delay(5.seconds) }
         val bitmap =
             checkNotNull(
                 UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).takeScreenshot()

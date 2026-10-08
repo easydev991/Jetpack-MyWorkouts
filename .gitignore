@@ -19,7 +19,6 @@
 /.idea/misc.xml
 /.idea/runConfigurations
 /.idea/vcs.xml
-/.idea/inspectionProfiles/Project_Default.xml
 /.idea/appInsightsSettings.xml
 .DS_Store
 /build
@@ -29,8 +28,10 @@ screenshot-tests/build/
 .cxx
 local.properties
 
-# IntelliJ IDEA
-.idea/
+# IntelliJ IDEA (игнорим всё, кроме шаримых профилей инспекций и scope'ов — канон JetpackDays 67d01fc)
+.idea/*
+!.idea/inspectionProfiles/
+!.idea/scopes/
 
 # Android Studio
 *.keystore

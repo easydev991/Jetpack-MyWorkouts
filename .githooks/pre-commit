@@ -1,9 +1,7 @@
 #!/bin/bash
 
 echo "Обновляю версии в README.md..."
-./gradlew updateReadmeVersions --no-configuration-cache --quiet
-
-if [ $? -eq 0 ]; then
+if ./gradlew updateReadmeVersions --no-configuration-cache --quiet; then
     echo "✓ Версии обновлены успешно"
     git add README.md
 else

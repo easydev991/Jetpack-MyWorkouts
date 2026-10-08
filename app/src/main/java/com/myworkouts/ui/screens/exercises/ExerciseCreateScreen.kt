@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -309,7 +308,7 @@ internal fun ExerciseCreateForm(
  * Выпадающий список категорий (`ExposedDropdownMenuBox`) —
  * паттерн-близнец `DurationDropdownField`. Пока категория не выбрана,
  * показывается placeholder; категории — локализованные лейблы стандартных
- * через [standardCategoryLabelResId], кастомные — имя как есть.
+ * через `standardCategoryLabelResId`, кастомные — имя как есть.
  *
  * Список приходит из состояния (`uiState.dropdownCategories`): активные
  * категории БД, в edit-режиме плюс архивная текущая (custom-categories,
@@ -377,7 +376,6 @@ internal fun CategoryDropdownField(
  * целиком — хвост ширины распределяется по ячейкам, а не остаётся
  * справа «под ещё одну иконку».
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ExerciseIconPickerSection(
     selectedIconNumber: Int?,
