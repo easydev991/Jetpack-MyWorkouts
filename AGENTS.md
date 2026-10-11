@@ -48,6 +48,9 @@ detekt-предупреждения исправляются до заверше
 ## Tests
 
 `make test` — JVM. `make android-test` — на подключённом устройстве.
+`make memory-check` — точечный прогон LeakCanary-регрессии
+(`android-test` её исключает — `notClass`); подробности —
+`.opencode/rules/test-execution.md`.
 Правила прогонов, отчёты и gotcha — `.opencode/rules/test-execution.md`
 (один прогон → один отчёт); руководства — навыки `kotlin-testing` (unit)
 и `kotlin-ui-testing` (androidTest).

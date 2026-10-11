@@ -56,8 +56,14 @@ test: _ensure_secrets
 	$(call run_tests,test,app/build/test-results)
 
 ## android-test: Запуск интеграционных тестов на Android устройстве со статистикой в консоли. Использование: make android-test FLAVOR=rustore (по умолчанию FLAVOR=github)
+# notClass исключает LeakCanary-регрессию (медленный heap-анализ) —
+# она гоняется отдельным memory-check
 android-test: _ensure_secrets _ensure_animations_off
-	$(call run_tests,connected$(FLAVOR_TITLE)DebugAndroidTest,app/build/outputs/androidTest-results/connected/debug)
+	$(call run_tests,connected$(FLAVOR_TITLE)DebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=com.myworkouts.ui.screens.root.MemoryLeakRegressionTest,app/build/outputs/androidTest-results/connected/debug)
+
+## memory-check: Прогон LeakCanary-регрессии на эмуляторе (только leak-тесты). Использование: make memory-check FLAVOR=rustore (по умолчанию FLAVOR=github)
+memory-check: _ensure_secrets _ensure_animations_off
+	$(call run_tests,connected$(FLAVOR_TITLE)DebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.myworkouts.ui.screens.root.MemoryLeakRegressionTest,app/build/outputs/androidTest-results/connected/debug)
 
 ## emulator-fast: Выключить анимации на запущенном эмуляторе (ускоряет androidTest). Применять после каждого старта эмулятора; android-test чинит их сам перед каждым прогоном
 # Запись сверяется read-back: масштабы умеют сами откатываться в 1.0 уже после
@@ -333,4 +339,4 @@ setup_git_hooks:
 ## all: Полная проверка (сборка + тесты + линтер) и установка APK на устройство
 all: check install
 
-.PHONY: help build clean test scripts-test lint format check install all android-test emulator-fast _ensure_animations_off screenshots screenshots-ru screenshots-en setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets rustore rustore-draft rustore-commit whats-new _rustore_build_aab
+.PHONY: help build clean test scripts-test lint format check install all android-test memory-check emulator-fast _ensure_animations_off screenshots screenshots-ru screenshots-en setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets rustore rustore-draft rustore-commit whats-new _rustore_build_aab

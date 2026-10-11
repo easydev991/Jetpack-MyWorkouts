@@ -152,6 +152,10 @@ description: >
   не существует — Gradle ответит «ambiguous») + человекочитаемый
   отчёт через `scripts/test_report.py` (тот же скрипт, что и для
   `make test`, — XML из `app/build/outputs/androidTest-results/connected/debug/`).
+- **LeakCanary**: `make memory-check` — точечный прогон только
+  LeakCanary-регрессии (нужен эмулятор); полный `android-test` её
+  исключает (`notClass`); XML из той же директории
+  `app/build/outputs/androidTest-results/connected/debug/`.
 - **Workflow** (точечный прогон в разработке / полный suite перед
   коммитом / `make emulator-fast`) — канон:
   `.opencode/rules/test-execution.md`; шпаргалка команд —
@@ -314,8 +318,11 @@ description: >
       `InstrumentedTest`)
 - [ ] Поиск по `testTag` (иконки упражнений) — только с
       `useUnmergedTree = true`; один `setContent` на тест
-- [ ] Запуск — `make android-test`, все тесты зелёные; повторные прогоны
-      ради чтения отчёта запрещены (см. `.opencode/rules/test-execution.md`)
+- [ ] Запуск — `make android-test` (без leak-теста) и `make memory-check`
+      (обязателен перед релизом и при изменениях в `ui/screens/root/`
+      или других потенциально leak-ёмких местах), все зелёные; повторные
+      прогоны ради чтения отчёта запрещены
+      (см. `.opencode/rules/test-execution.md`)
 
 ## References
 

@@ -2,7 +2,8 @@
 
 ## Главное правило: один прогон → один отчёт
 
-`make test` и `make android-test` **уже** запускают `scripts/test_report.py`
+`make test`, `make android-test` и `make memory-check` **уже** запускают
+`scripts/test_report.py`
 и печатают статистику и список каждого упавшего `ClassName::testName`.
 Повторный `make` или `find … -name 'TEST-*.xml'` ради чтения того же
 отчёта — **запрещено** (JVM ~30 c, androidTest 2+ минуты; повторы — лишние
@@ -26,6 +27,7 @@ python3 scripts/test_report.py app/build/outputs/androidTest-results/connected/d
 ```bash
 make test           # JVM (JUnit 5) — XML в app/build/test-results/
 make android-test   # androidTest (JUnit 4) на эмуляторе
+make memory-check   # только LeakCanary-тест (нужен эмулятор)
 ```
 
 - **Точечный прогон** в разработке — класс затронутого экрана. JVM:
@@ -35,7 +37,9 @@ make android-test   # androidTest (JUnit 4) на эмуляторе
   (метод — через `#`). Полный синтаксис фильтров — `references/running-tests.md`
   обоих скиллов.
 - **Полный прогон** — перед коммитом задачи и перед релизом (ловит
-  регрессии в соседних экранах).
+  регрессии в соседних экранах). Полный `make android-test` не гоняет
+  leak-регрессию (исключена `notClass`-фильтром) — перед релизом
+  добавить `make memory-check`.
 - **Отладка без отчёта** — `./gradlew … --info`; проверка результатов всё
   равно через `test_report.py` по XML, не через повторный `make`.
 - **Упали** — список фейлов в выводе отчёта; детали — HTML

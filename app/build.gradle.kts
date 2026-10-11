@@ -143,8 +143,12 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.room.testing)
+    // JUnit-правило LeakCanary: валит тест при подтверждённых утечках (make memory-check)
+    androidTestImplementation(libs.leakcanary.android.instrumentation)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    // Авто-инициализация LeakCanary через manifest merge, свой init-код не нужен
+    debugImplementation(libs.leakcanary.android)
 
     constraints {
         // room-testing (androidTest) требует kotlinx-serialization >= 1.8.1
