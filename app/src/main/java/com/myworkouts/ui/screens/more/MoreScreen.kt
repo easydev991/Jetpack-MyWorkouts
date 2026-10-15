@@ -8,8 +8,8 @@ import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -55,17 +57,20 @@ private const val GITHUB_REPOSITORY_URL = "https://github.com/easydev991/Jetpack
  * (exercises-tab), кнопки перехода к экрану «Оформление приложения»,
  * «Данные приложения», «Отправить обратную связь», кнопку «GitHub», а на
  * flavor rustore — «Оценить приложение» и «Поделиться приложением». По
- * мере появления новых кнопок структура экрана — `Box` + `Column` с
- * единым интервалом через `Arrangement.spacedBy`. Версия приложения
- * прижата к низу через `Box.BottomCenter`.
+ * мере появления новых кнопок структура экрана — единый `Column` с
+ * `verticalScroll` (контент должен прокручиваться в landscape и при
+ * крупных шрифтах) и единым интервалом через `Arrangement.spacedBy`.
+ * Версия приложения прижата к низу через `Spacer(weight)` — в
+ * скроллящейся колонке спейсер сжимается в ноль, когда контент
+ * переполняет экран.
  *
  * @implNote NavController обязательный (callback-обёртка — лишний
  * indirection при единственном вызове в RootScreen). Состояние кнопки и
  * запись — выше по потоку, в RootScreen (design Decision 8): экран
  * остаётся без ViewModel, получает `Boolean` + колбэк. Column
- * с дефолтным `Arrangement.Top` прижимает кнопки к верху, горизонтальное
- * центрирование через `Alignment.CenterHorizontally`; версия
- * приложения позиционируется независимо в Box.
+ * прижимает кнопки к верху, горизонтальное центрирование через
+ * `Alignment.CenterHorizontally`; версия приложения живёт в той же
+ * колонке за `Spacer(weight)`.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,62 +91,64 @@ fun MoreScreen(
         }
     ) { paddingValues ->
         val context = LocalContext.current
-        Box(
+        Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(8.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(8.dp),
+            // Единый интервал между всеми кнопками колонки, включая
+            // обе кнопки внутри NavigationButtons (они без обёртки —
+            // прямые measurables этой Column)
+            verticalArrangement =
+                Arrangement.spacedBy(dimensionResource(R.dimen.spacing_xxsmall)),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                // Единый интервал между всеми кнопками колонки, включая
-                // обе кнопки внутри NavigationButtons (они без обёртки —
-                // прямые measurables этой Column)
-                verticalArrangement =
-                    Arrangement.spacedBy(dimensionResource(R.dimen.spacing_xxsmall)),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                NavigationButtons(navController = navController)
+            NavigationButtons(navController = navController)
 
-                // Кнопка видимости вкладки «Упражнения» (more-screen,
-                // design Decision 8): сразу после навигационных кнопок,
-                // до feedback.
-                ExercisesTabToggle(
-                    showExercisesTab = showExercisesTab,
-                    onShowExercisesTabChange = { show ->
-                        // Действие на тапе; value — итоговое состояние
-                        // вкладки: show/hide (design D10)
-                        analyticsProvider.log(
-                            AnalyticsEvent.UserAction(
-                                UserActionType.TOGGLE_EXERCISES_TAB,
-                                if (show) "show" else "hide"
-                            )
+            // Кнопка видимости вкладки «Упражнения» (more-screen,
+            // design Decision 8): сразу после навигационных кнопок,
+            // до feedback.
+            ExercisesTabToggle(
+                showExercisesTab = showExercisesTab,
+                onShowExercisesTabChange = { show ->
+                    // Действие на тапе; value — итоговое состояние
+                    // вкладки: show/hide (design D10)
+                    analyticsProvider.log(
+                        AnalyticsEvent.UserAction(
+                            UserActionType.TOGGLE_EXERCISES_TAB,
+                            if (show) "show" else "hide"
                         )
-                        onShowExercisesTabChange(show)
-                    }
-                )
-
-                FeedbackButton(
-                    context = context,
-                    analyticsProvider = analyticsProvider
-                )
-
-                // Кнопки «Оценить приложение» и «Поделиться приложением»
-                // (more-screen) — только на flavor rustore
-                if (BuildConfig.RUSTORE_FEATURES) {
-                    RateAppButton(context = context)
-                    ShareAppButton(context = context)
+                    )
+                    onShowExercisesTabChange(show)
                 }
+            )
 
-                GitHubButton(context = context)
+            FeedbackButton(
+                context = context,
+                analyticsProvider = analyticsProvider
+            )
+
+            // Кнопки «Оценить приложение» и «Поделиться приложением»
+            // (more-screen) — только на flavor rustore
+            if (BuildConfig.RUSTORE_FEATURES) {
+                RateAppButton(context = context)
+                ShareAppButton(context = context)
             }
+
+            GitHubButton(context = context)
+
+            // Версия прижата к низу через weight-спейсер: в скроллящейся
+            // колонке он сжимается в ноль, когда контент переполняет экран
+            // (landscape, крупные шрифты), и добивает пустоту, когда
+            // всё помещается (образец — MoreScreen в JetpackDays)
+            Spacer(modifier = Modifier.weight(1f))
 
             Text(
                 text = stringResource(R.string.app_version, BuildConfig.VERSION_NAME),
                 modifier =
                     Modifier
-                        .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .padding(8.dp),
                 style = MaterialTheme.typography.bodyMedium,
