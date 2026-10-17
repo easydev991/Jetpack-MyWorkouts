@@ -213,7 +213,11 @@ class MakefileWhatsNewAndDraftTest(_MakefileTestBase):
             out_file.exists(), f"whats_new файл должен быть создан: {out_file}"
         )
         content = out_file.read_text()
-        self.assertIn("Что нового в 1.1.0", content)
+        self.assertNotIn(
+            "Что нового",
+            content,
+            "файл должен содержать только буллеты, без заголовка",
+        )
         self.assertIn("- Fix bug", content)
         self.assertNotIn(
             "- Initial",

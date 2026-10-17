@@ -11,8 +11,8 @@
 # Поведение:
 #   - Если <output_file> уже существует: печатает "Файл уже существует: <path>"
 #     и содержимое файла в stdout. Ничего не перезаписывает.
-#   - Если файла нет: создаёт с заголовком "Что нового в <version_name>"
-#     и буллетами из `git log <last_release_tag>..HEAD --pretty=format:"- %s"`.
+#   - Если файла нет: создаёт с буллетами из
+#     `git log <last_release_tag>..HEAD --pretty=format:"- %s"`.
 #   - Если релизных тегов нет: пишет пометку "(первый релиз)".
 #
 # Зависимости: bash, git, mkdir, cat. Никаких внешних утилит.
@@ -40,8 +40,6 @@ mkdir -p "$(dirname "$OUTPUT_FILE")"
 LAST_TAG=$(git tag --sort=-version:refname 2>/dev/null | grep -E '^[0-9]' | head -1 || true)
 
 {
-	echo "Что нового в $VERSION_NAME"
-	echo ""
 	if [[ -n "$LAST_TAG" ]]; then
 		git log "$LAST_TAG"..HEAD --pretty=format:"- %s" 2>/dev/null || echo "- (пустой git log)"
 	else

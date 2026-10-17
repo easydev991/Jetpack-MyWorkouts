@@ -60,7 +60,11 @@ class GenerateWhatsNewFromGitLogTest(unittest.TestCase):
             text=True,
         )
         content = self.output.read_text()
-        self.assertIn("Что нового в 1.1.0", content)
+        self.assertNotIn(
+            "Что нового",
+            content,
+            "файл должен содержать только буллеты, без заголовка",
+        )
         self.assertIn("- Add dark theme", content)
         self.assertIn("- Fix crash on startup", content)
         self.assertNotIn(
@@ -104,7 +108,11 @@ class GenerateWhatsNewFromGitLogTest(unittest.TestCase):
                 text=True,
             )
             content = out_file.read_text()
-            self.assertIn("Что нового в 1.0.0", content)
+            self.assertNotIn(
+                "Что нового",
+                content,
+                "файл должен содержать только буллеты, без заголовка",
+            )
             self.assertIn("(первый релиз)", content)
         finally:
             shutil.rmtree(no_tag, ignore_errors=True)
