@@ -37,9 +37,13 @@
 
     git subtree pull --prefix tools/release https://github.com/easydev991/android-release-toolkit.git v1.0.1 --squash
 
+Или одной командой из корня тулкита — по всем локальным потребителям сразу:
+
+    make sync            # последний тег; make sync TAG=v1.0.5 — конкретный
+
 Копии в `tools/release/` приложений руками не править — только `git subtree pull`.
 
 ## Выпуск новой версии тулкита
 
 Правка → тесты → коммит → тег `vX.Y.Z` → `git push origin main --tags` →
-`git subtree pull` в приложениях-потребителях.
+`make sync` (или `git subtree pull` в приложениях-потребителях).
