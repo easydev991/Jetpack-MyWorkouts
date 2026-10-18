@@ -1,21 +1,18 @@
 package com.myworkouts.domain.usecase
 
-import android.content.ContentResolver
-import android.content.Context
-import android.net.Uri
-import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.crash.NoopCrashReporter
+import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.BackupSettings
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.domain.model.OverviewTab
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -23,7 +20,9 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.util.concurrent.CancellationException
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.io.OutputStream
 
 /**
  * Unit-тесты формата экспорта (app-data-screen, design Decisions 2–3):
@@ -285,21 +284,23 @@ class ExportBackupUseCaseTest {
     }
 
     @Test
-    fun invoke_when_repository_fails_then_failure_and_no_stream() =
+    fun invoke_when_repository_fails_then_failure_and_stream_not_opened() =
         runTest {
-            // Given
+            // Given — падение снимка репозитория: SAF-документ не должен
+            // открываться (открытие обнуляет существующий файл)
             val dbError = RuntimeException("Сбой базы")
             val repository = mockk<WorkoutDataRepository>(relaxed = true)
             coEvery { repository.getAllExercises() } returns Result.failure(dbError)
             coEvery { repository.getAllEntries() } returns Result.failure(dbError)
-            val contentResolver = mockk<ContentResolver>(relaxed = true)
-            val context = mockk<Context>(relaxed = true)
-            every { context.contentResolver } returns contentResolver
-            val uri = mockk<Uri>()
-            val useCase = ExportBackupUseCase(repository, mockk(relaxed = true), context)
+            var opened = false
+            val useCase = ExportBackupUseCase(repository, NoopCrashReporter())
 
             // When
-            val result = useCase(uri)
+            val result =
+                useCase(BackupSettings.defaults()) {
+                    opened = true
+                    null
+                }
 
             // Then
             assertTrue(result.isFailure, "Ошибка репозитория — Result.failure")
@@ -307,11 +308,72 @@ class ExportBackupUseCaseTest {
                 result.exceptionOrNull() === dbError,
                 "Ошибка БД проходит в Result как есть, не оборачивается"
             )
-            verify(exactly = 0) { contentResolver.openOutputStream(any()) }
+            assertFalse(opened, "При сбое снимка файл не открывается")
         }
 
     @Test
-    fun invoke_when_categories_snapshot_fails_then_failure_and_no_stream() =
+    fun roundTrip_export_then_parse_returns_same_data() {
+        // Given — типовой набор с настройками v2
+        val categories =
+            listOf(
+                Category(id = 7L, name = "CORE", colorArgb = 0xFF6750A4.toInt(), isCustom = true)
+            )
+        val settings =
+            BackupSettings(
+                tabVisibility = mapOf(OverviewTab.RECORDS to false),
+                lastOverviewTab = OverviewTab.ACTIVITY
+            )
+
+        // When — строка экспорта подаётся на вход парсеру импорта
+        val parsed =
+            parseBackupJson(
+                buildBackupJson(listOf(pullUps, plank), listOf(repsEntry, timeEntry), settings, categories)
+            )
+
+        // Then — записываемые поля прошли круг (id/exerciseId/workoutId/
+        // modifiedAt в файл не пишутся по дизайну, при чтении обнуляются,
+        // связь записей — по имени упражнения)
+        assertEquals(
+            listOf(pullUps.copy(id = 0L), plank.copy(id = 0L)),
+            parsed.exercises,
+            "Каталог упражнений прошёл круг без потерь записываемых полей"
+        )
+        assertEquals(
+            listOf(
+                BackupEntry(
+                    exerciseName = pullUps.name,
+                    date = repsEntry.date,
+                    sets = repsEntry.sets,
+                    reps = repsEntry.reps,
+                    weightKg = null,
+                    durationSec = null,
+                    comment = null,
+                    createdAt = repsEntry.createdAt
+                ),
+                BackupEntry(
+                    exerciseName = plank.name,
+                    date = timeEntry.date,
+                    sets = timeEntry.sets,
+                    reps = null,
+                    weightKg = null,
+                    durationSec = timeEntry.durationSec,
+                    comment = timeEntry.comment,
+                    createdAt = timeEntry.createdAt
+                )
+            ),
+            parsed.entries,
+            "Записи прошли круг: связь по имени упражнения"
+        )
+        assertEquals(
+            listOf(Category(id = 0L, name = "CORE", colorArgb = 0xFF6750A4.toInt(), isCustom = true)),
+            parsed.categories,
+            "Категории: id не пишется, isCustom всегда true (файл недоверенный)"
+        )
+        assertEquals(settings, parsed.settings, "Настройки вкладок прошли круг")
+    }
+
+    @Test
+    fun invoke_when_categories_snapshot_fails_then_failure_and_stream_not_opened() =
         runTest {
             // Given — снимок категорий недоступен: экспорт не начинается
             val dbError = RuntimeException("Сбой базы")
@@ -319,14 +381,15 @@ class ExportBackupUseCaseTest {
             coEvery { repository.getAllExercises() } returns Result.success(listOf(pullUps))
             coEvery { repository.getAllEntries() } returns Result.success(emptyList())
             coEvery { repository.getAllCategories() } returns Result.failure(dbError)
-            val contentResolver = mockk<ContentResolver>(relaxed = true)
-            val context = mockk<Context>(relaxed = true)
-            every { context.contentResolver } returns contentResolver
-            val uri = mockk<Uri>()
-            val useCase = ExportBackupUseCase(repository, mockk(relaxed = true), context)
+            var opened = false
+            val useCase = ExportBackupUseCase(repository, NoopCrashReporter())
 
             // When
-            val result = useCase(uri)
+            val result =
+                useCase(BackupSettings.defaults()) {
+                    opened = true
+                    null
+                }
 
             // Then
             assertTrue(result.isFailure, "Ошибка снимка категорий — Result.failure")
@@ -334,33 +397,100 @@ class ExportBackupUseCaseTest {
                 result.exceptionOrNull() === dbError,
                 "Ошибка БД проходит в Result как есть, не оборачивается"
             )
-            verify(exactly = 0) { contentResolver.openOutputStream(any()) }
+            assertFalse(opened, "При сбое снимка файл не открывается")
+        }
+
+    @Test
+    fun invoke_when_stream_open_returns_null_then_failure_export() =
+        runTest {
+            // Given — opener (SAF) не отдал поток записи
+            val repository = mockk<WorkoutDataRepository>(relaxed = true)
+            coEvery { repository.getAllExercises() } returns Result.success(listOf(pullUps))
+            coEvery { repository.getAllEntries() } returns Result.success(listOf(repsEntry))
+            coEvery { repository.getAllCategories() } returns Result.success(emptyList())
+            val useCase = ExportBackupUseCase(repository, NoopCrashReporter())
+
+            // When
+            val result = useCase(BackupSettings.defaults()) { null }
+
+            // Then
+            val exception = result.exceptionOrNull()
+            assertTrue(result.isFailure, "Нет потока — Result.failure")
+            assertTrue(
+                exception is BackupException && exception.error == BackupError.EXPORT,
+                "Недоступность потока — BackupException(EXPORT)"
+            )
+        }
+
+    @Test
+    fun invoke_when_stream_fails_then_failure_export() =
+        runTest {
+            // Given — запись в поток падает
+            val repository = mockk<WorkoutDataRepository>(relaxed = true)
+            coEvery { repository.getAllExercises() } returns Result.success(listOf(pullUps))
+            coEvery { repository.getAllEntries() } returns Result.success(listOf(repsEntry))
+            coEvery { repository.getAllCategories() } returns Result.success(emptyList())
+            val stream = mockk<OutputStream>()
+            every { stream.write(any<ByteArray>()) } throws IOException("Диск переполнен")
+            every { stream.close() } returns Unit
+            val useCase = ExportBackupUseCase(repository, NoopCrashReporter())
+
+            // When
+            val result = useCase(BackupSettings.defaults()) { stream }
+
+            // Then
+            val exception = result.exceptionOrNull()
+            assertTrue(result.isFailure, "Сбой записи — Result.failure")
+            assertTrue(
+                exception is BackupException && exception.error == BackupError.EXPORT,
+                "Ошибка записи оборачивается в BackupException(EXPORT)"
+            )
         }
 
     @Test
     fun invoke_when_cancelled_then_rethrows_cancellation() =
         runTest {
-            // Given — SAF-поток записи прерывается отменой корутины
+            // Given — запись в поток прерывается отменой корутины
             // (спека «Отмена корутины не является ошибкой»)
             val repository = mockk<WorkoutDataRepository>(relaxed = true)
             coEvery { repository.getAllExercises() } returns Result.success(listOf(pullUps))
             coEvery { repository.getAllEntries() } returns Result.success(listOf(repsEntry))
             coEvery { repository.getAllCategories() } returns Result.success(emptyList())
-            val dataStore = mockk<AppSettingsDataStore>()
-            every { dataStore.overviewTabVisibility } returns
-                flowOf(OverviewTab.entries.associateWith { true })
-            every { dataStore.lastOverviewTab } returns flowOf(OverviewTab.STATS)
-            val contentResolver = mockk<ContentResolver>(relaxed = true)
-            val context = mockk<Context>(relaxed = true)
-            every { context.contentResolver } returns contentResolver
-            every { contentResolver.openOutputStream(any()) } throws
-                CancellationException("Операция отменена")
-            val uri = mockk<Uri>()
-            val useCase = ExportBackupUseCase(repository, dataStore, context)
+            val stream = mockk<OutputStream>()
+            every { stream.write(any<ByteArray>()) } throws CancellationException("Операция отменена")
+            every { stream.close() } returns Unit
+            val useCase = ExportBackupUseCase(repository, NoopCrashReporter())
 
             // When / Then — CancellationException прокидывается дальше,
             // не превращаясь в Result.failure
-            assertThrows<CancellationException> { useCase(uri) }
+            assertThrows<CancellationException> { useCase(BackupSettings.defaults()) { stream } }
+        }
+
+    @Test
+    fun invoke_when_success_then_stream_contains_backup_json() =
+        runTest {
+            // Given — снимок репозитория и настройки снапшотом
+            val repository = mockk<WorkoutDataRepository>(relaxed = true)
+            coEvery { repository.getAllExercises() } returns Result.success(listOf(pullUps))
+            coEvery { repository.getAllEntries() } returns Result.success(listOf(repsEntry))
+            coEvery { repository.getAllCategories() } returns Result.success(emptyList())
+            val output = ByteArrayOutputStream()
+            val settings =
+                BackupSettings(
+                    tabVisibility = OverviewTab.entries.associateWith { true },
+                    lastOverviewTab = OverviewTab.STATS
+                )
+            val useCase = ExportBackupUseCase(repository, NoopCrashReporter())
+
+            // When
+            val result = useCase(settings) { output }
+
+            // Then — в поток записаны байты JSON бэкапа
+            assertTrue(result.isSuccess, "Экспорт успешен")
+            val json = JSONObject(output.toString("UTF-8"))
+            assertEquals(1, json.getInt("version"), "Версия формата — 1")
+            assertEquals(1, json.getJSONArray("exercises").length(), "Упражнение в файле")
+            assertEquals(1, json.getJSONArray("entries").length(), "Запись в файле")
         }
 
     // ---------- overview-screen: настройки вкладок в бэкапе (design D8) ----------

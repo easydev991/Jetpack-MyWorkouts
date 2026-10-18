@@ -17,8 +17,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
+import com.myworkouts.crash.NoopCrashReporter
 import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
@@ -26,6 +26,7 @@ import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.screens.entry.EntryCreateScreen
 import com.myworkouts.ui.viewmodel.EntryCreateViewModel
@@ -188,7 +189,7 @@ class MainScreenEditNavigationTest {
                 MainScreen(
                     viewModel =
                         viewModel(
-                            factory = MainViewModel.factory(repository, NoopAnalyticsProvider())
+                            factory = MainViewModel.factory(repository, NoopAnalyticsProvider(), NoopCrashReporter())
                         ),
                     onAddEntryClick = {},
                     onEditEntryClick = { entryId ->

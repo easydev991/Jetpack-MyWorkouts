@@ -4,7 +4,6 @@ import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryField
@@ -13,6 +12,7 @@ import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers

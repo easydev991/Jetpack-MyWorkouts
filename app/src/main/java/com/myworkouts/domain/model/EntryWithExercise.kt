@@ -8,8 +8,7 @@ package com.myworkouts.domain.model
  *
  * Без `createdAt` — столбец в проекцию не включается (прецедент —
  * [EntryListItem], строке расчётов он не нужен). Маппинг из
- * [com.myworkouts.data.db.EntryListItemWithExerciseEntity] —
- * `toEntryWithExercise()`.
+ * `EntryListItemWithExerciseEntity` — `toEntryWithExercise()`.
  *
  * @property id Идентификатор записи
  * @property exerciseId Идентификатор упражнения каталога

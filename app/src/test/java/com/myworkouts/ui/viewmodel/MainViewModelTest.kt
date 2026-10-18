@@ -3,18 +3,15 @@ package com.myworkouts.ui.viewmodel
 import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
-import com.myworkouts.crash.CrashlyticsHelper
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.crash.FakeCrashReporter
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.ui.state.MainUiState
-import io.mockk.mockkObject
-import io.mockk.unmockkObject
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -188,6 +185,7 @@ class MainViewModelTest {
 
     private lateinit var repository: MainViewModelFakeRepository
     private val fakeAnalytics = FakeAnalyticsProvider()
+    private val fakeCrash = FakeCrashReporter()
 
     @BeforeEach
     fun setUp() {
@@ -201,7 +199,7 @@ class MainViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(): MainViewModel = MainViewModel(repository, fakeAnalytics)
+    private fun createViewModel(): MainViewModel = MainViewModel(repository, fakeAnalytics, fakeCrash)
 
     @Test
     fun state_initial_before_subscription_then_loading() =
@@ -373,39 +371,36 @@ class MainViewModelTest {
             )
         }
 
-    /** Провал deleteEntry логируется в Crashlytics, pending остаётся для повтора. */
+    /** Провал deleteEntry логируется в crash-репортер, pending остаётся для повтора. */
     @Test
     fun confirm_delete_on_failure_then_logs_exception_and_keeps_pending() =
         runTest(testDispatcher) {
             // Given — провал репозитория и открытый алерт удаления
-            mockkObject(CrashlyticsHelper)
-            try {
-                val error = IllegalStateException("Сбой БД")
-                repository.deleteEntryResult = Result.failure(error)
-                val viewModel = createViewModel()
-                backgroundScope.launch { viewModel.uiState.collect { } }
-                advanceUntilIdle()
-                viewModel.requestDelete(item1)
-                advanceUntilIdle()
+            val error = IllegalStateException("Сбой БД")
+            repository.deleteEntryResult = Result.failure(error)
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.requestDelete(item1)
+            advanceUntilIdle()
 
-                // When
-                viewModel.confirmDelete()
-                advanceUntilIdle()
+            // When
+            viewModel.confirmDelete()
+            advanceUntilIdle()
 
-                // Then
-                verify {
-                    CrashlyticsHelper.logException(error, "Удаление записи")
-                }
-                val state = viewModel.uiState.value
-                assertTrue(state is MainUiState.Success, "После провала — Success")
-                val success = state as MainUiState.Success
-                assertEquals(
-                    item1.id,
-                    success.pendingDeleteId,
-                    "При провале pendingDeleteId сохраняется для повтора"
-                )
-            } finally {
-                unmockkObject(CrashlyticsHelper)
-            }
+            // Then
+            assertEquals(
+                listOf(FakeCrashReporter.Entry(error, "Удаление записи")),
+                fakeCrash.logged,
+                "Провал удаления записывается в crash-репортер с контекстом"
+            )
+            val state = viewModel.uiState.value
+            assertTrue(state is MainUiState.Success, "После провала — Success")
+            val success = state as MainUiState.Success
+            assertEquals(
+                item1.id,
+                success.pendingDeleteId,
+                "При провале pendingDeleteId сохраняется для повтора"
+            )
         }
 }

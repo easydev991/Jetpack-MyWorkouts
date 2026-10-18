@@ -55,6 +55,10 @@ endef
 test: _ensure_secrets
 	$(call run_tests,test,app/build/test-results)
 
+## guard_domain: Guard-тест чистоты домена (DomainPurityTest) — вызывает pre-commit хук
+guard_domain: _ensure_secrets
+	./gradlew test$(FLAVOR_TITLE)DebugUnitTest --tests "com.myworkouts.domain.DomainPurityTest" --quiet
+
 ## android-test: Запуск интеграционных тестов на Android устройстве со статистикой в консоли. Использование: make android-test FLAVOR=rustore (по умолчанию FLAVOR=github)
 # notClass исключает LeakCanary-регрессию (медленный heap-анализ) —
 # она гоняется отдельным memory-check
@@ -323,7 +327,7 @@ update_readme_versions:
 	./gradlew updateReadmeVersions --no-configuration-cache --quiet
 	@printf "$(GREEN)Версии обновлены успешно$(RESET)\n"
 
-## setup_git_hooks: Настроить Git hooks для автоматического обновления README.md
+## setup_git_hooks: Настроить Git hooks (schema-guard Room, домен-guard, версии в README)
 setup_git_hooks:
 	@printf "$(YELLOW)Настройка Git hooks...$(RESET)\n"
 	@if [ ! -f ".githooks/pre-commit" ]; then \
@@ -333,10 +337,10 @@ setup_git_hooks:
 	@chmod +x .githooks/pre-commit
 	@git config core.hooksPath .githooks
 	@printf "$(GREEN)Git hooks настроены: core.hooksPath = .githooks$(RESET)\n"
-	@printf "$(YELLOW)Теперь pre-commit хук будет автоматически обновлять версии в README.md$(RESET)\n"
+	@printf "$(YELLOW)Теперь pre-commit хук проверяет схемы Room (bump версии) и чистоту домена и обновляет версии в README.md$(RESET)\n"
 
 # Запуск всех задач
 ## all: Полная проверка (сборка + тесты + линтер) и установка APK на устройство
 all: check install
 
-.PHONY: help build clean test scripts-test lint format check install all android-test memory-check emulator-fast _ensure_animations_off screenshots screenshots-ru screenshots-en setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets rustore rustore-draft rustore-commit whats-new _rustore_build_aab
+.PHONY: help build clean test guard_domain scripts-test lint format check install all android-test memory-check emulator-fast _ensure_animations_off screenshots screenshots-ru screenshots-en setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets rustore rustore-draft rustore-commit whats-new _rustore_build_aab

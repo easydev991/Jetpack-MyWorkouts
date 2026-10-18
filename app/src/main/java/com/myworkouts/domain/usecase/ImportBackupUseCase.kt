@@ -1,57 +1,55 @@
 // `TooManyFunctions` подавлен осознанно: файл — один use-case и его
-// чистые помощники парсинга/merge (app-data-screen, design Decisions 4–5);
-// декомпозиция по файлам усложнит связку «парсер + merge + invoke».
+// чистые помощники merge (app-data-screen, design Decisions 4–5);
+// декомпозиция по файлам усложнит связку «merge + invoke». Парсинг
+// формата — в BackupFileDto.kt (kotlinx-serialization).
 @file:Suppress("TooManyFunctions")
 
 package com.myworkouts.domain.usecase
 
-import android.content.Context
-import android.net.Uri
-import com.myworkouts.crash.CrashlyticsHelper
-import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.EntryValidator
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.crash.CrashReporter
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.BackupSettings
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
-import com.myworkouts.domain.model.OverviewTab
+import com.myworkouts.domain.repository.EntryValidator
+import com.myworkouts.domain.repository.WorkoutDataRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONException
-import org.json.JSONObject
-import java.util.concurrent.CancellationException
+import java.io.InputStream
 
 /**
  * Восстановление данных из файла резервной копии слиянием
- * (app-data-screen, design Decisions 3–5).
+ * (app-data-screen, design Decisions 3–5 — сигнатуры без Android:
+ * opener-фабрика потока — параметр вызова, как в экспорте).
  *
- * Читает файл через `context.contentResolver.openInputStream(uri)` на
- * [Dispatchers.IO], целиком парсит и валидирует его до любой записи в БД
+ * Файл, открытый [openStream], читается целиком и парсится на
+ * [Dispatchers.IO]; открытие и закрытие (`use`) — в одном блоке без
+ * точки отмены между ними, иначе отмена корутины в зазоре оставила бы
+ * открытый SAF-поток до финализатора. Валидация до любой записи в БД
  * (битый файл не может изменить данные частично), мержит с текущими
  * данными (ничего не перезаписывается, добавляется только недостающее),
  * вставляет подготовленное одной транзакцией
- * [WorkoutDataRepository.importData] и применяет блок настроек вкладок
- * обзора из бэкапов версии 2 (overview-screen, design D8) — после
- * успешного восстановления.
+ * [WorkoutDataRepository.importData]. Блок настроек вкладок обзора из
+ * бэкапов версии 2 (overview-screen, design D8) возвращается снапшотом
+ * — применение к хранилищу (после успешного восстановления) остаётся
+ * за вызывающим (`AppSettingsDataStore.applyBackupSettings`); `null` —
+ * бэкап v1, хранилище не трогать.
  *
  * @property repository доступ к данным приложения
- * @property dataStore хранилище настроек: блок `settings` бэкапа v2
- *   применяется сюда после merge записей (design D8)
- * @property context контекст приложения; поток открывается через
- *   `contentResolver` (в [com.myworkouts.ui.viewmodel.AppDataViewModel]
- *   передаётся `context.applicationContext`)
+ * @property crashReporter репортер сбоев: failure-ветки чтения и парсинга
  */
 class ImportBackupUseCase(
     private val repository: WorkoutDataRepository,
-    private val dataStore: AppSettingsDataStore,
-    private val context: Context
+    private val crashReporter: CrashReporter
 ) {
     /**
-     * Сливает данные файла по [uri] с текущими: ошибки файла —
-     * `Result.failure([BackupException])` с [BackupError.INVALID_FILE],
+     * Сливает данные файла, открытого [openStream], с текущими и возвращает
+     * снапшот настроек: ошибки файла —
+     * `Result.failure([BackupException])` с [BackupError.INVALID_FILE]
+     * (включая `null` от [openStream] — документ недоступен),
      * ошибки БД — как есть.
      *
      * `ReturnCount` и `TooGenericExceptionCaught` подавлены осознанно:
@@ -60,16 +58,15 @@ class ImportBackupUseCase(
      * BackupException» требуют общий `catch` и несколько точек выхода.
      */
     @Suppress("ReturnCount", "TooGenericExceptionCaught")
-    suspend operator fun invoke(uri: Uri): Result<Unit> {
+    suspend operator fun invoke(openStream: suspend () -> InputStream?): Result<BackupSettings?> {
         val raw =
             try {
                 withContext(Dispatchers.IO) {
                     val stream =
-                        context.contentResolver.openInputStream(uri)
-                            ?: throw BackupException(
-                                "Поток чтения недоступен: $uri",
-                                BackupError.INVALID_FILE
-                            )
+                        openStream() ?: throw BackupException(
+                            "Поток чтения недоступен",
+                            BackupError.INVALID_FILE
+                        )
                     stream.use { it.readBytes().toString(Charsets.UTF_8) }
                 }
             } catch (e: CancellationException) {
@@ -77,10 +74,10 @@ class ImportBackupUseCase(
                 // логирования (спека «Отмена корутины не является ошибкой»).
                 throw e
             } catch (e: BackupException) {
-                CrashlyticsHelper.logException(e, "Восстановление резервной копии: сбой чтения файла")
+                crashReporter.logException(e, "Восстановление резервной копии: сбой чтения файла")
                 return Result.failure(e)
             } catch (e: Exception) {
-                CrashlyticsHelper.logException(e, "Восстановление резервной копии: сбой чтения файла")
+                crashReporter.logException(e, "Восстановление резервной копии: сбой чтения файла")
                 return Result.failure(
                     BackupException(
                         "Не удалось прочитать файл: ${e.message}",
@@ -90,18 +87,19 @@ class ImportBackupUseCase(
             }
         val fileContent =
             try {
-                parseBackupJson(raw)
+                // Парсинг на IO вместе с чтением: разбор мегабайтного
+                // JSON не должен замораживать main (вызывающий — viewModelScope)
+                withContext(Dispatchers.IO) { parseBackupJson(raw) }
             } catch (e: BackupException) {
-                CrashlyticsHelper.logException(e, "Восстановление резервной копии: некорректный файл копии")
+                crashReporter.logException(e, "Восстановление резервной копии: некорректный файл копии")
                 return Result.failure(e)
             }
         mergeAndInsert(fileContent).getOrElse { error ->
             return Result.failure(error)
         }
-        // Настройки вкладок применяются после восстановления (design D8):
-        // бэкапы v1 не содержат блока — DataStore не меняется.
-        applyBackupSettings(dataStore, fileContent.settings)
-        return Result.success(Unit)
+        // Настройки вкладок применяет вызывающий после восстановления
+        // (design D8); `null` (бэкап v1) — DataStore не меняется.
+        return Result.success(fileContent.settings)
     }
 
     /**
@@ -155,22 +153,6 @@ class ImportBackupUseCase(
         }
         return Result.success(Unit)
     }
-}
-
-/**
- * Применяет блок настроек вкладок бэкапа к [AppSettingsDataStore] после
- * успешного восстановления (design D8); `null` (бэкап v1) — не трогает.
- * Вынесено из [ImportBackupUseCase.invoke] — detekt `LongMethod`.
- */
-private suspend fun applyBackupSettings(
-    dataStore: AppSettingsDataStore,
-    settings: BackupSettings?
-) {
-    settings ?: return
-    settings.tabVisibility.forEach { (tab, visible) ->
-        dataStore.setOverviewTabVisible(tab, visible)
-    }
-    dataStore.setLastOverviewTab(settings.lastOverviewTab)
 }
 
 /**
@@ -333,214 +315,3 @@ private fun ExerciseEntry.contentKey(name: String): EntryContentKey =
         durationSec = durationSec,
         comment = comment
     )
-
-/**
- * Чистая функция парсинга файла резервной копии (design Decision 5):
- * строгая валидация структуры и типов, неизвестные поля игнорируются.
- * Любая ошибка формата — [BackupException] с [BackupError.INVALID_FILE].
- *
- * `ThrowsCount` подавлен осознанно: валидация формата — по одному
- * `throw` на правило Decision 5, иначе потеряется точная причина отказа.
- * `SwallowedException` — исключение используется (его `message` попадает
- * в диагностику), правило не распознаёт доступ через свойство.
- */
-@Suppress("ThrowsCount", "SwallowedException")
-internal fun parseBackupJson(raw: String): BackupFileContent {
-    val root =
-        try {
-            JSONObject(raw)
-        } catch (e: JSONException) {
-            throw invalidFile("Файл не является корректным JSON: ${e.message}")
-        }
-    val version = root.opt("version")
-    if (version !is Int || (version != 1 && version != 2)) {
-        throw invalidFile("Поле version отсутствует, не целое или не поддерживается: $version")
-    }
-    val exercisesArray =
-        root.optJSONArray("exercises")
-            ?: throw invalidFile("Поле exercises отсутствует или не массив")
-    val entriesArray =
-        root.optJSONArray("entries")
-            ?: throw invalidFile("Поле entries отсутствует или не массив")
-    val exercises =
-        (0 until exercisesArray.length()).map { index ->
-            parseExercise(exercisesArray.optJSONObject(index) ?: throw invalidFile("Элемент exercises не объект"))
-        }
-    val entries =
-        (0 until entriesArray.length()).map { index ->
-            parseEntry(entriesArray.optJSONObject(index) ?: throw invalidFile("Элемент entries не объект"))
-        }
-    // Секция categories[] — обратно совместимое расширение (design D9):
-    // отсутствие массива (старые бэкапы) — пустой список, не ошибка.
-    val categories =
-        root.optJSONArray("categories")?.let { categoriesArray ->
-            (0 until categoriesArray.length()).map { index ->
-                parseCategory(
-                    categoriesArray.optJSONObject(index)
-                        ?: throw invalidFile("Элемент categories не объект")
-                )
-            }
-        } ?: emptyList()
-    return BackupFileContent(
-        categories = categories,
-        exercises = exercises,
-        entries = entries,
-        settings = parseBackupSettings(root)
-    )
-}
-
-/** Результат разбора файла бэкапа: категории, каталог, записи и блок настроек. */
-internal data class BackupFileContent(
-    val categories: List<Category>,
-    val exercises: List<Exercise>,
-    val entries: List<BackupEntry>,
-    val settings: BackupSettings?
-)
-
-private fun parseExercise(obj: JSONObject): Exercise =
-    Exercise(
-        id = 0L,
-        name = obj.requiredString("name"),
-        // Категория — имя-строка без enum-валидации (custom-categories,
-        // задача 3.2): файл с произвольной строкой не отвергается — резолв
-        // по (БД ∪ файл) и пропуск неизвестной категории — в mergeBackup
-        // (design D9)
-        category = obj.requiredString("category"),
-        isCustom =
-            obj.opt("isCustom") as? Boolean
-                ?: throw invalidFile("Поле isCustom упражнения отсутствует или не Boolean"),
-        comment = obj.optionalString("comment"),
-        iconNumber = obj.optionalInt("iconNumber"),
-        createdAt = obj.requiredLong("createdAt"),
-        measuredBy = obj.requiredEnum("measuredBy", ExerciseMeasuredBy.entries),
-        isArchived = obj.optionalBoolean("isArchived") ?: false
-    )
-
-private fun parseEntry(obj: JSONObject): BackupEntry =
-    BackupEntry(
-        exerciseName = obj.requiredString("exerciseName"),
-        date = obj.requiredLong("date"),
-        sets = obj.requiredInt("sets"),
-        reps = obj.optionalInt("reps"),
-        weightKg = obj.optionalDouble("weightKg"),
-        durationSec = obj.optionalInt("durationSec"),
-        comment = obj.optionalString("comment"),
-        createdAt = obj.requiredLong("createdAt")
-    )
-
-/**
- * Элемент `categories` файла (custom-categories, design D9): `name`,
- * `colorArgb`, `isArchived` — строгие типы (ошибка файла — нарушение
- * любого). `isCustom` из файла игнорируется: файл недоверенный, вставленные
- * категории всегда пользовательские (spec «Восстановление ... слиянием»).
- */
-private fun parseCategory(obj: JSONObject): Category =
-    Category(
-        id = 0L,
-        name = obj.requiredString("name"),
-        colorArgb = obj.requiredInt("colorArgb"),
-        isCustom = true,
-        isArchived =
-            obj.opt("isArchived") as? Boolean
-                ?: throw invalidFile("Поле isArchived категории отсутствует или не Boolean")
-    )
-
-private fun invalidFile(message: String): BackupException = BackupException(message, BackupError.INVALID_FILE)
-
-/**
- * Парсинг блока настроек вкладок обзора (overview-screen, design D8):
- * вызывается из [parseBackupJson] — `root` уже провалидирован. Блок
- * отсутствует (бэкап версии 1) → `null`, DataStore не меняется.
- * Неизвестные имена вкладок и некорректные типы значений в карте
- * видимости игнорируются (принцип «неизвестные поля игнорируются»
- * Decision 5); мусорное `lastOverviewTab` — fallback на STATS (тот же
- * контракт, что у Flow [AppSettingsDataStore.lastOverviewTab]).
- */
-internal fun parseBackupSettings(root: JSONObject): BackupSettings? {
-    val settingsJson = root.optJSONObject("settings") ?: return null
-    val visibilityJson = settingsJson.optJSONObject("overviewTabVisibility")
-    val tabVisibility =
-        if (visibilityJson == null) {
-            emptyMap()
-        } else {
-            buildMap {
-                OverviewTab.entries.forEach { tab ->
-                    val value = visibilityJson.opt(tab.name)
-                    if (value is Boolean) {
-                        put(tab, value)
-                    }
-                }
-            }
-        }
-    val lastRaw = settingsJson.opt("lastOverviewTab")
-    val lastOverviewTab = OverviewTab.entries.firstOrNull { it.name == lastRaw } ?: OverviewTab.STATS
-    return BackupSettings(tabVisibility = tabVisibility, lastOverviewTab = lastOverviewTab)
-}
-
-private fun JSONObject.requiredString(key: String): String {
-    val value = opt(key)
-    if (value !is String || value.isBlank()) {
-        throw invalidFile("Поле $key отсутствует, не строка или пустое")
-    }
-    return value
-}
-
-private fun JSONObject.requiredLong(key: String): Long =
-    when (val value = opt(key)) {
-        is Long -> value
-        is Int -> value.toLong()
-        else -> throw invalidFile("Поле $key отсутствует или не целое число")
-    }
-
-private fun JSONObject.requiredInt(key: String): Int =
-    when (val value = opt(key)) {
-        is Int -> value
-        is Long -> value.toInt()
-        else -> throw invalidFile("Поле $key отсутствует или не целое число")
-    }
-
-private fun <T : Enum<T>> JSONObject.requiredEnum(
-    key: String,
-    values: Collection<T>
-): T {
-    val raw = opt(key)
-    return (raw as? String)?.let { name -> values.firstOrNull { it.name == name } }
-        ?: throw invalidFile("Поле $key отсутствует или имеет неизвестное значение: $raw")
-}
-
-private fun JSONObject.optionalString(key: String): String? {
-    val value = opt(key)
-    return when {
-        value == null || value === JSONObject.NULL -> null
-        value is String -> value
-        else -> throw invalidFile("Поле $key не строка")
-    }
-}
-
-private fun JSONObject.optionalInt(key: String): Int? {
-    val value = opt(key)
-    return when {
-        value == null || value === JSONObject.NULL -> null
-        value is Int -> value
-        value is Long -> value.toInt()
-        else -> throw invalidFile("Поле $key не целое число")
-    }
-}
-
-private fun JSONObject.optionalDouble(key: String): Double? {
-    val value = opt(key)
-    return when {
-        value == null || value === JSONObject.NULL -> null
-        value is Double -> value
-        else -> throw invalidFile("Поле $key не число")
-    }
-}
-
-private fun JSONObject.optionalBoolean(key: String): Boolean? {
-    val value = opt(key)
-    return when {
-        value == null || value === JSONObject.NULL -> null
-        value is Boolean -> value
-        else -> throw invalidFile("Поле $key не Boolean")
-    }
-}

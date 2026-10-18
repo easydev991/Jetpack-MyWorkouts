@@ -62,19 +62,19 @@ python3 scripts/test_report.py app/build/outputs/androidTest-results/connected/d
 ./gradlew test
 
 # Один тестовый класс
-./gradlew test --tests "com.myworkouts.data.repository.EntryValidatorTest"
+./gradlew test --tests "com.myworkouts.domain.repository.EntryValidatorTest"
 
 # По паттерну (Class содержит подстроку)
 ./gradlew test --tests "*EntryValidatorTest"
 
 # Один тестовый метод
-./gradlew test --tests "com.myworkouts.data.repository.EntryValidatorTest.sets_below_one_rejected"
+./gradlew test --tests "com.myworkouts.domain.repository.EntryValidatorTest.sets_below_one_rejected"
 
 # Все тесты в пакете
 ./gradlew test --tests "com.myworkouts.ui.viewmodel.*"
 
 # Несколько классов
-./gradlew test --tests "com.myworkouts.data.repository.EntryValidatorTest" \
+./gradlew test --tests "com.myworkouts.domain.repository.EntryValidatorTest" \
                 --tests "com.myworkouts.ui.viewmodel.MainViewModelTest"
 ```
 

@@ -29,6 +29,7 @@ import com.myworkouts.domain.model.OverviewTab
 import com.myworkouts.ui.components.SettingToggleRow
 import com.myworkouts.ui.state.OverviewSettingsUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
+import com.myworkouts.ui.util.labelResId
 import com.myworkouts.ui.viewmodel.OverviewSettingsViewModel
 
 /**
@@ -110,7 +111,7 @@ internal fun OverviewSettingsScreenBody(
             )
             OverviewTab.entries.forEach { tab ->
                 SettingToggleRow(
-                    labelResId = tab.labelResId,
+                    labelResId = tab.labelResId(),
                     checked = state.visibility[tab] ?: true,
                     onToggle = { checked -> onTabToggle(tab, checked) }
                 )

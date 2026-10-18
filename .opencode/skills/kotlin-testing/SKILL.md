@@ -90,11 +90,11 @@ description: >
   человекочитаемым отчётом через `scripts/test_report.py`
   (статистика + список упавших тестов + per-class таблица).
 - **Один класс**:
-  `./gradlew test --tests "com.myworkouts.data.repository.EntryValidatorTest"`.
+  `./gradlew test --tests "com.myworkouts.domain.repository.EntryValidatorTest"`.
 - **Поиск по паттерну**:
   `./gradlew test --tests "*EntryValidatorTest"`.
 - **Один метод**:
-  `./gradlew test --tests "com.myworkouts.data.repository.EntryValidatorTest.sets_below_one_rejected"`.
+  `./gradlew test --tests "com.myworkouts.domain.repository.EntryValidatorTest.sets_below_one_rejected"`.
 - **Полная проверка**: `make check` — build + test + lint.
 
 ## First 60 seconds (triage template)

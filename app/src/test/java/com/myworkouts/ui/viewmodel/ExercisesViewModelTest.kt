@@ -6,12 +6,7 @@ import com.myworkouts.analytics.AppErrorOperation
 import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.CategoryInUseDeletionException
-import com.myworkouts.data.repository.LastActiveCategoryException
-import com.myworkouts.data.repository.LastActiveExerciseException
-import com.myworkouts.data.repository.LinkedEntriesDeletionException
-import com.myworkouts.data.repository.StandardCategoryDeletionException
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.crash.FakeCrashReporter
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.DeleteCategoryError
@@ -19,6 +14,12 @@ import com.myworkouts.domain.model.DeleteExerciseError
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.domain.repository.CategoryInUseDeletionException
+import com.myworkouts.domain.repository.LastActiveCategoryException
+import com.myworkouts.domain.repository.LastActiveExerciseException
+import com.myworkouts.domain.repository.LinkedEntriesDeletionException
+import com.myworkouts.domain.repository.StandardCategoryDeletionException
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.ui.state.ExercisesTab
 import com.myworkouts.ui.state.ExercisesUiState
 import io.mockk.coVerify
@@ -247,6 +248,9 @@ class ExercisesViewModelTest {
     /** Перехватчик событий аналитики (design D9). */
     private val analyticsProvider = FakeAnalyticsProvider()
 
+    /** Перехватчик сбоев: журнал вместо Crashlytics. */
+    private val crashReporter = FakeCrashReporter()
+
     /** Mock [AppSettingsDataStore] для VM (archive-alert-hide, tasks §1.2).
      *  На этом этапе используется только чтобы компилировались тесты;
      *  реальные stub'ы для `dontShowArchiveDialog` / `setDontShowArchiveDialog`
@@ -298,7 +302,8 @@ class ExercisesViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(): ExercisesViewModel = ExercisesViewModel(repository, dataStore, analyticsProvider)
+    private fun createViewModel(): ExercisesViewModel =
+        ExercisesViewModel(repository, dataStore, analyticsProvider, crashReporter)
 
     @Test
     fun state_initial_before_subscription_then_loading() =

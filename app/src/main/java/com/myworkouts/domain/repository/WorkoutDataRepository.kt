@@ -1,4 +1,4 @@
-package com.myworkouts.data.repository
+package com.myworkouts.domain.repository
 
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Category
@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 /**
  * Репозиторий данных тренировок: каталог упражнений и записи о выполнении.
  *
- * Интерфейс над [RoomWorkoutDataRepository] — единственная реализация;
+ * Интерфейс над `RoomWorkoutDataRepository` — единственная реализация;
  * нужен для fake-репозитория на `MutableStateFlow` в JVM-тестах ViewModel
  * (design.md Decision 1 change `entry-create-screen`). API реактивный там,
  * где нужен список (`Flow`), и `suspend` + `Result` для точечных операций.

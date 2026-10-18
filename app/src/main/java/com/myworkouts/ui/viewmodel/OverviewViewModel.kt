@@ -9,8 +9,8 @@ import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.OverviewTab
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.domain.usecase.ActivityPeriod
 import com.myworkouts.domain.usecase.RecordsMode
 import com.myworkouts.domain.usecase.StatsPeriod

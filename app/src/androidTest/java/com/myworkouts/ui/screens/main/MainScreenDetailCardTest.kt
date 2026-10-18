@@ -30,6 +30,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
+import com.myworkouts.crash.NoopCrashReporter
 import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.domain.model.EntryListItem
@@ -206,7 +207,7 @@ class MainScreenDetailCardTest {
                 MainScreen(
                     viewModel =
                         viewModel(
-                            factory = MainViewModel.factory(repository, NoopAnalyticsProvider())
+                            factory = MainViewModel.factory(repository, NoopAnalyticsProvider(), NoopCrashReporter())
                         ),
                     onAddEntryClick = {},
                     analyticsProvider = NoopAnalyticsProvider()

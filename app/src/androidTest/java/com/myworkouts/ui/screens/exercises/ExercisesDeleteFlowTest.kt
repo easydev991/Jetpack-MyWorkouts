@@ -13,10 +13,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
+import com.myworkouts.crash.NoopCrashReporter
 import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.LinkedEntriesDeletionException
-import com.myworkouts.data.repository.StandardExerciseDeletionException
-import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
@@ -24,6 +22,9 @@ import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.domain.repository.LinkedEntriesDeletionException
+import com.myworkouts.domain.repository.StandardExerciseDeletionException
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.viewmodel.ExercisesViewModel
 import kotlinx.coroutines.flow.Flow
@@ -189,7 +190,8 @@ class ExercisesDeleteFlowTest {
                                 ExercisesViewModel.factory(
                                     repository,
                                     AppSettingsDataStore.create(context),
-                                    NoopAnalyticsProvider()
+                                    NoopAnalyticsProvider(),
+                                    NoopCrashReporter()
                                 )
                         ),
                     onAddExerciseClick = {},
@@ -402,7 +404,8 @@ class ExercisesErrorSnackbarTest(
                                 ExercisesViewModel.factory(
                                     fake,
                                     AppSettingsDataStore.create(context),
-                                    NoopAnalyticsProvider()
+                                    NoopAnalyticsProvider(),
+                                    NoopCrashReporter()
                                 )
                         ),
                     onAddExerciseClick = {},
@@ -641,7 +644,8 @@ class ExercisesPreCheckSnackbarTest {
                                 ExercisesViewModel.factory(
                                     fake,
                                     AppSettingsDataStore.create(context),
-                                    NoopAnalyticsProvider()
+                                    NoopAnalyticsProvider(),
+                                    NoopCrashReporter()
                                 )
                         ),
                     onAddExerciseClick = {},

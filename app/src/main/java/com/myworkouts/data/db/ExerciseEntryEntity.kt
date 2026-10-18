@@ -13,7 +13,7 @@ import androidx.room.PrimaryKey
  * несуществующим `exerciseId`, см. design.md Decision 3). Колонка `workoutId`
  * присутствует, FK на будущую таблицу `workouts` не объявлен — таблицы ещё
  * нет, она появится отдельной миграцией v1→v2. В MVP `workoutId` всегда
- * `null`, [com.myworkouts.data.repository.EntryValidator] отклоняет записи
+ * `null`, [com.myworkouts.domain.repository.EntryValidator] отклоняет записи
  * с непустым `workoutId`.
  *
  * Индексы:

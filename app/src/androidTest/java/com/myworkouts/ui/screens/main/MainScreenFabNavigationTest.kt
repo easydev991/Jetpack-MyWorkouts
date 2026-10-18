@@ -13,13 +13,14 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.crash.NoopCrashReporter
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.navigation.Screen
 import com.myworkouts.navigation.Screen.EntryCreate
 import com.myworkouts.ui.viewmodel.MainViewModel
@@ -35,7 +36,7 @@ import org.junit.runner.RunWith
  * `entry_create` (NavHost-обёртка по образцу `MoreScreenTest`).
  *
  * `MainScreen` теперь принимает [MainViewModel] — конструкция через
- * `MainViewModel.factory(repository, NoopAnalyticsProvider())` с in-memory репозиторием
+ * `MainViewModel.factory(repository, NoopAnalyticsProvider(), NoopCrashReporter())` с in-memory репозиторием
  * (workout-entries-list, задача 5.5).
  */
 @RunWith(AndroidJUnit4::class)
@@ -151,7 +152,7 @@ class MainScreenFabNavigationTest {
                 MainScreen(
                     viewModel =
                         viewModel(
-                            factory = MainViewModel.factory(repository, NoopAnalyticsProvider())
+                            factory = MainViewModel.factory(repository, NoopAnalyticsProvider(), NoopCrashReporter())
                         ),
                     onAddEntryClick = { navController.navigate(EntryCreate.createRoute()) },
                     analyticsProvider = NoopAnalyticsProvider()

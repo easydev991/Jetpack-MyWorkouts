@@ -456,7 +456,7 @@ class ArchivedExercisesScreenTest {
     }
 
     /**
-     * Fake [com.myworkouts.data.repository.WorkoutDataRepository] для
+     * Fake [com.myworkouts.domain.repository.WorkoutDataRepository] для
      * VM-driven тестов (§7.3 упражнения + custom-categories задачи 7.4
      * категории): `archived` / `archivedCategories` управляются через
      * `MutableStateFlow` (тест обновляет как реактивный SQL-Flow);
@@ -466,7 +466,7 @@ class ArchivedExercisesScreenTest {
     private class FakeArchivedRepository(
         initialArchived: List<Exercise> = emptyList(),
         initialArchivedCategories: List<Category> = emptyList()
-    ) : com.myworkouts.data.repository.WorkoutDataRepository {
+    ) : com.myworkouts.domain.repository.WorkoutDataRepository {
         val archived: MutableStateFlow<List<Exercise>> = MutableStateFlow(initialArchived)
 
         val archivedCategories: MutableStateFlow<List<Category>> =

@@ -15,7 +15,7 @@
 корутин и без зависимостей.
 
 ```kotlin
-package com.myworkouts.data.repository
+package com.myworkouts.domain.repository
 
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -301,7 +301,7 @@ fun invoke_when_repository_fails_then_failure_and_no_stream() =
 ```kotlin
 package com.myworkouts.ui.viewmodel
 
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
@@ -440,7 +440,7 @@ package com.myworkouts.ui.viewmodel
 
 import android.net.Uri
 import android.util.Log
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
@@ -567,7 +567,7 @@ class AppDataViewModelTest {
 - `app/src/test/java/com/myworkouts/ui/viewmodel/ExercisesViewModelTest.kt` — Fake с настраиваемыми `deleteExerciseResult`/`linkedEntries`, маппинг `DeleteExerciseError`.
 - `app/src/test/java/com/myworkouts/ui/viewmodel/AppDataViewModelTest.kt` — Fake + замоканные use-case'ы, `mockkStatic(Log::class)`, маппинг `BackupError` → `AppDataResult`.
 - `app/src/test/java/com/myworkouts/data/db/MappersTest.kt` — `toDomain`/`toEntity`, round-trip enum ↔ string.
-- `app/src/test/java/com/myworkouts/data/repository/EntryValidatorTest.kt` — `@ParameterizedTest` + `@ValueSource(ints/doubles)` для граничных значений.
+- `app/src/test/java/com/myworkouts/domain/repository/EntryValidatorTest.kt` — `@ParameterizedTest` + `@ValueSource(ints/doubles)` для граничных значений.
 - `app/src/test/java/com/myworkouts/domain/model/ExerciseCategoryTest.kt` — `@ParameterizedTest` + `@EnumSource` для enum-контракта.
 - `app/src/test/java/com/myworkouts/domain/usecase/ExportBackupUseCaseTest.kt` — `mockk<Context>` + `coEvery`/`every` для suspend-Flow-методов, верификация `openOutputStream` НЕ вызван при ошибке.
 - `app/src/test/java/com/myworkouts/domain/usecase/ImportBackupUseCaseTest.kt` — `ByteArrayInputStream` для подачи JSON-строки, `slot` для захвата аргументов `importData`, `@ParameterizedTest` + `@MethodSource` для негативных кейсов.

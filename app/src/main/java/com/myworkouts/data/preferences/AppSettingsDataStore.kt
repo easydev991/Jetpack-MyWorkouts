@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.myworkouts.domain.model.AppTheme
+import com.myworkouts.domain.model.BackupSettings
 import com.myworkouts.domain.model.EntryField
 import com.myworkouts.domain.model.OverviewTab
 import kotlinx.coroutines.flow.Flow
@@ -277,6 +278,24 @@ class AppSettingsDataStore(
                     ?.let { name -> OverviewTab.entries.firstOrNull { it.name == name } }
                     ?: OverviewTab.STATS
             }
+
+    /**
+     * Применяет блок настроек вкладок из резервной копии после успешного
+     * восстановления (app-data-screen, design D8); `null` (бэкап v1) —
+     * состояние не меняется. Один `edit` — одна перезапись файла и одно
+     * emission (образец [setAllOverviewTabsVisible]). Переехало из
+     * [com.myworkouts.domain.usecase.ImportBackupUseCase]:
+     * data-метод над своими ключами.
+     */
+    suspend fun applyBackupSettings(settings: BackupSettings?) {
+        settings ?: return
+        dataStore.edit { preferences ->
+            settings.tabVisibility.forEach { (tab, visible) ->
+                preferences[overviewTabKey(tab)] = visible
+            }
+            preferences[LAST_OVERVIEW_TAB_KEY] = settings.lastOverviewTab.name
+        }
+    }
 
     companion object {
         /**

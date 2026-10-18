@@ -6,6 +6,8 @@ import com.myworkouts.data.db.CategoryEntity
 import com.myworkouts.data.db.ExerciseDao
 import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.domain.model.Category
+import com.myworkouts.domain.repository.CategoryInUseDeletionException
+import com.myworkouts.domain.repository.StandardCategoryDeletionException
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every

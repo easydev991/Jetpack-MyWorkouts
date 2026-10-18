@@ -181,7 +181,7 @@ class CategoryCreateScreenTest {
 
     /**
      * Сохранение в edit-режиме обновляет в БД имя И цвет — одна операция
-     * [com.myworkouts.data.repository.WorkoutDataRepository.updateCategory].
+     * [com.myworkouts.domain.repository.WorkoutDataRepository.updateCategory].
      */
     @Test
     fun screen_when_save_in_edit_mode_then_updates_name_and_color_in_database() {

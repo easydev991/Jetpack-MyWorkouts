@@ -102,6 +102,11 @@ detekt-предупреждения исправляются до заверше
   провайдер выбирается в `MainActivity` по `BuildConfig.DEBUG`
   (Noop в debug, Firebase в release), пакеты `analytics/` и `crash/`
   живут рядом с `data/` и `domain/` и не считаются фича-сетью.
+- **Чистота домена**: `domain/` не импортирует `android.*`/`androidx.*`/
+  `data`/`crash`/`analytics`/`ui`/`navigation`/`di`/`R`/`BuildConfig` —
+  ловит guard-тест `DomainPurityTest`; при регрессии падение — карта
+  работ.
+  `java.*` разрешён до миграции на `kotlinx-datetime`.
 
 ---
 
@@ -155,19 +160,26 @@ detekt-предупреждения исправляются до заверше
   с relaxed) запрещены — не ловят синтаксические ошибки, только
   интеграционный тест через `MigrationTestHelper`
 - `data/preferences/AppSettingsDataStore.kt`
-- `data/repository/` — `WorkoutDataRepository`, `RoomWorkoutDataRepository`,
-  `EntryValidator`, `OperationalExceptions`
-- `domain/model/` — domain-модели (упражнения, записи, настройки, периоды,
+- `data/repository/` — `RoomWorkoutDataRepository` (реализация порта)
+- `domain/repository/` — порт `WorkoutDataRepository`, `EntryValidator`
+  (+`EntryValidationException`/`EntryValidationError`),
+  `OperationalExceptions`
+- `domain/model/` — domain-модели (упражнения, записи, настройки,
   `BackupEntry` и т.д.). Полный список — в каталоге.
-- `domain/usecase/` — use-cases: бэкап в JSON, статистика (streaks, heatmap,
-  records, category stats), вычисление периодов. Полный список — в каталоге.
+- `domain/usecase/` — use-cases: бэкап в JSON (`BackupFileDto.kt` — DTO
+  kotlinx-serialization + чистые сборка/парсинг файла), статистика
+  (streaks, heatmap, records, category stats), вычисление периодов
+  (включая enum'ы `StatsPeriod`/`ActivityPeriod`). Полный список — в
+  каталоге.
+- `domain/crash/` — порт `CrashReporter` (`logException`)
 - `analytics/` — событийная модель и провайдеры: sealed interface
   `AnalyticsEvent` (`ScreenView`/`UserAction`/`AppError`), enum'ы
   `AppScreen`/`UserActionType`/`AppErrorOperation`, интерфейс
   `AnalyticsProvider` и реализации `FirebaseAnalyticsProvider`
   (релизный маппинг в `Bundle`) и `NoopAnalyticsProvider` (debug)
-- `crash/` — `CrashlyticsHelper` (object, `logException` в `try/catch`,
-  `setCustomKey` для контекста; используется из use-cases и VM)
+- `crash/` — реализации порта `CrashReporter`:
+  `FirebaseCrashReporter` (тело бывшего `CrashlyticsHelper`, релиз) и
+  `NoopCrashReporter` (debug); выбор провайдера — в `MainActivity`
 - `navigation/Screen.kt` — маршруты + `BottomTab`/`BottomTabs` (в одном
   файле, «только route» уже не про него)
 - `ui/screens/{main,entry,more,root,appearance,appdata,exercises,overview}/`
@@ -176,7 +188,10 @@ detekt-предупреждения исправляются до заверше
   `main/EntryListItemRow`, `exercises/ExerciseListItemRow`
 - `ui/state/` — UiState-класс, по одному на экран
 - `ui/theme/{Color,Theme,Type}.kt` ← `Type`, не `Typography`
-- `ui/util/` — `DurationFormatter.kt` (main + entry), `SectionDateFormatter.kt`
+- `ui/util/` — `DurationFormatter.kt` (main + entry),
+  `SectionDateFormatter.kt`, `StandardCategoryLabels.kt` и
+  `DomainEnumLabels.kt` (мапперы доменных сущностей в строковые
+  ресурсы)
 - `ui/viewmodel/` — ViewModel, по одной на экран
 
 `di/` и `util/` намеренно не создаются — manual DI без Hilt; `MainActivity`

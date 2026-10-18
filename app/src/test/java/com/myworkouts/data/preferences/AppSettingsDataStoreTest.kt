@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.myworkouts.domain.model.BackupSettings
 import com.myworkouts.domain.model.EntryField
 import com.myworkouts.domain.model.OverviewTab
 import kotlinx.coroutines.flow.first
@@ -372,5 +373,56 @@ class AppSettingsDataStoreTest {
 
             // Then — fallback на STATS, паттерн theme (design D8)
             assertEquals(OverviewTab.STATS, tab, "Мусорное значение — вкладка «Статистика»")
+        }
+
+    // ---------- applyBackupSettings (design D8) ----------
+
+    @Test
+    fun applyBackupSettings_applies_visibility_and_last_tab() =
+        runTest {
+            // Given — хранилище с дефолтным состоянием
+            val dataStore = newDataStore()
+            val settings =
+                BackupSettings(
+                    tabVisibility = mapOf(OverviewTab.RECORDS to false, OverviewTab.ACTIVITY to true),
+                    lastOverviewTab = OverviewTab.ACTIVITY
+                )
+
+            // When
+            dataStore.applyBackupSettings(settings)
+
+            // Then — видимость и последняя вкладка из снапшота
+            assertEquals(
+                mapOf(OverviewTab.RECORDS to false, OverviewTab.ACTIVITY to true) +
+                    OverviewTab.entries
+                        .filter { it != OverviewTab.RECORDS && it != OverviewTab.ACTIVITY }
+                        .associateWith { true },
+                dataStore.overviewTabVisibility.first(),
+                "Видимость вкладок применена из снапшота"
+            )
+            assertEquals(OverviewTab.ACTIVITY, dataStore.lastOverviewTab.first(), "Последняя вкладка из снапшота")
+        }
+
+    @Test
+    fun applyBackupSettings_null_does_not_touch_state() =
+        runTest {
+            // Given — заданное состояние (бэкап v1 не содержит настроек)
+            val dataStore = newDataStore()
+            dataStore.setOverviewTabVisible(OverviewTab.RECORDS, false)
+            dataStore.setLastOverviewTab(OverviewTab.RECORDS)
+
+            // When
+            dataStore.applyBackupSettings(null)
+
+            // Then — состояние не изменилось
+            assertEquals(
+                OverviewTab.RECORDS,
+                dataStore.lastOverviewTab.first(),
+                "Бэкап v1 не меняет последнюю вкладку"
+            )
+            assertFalse(
+                dataStore.overviewTabVisibility.first()[OverviewTab.RECORDS] ?: true,
+                "Бэкап v1 не меняет видимость вкладок"
+            )
         }
 }

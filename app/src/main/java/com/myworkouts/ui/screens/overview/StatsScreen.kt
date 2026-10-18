@@ -72,6 +72,7 @@ import com.myworkouts.ui.state.StatsUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.util.categoryLabel
 import com.myworkouts.ui.util.formatDurationResource
+import com.myworkouts.ui.util.labelResId
 import com.myworkouts.ui.util.sectionDateLabelResource
 import java.time.LocalDate
 
@@ -484,7 +485,7 @@ private fun StatsPeriodPicker(
                         count = visiblePeriods.size
                     )
             ) {
-                Text(text = stringResource(id = period.labelResId))
+                Text(text = stringResource(id = period.labelResId()))
             }
         }
     }

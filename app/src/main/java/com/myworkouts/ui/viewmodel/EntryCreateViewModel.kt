@@ -9,11 +9,11 @@ import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.EntryField
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.screens.entry.entryDateMillis
 import com.myworkouts.ui.state.EntryCreateUiState

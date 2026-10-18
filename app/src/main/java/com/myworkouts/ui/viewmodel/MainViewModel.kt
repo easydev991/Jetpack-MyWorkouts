@@ -8,9 +8,9 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.UserActionType
-import com.myworkouts.crash.CrashlyticsHelper
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.crash.CrashReporter
 import com.myworkouts.domain.model.EntryListItem
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.ui.state.MainUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -39,10 +39,12 @@ import kotlinx.coroutines.launch
  *
  * @property repository Репозиторий данных тренировок
  * @property analyticsProvider Провайдер аналитики
+ * @property crashReporter репортер сбоев: failure-ветки удаления записи
  */
 class MainViewModel(
     private val repository: WorkoutDataRepository,
-    private val analyticsProvider: AnalyticsProvider
+    private val analyticsProvider: AnalyticsProvider,
+    private val crashReporter: CrashReporter
 ) : ViewModel() {
     /** Транзитное: id записи, для которой открыт алерт удаления. */
     private val pendingDeleteId = MutableStateFlow<Long?>(null)
@@ -94,7 +96,7 @@ class MainViewModel(
                 // поэтому сбой должен дойти до телеметрии — как в
                 // ExercisesViewModel.confirmDelete.
                 .onFailure { error ->
-                    CrashlyticsHelper.logException(error, "Удаление записи")
+                    crashReporter.logException(error, "Удаление записи")
                 }
         }
     }
@@ -111,14 +113,16 @@ class MainViewModel(
          *
          * @param repository Репозиторий данных тренировок
          * @param analyticsProvider Провайдер аналитики
+         * @param crashReporter репортер сбоев
          * @return Factory для создания ViewModel
          */
         fun factory(
             repository: WorkoutDataRepository,
-            analyticsProvider: AnalyticsProvider
+            analyticsProvider: AnalyticsProvider,
+            crashReporter: CrashReporter
         ): ViewModelProvider.Factory =
             viewModelFactory {
-                initializer { MainViewModel(repository, analyticsProvider) }
+                initializer { MainViewModel(repository, analyticsProvider, crashReporter) }
             }
     }
 }

@@ -23,13 +23,14 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.crash.NoopCrashReporter
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.flow.Flow
@@ -87,7 +88,12 @@ class MainScreenSectionsTest {
                         entry(id = 101L, name = "Приседания", date = today.minusDays(1), hour = 19) +
                         entry(id = 201L, name = "Планка", date = today.minusDays(5), hour = 8)
             )
-        viewModel = MainViewModel(repository = repository, analyticsProvider = NoopAnalyticsProvider())
+        viewModel =
+            MainViewModel(
+                repository = repository,
+                analyticsProvider = NoopAnalyticsProvider(),
+                crashReporter = NoopCrashReporter()
+            )
     }
 
     /** JVM-локаль утекает между тестами — восстанавливаем исходную. */
@@ -335,7 +341,12 @@ class MainScreenSectionsTest {
                         )
                     )
             )
-        viewModel = MainViewModel(repository = repository, analyticsProvider = NoopAnalyticsProvider())
+        viewModel =
+            MainViewModel(
+                repository = repository,
+                analyticsProvider = NoopAnalyticsProvider(),
+                crashReporter = NoopCrashReporter()
+            )
         setContentInLocale("ru")
         composeTestRule.waitForIdle()
 
@@ -383,7 +394,12 @@ class MainScreenSectionsTest {
                         )
                     )
             )
-        viewModel = MainViewModel(repository = repository, analyticsProvider = NoopAnalyticsProvider())
+        viewModel =
+            MainViewModel(
+                repository = repository,
+                analyticsProvider = NoopAnalyticsProvider(),
+                crashReporter = NoopCrashReporter()
+            )
         setContentInLocale(locale.language)
         composeTestRule.waitForIdle()
         composeTestRule

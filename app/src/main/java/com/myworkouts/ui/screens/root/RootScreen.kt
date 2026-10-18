@@ -26,7 +26,8 @@ import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.AppScreen
 import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.crash.CrashReporter
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.navigation.BottomTab
 import com.myworkouts.navigation.Screen
 import com.myworkouts.navigation.visibleTabs
@@ -52,6 +53,7 @@ import com.myworkouts.ui.viewmodel.ExercisesViewModel
  *
  * @param dataStore единый экземпляр [AppSettingsDataStore] для всего приложения
  * @param repository репозиторий данных тренировок (создан в `MyWorkoutsApplication`)
+ * @param crashReporter репортер сбоев (выбран в `MainActivity` по типу сборки)
  * @param modifier внешний модификатор для [Scaffold]
  */
 @Composable
@@ -59,6 +61,7 @@ fun RootScreen(
     dataStore: AppSettingsDataStore,
     repository: WorkoutDataRepository,
     analyticsProvider: AnalyticsProvider,
+    crashReporter: CrashReporter,
     modifier: Modifier = Modifier
 ) {
     val navController = rememberNavController()
@@ -126,6 +129,7 @@ fun RootScreen(
             showExercisesTab = showExercisesTab,
             repository = repository,
             analyticsProvider = analyticsProvider,
+            crashReporter = crashReporter,
             modifier = Modifier.padding(paddingValues)
         )
     }
@@ -148,6 +152,7 @@ private fun AppNavHost(
     showExercisesTab: Boolean,
     repository: WorkoutDataRepository,
     analyticsProvider: AnalyticsProvider,
+    crashReporter: CrashReporter,
     modifier: Modifier = Modifier
 ) {
     NavHost(
@@ -156,10 +161,10 @@ private fun AppNavHost(
         modifier = modifier
     ) {
         composable(Screen.Main.route) {
-            MainNavDestination(repository, analyticsProvider, navController)
+            MainNavDestination(repository, analyticsProvider, crashReporter, navController)
         }
         composable(Screen.Exercises.route) {
-            ExercisesNavDestination(repository, dataStore, analyticsProvider, navController)
+            ExercisesNavDestination(repository, dataStore, analyticsProvider, crashReporter, navController)
         }
         composable(Screen.More.route) {
             MoreNavDestination(dataStore, showExercisesTab, analyticsProvider, navController)
@@ -168,7 +173,7 @@ private fun AppNavHost(
             AppearanceNavDestination(dataStore, analyticsProvider, navController)
         }
         composable(Screen.AppData.route) {
-            AppDataNavDestination(repository, dataStore, analyticsProvider, navController)
+            AppDataNavDestination(repository, dataStore, analyticsProvider, crashReporter, navController)
         }
         composable(Screen.Overview.route) {
             OverviewNavDestination(repository, dataStore, analyticsProvider, navController)
@@ -180,13 +185,7 @@ private fun AppNavHost(
             EntrySettingsNavDestination(navController, dataStore, analyticsProvider)
         }
         composable(Screen.EntryCreate.route, arguments = Screen.EntryCreate.arguments) { backStackEntry ->
-            EntryCreateNavDestination(
-                backStackEntry = backStackEntry,
-                repository = repository,
-                dataStore = dataStore,
-                analyticsProvider = analyticsProvider,
-                navController = navController
-            )
+            EntryCreateNavDestination(backStackEntry, repository, dataStore, analyticsProvider, navController)
         }
         composable(Screen.ExerciseCreate.route, arguments = Screen.ExerciseCreate.arguments) { backStackEntry ->
             ExerciseCreateNavDestination(
@@ -197,11 +196,7 @@ private fun AppNavHost(
             )
         }
         composable(Screen.ArchivedExercises.route) {
-            ArchivedExercisesNavDestination(
-                repository = repository,
-                analyticsProvider = analyticsProvider,
-                navController = navController
-            )
+            ArchivedExercisesNavDestination(repository, analyticsProvider, navController)
         }
         composable(Screen.CategoryCreate.route, arguments = Screen.CategoryCreate.arguments) { backStackEntry ->
             CategoryCreateNavDestination(
@@ -356,12 +351,14 @@ private fun ExercisesNavDestination(
     repository: WorkoutDataRepository,
     dataStore: AppSettingsDataStore,
     analyticsProvider: AnalyticsProvider,
+    crashReporter: CrashReporter,
     navController: NavHostController
 ) {
     ExercisesScreen(
         viewModel =
             viewModel(
-                factory = ExercisesViewModel.factory(repository, dataStore, analyticsProvider)
+                factory =
+                    ExercisesViewModel.factory(repository, dataStore, analyticsProvider, crashReporter)
             ),
         onAddExerciseClick = { navController.navigate(Screen.ExerciseCreate.createRoute()) },
         onAddCategoryClick = { navController.navigate(Screen.CategoryCreate.createRoute()) },

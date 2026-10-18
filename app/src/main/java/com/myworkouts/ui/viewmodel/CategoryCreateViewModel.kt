@@ -8,9 +8,9 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.UserActionType
-import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.data.repository.generateCategoryColor
 import com.myworkouts.domain.model.Category
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.state.CategoryCreateUiState
 import kotlinx.coroutines.flow.MutableStateFlow

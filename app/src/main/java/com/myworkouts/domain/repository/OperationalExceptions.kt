@@ -1,4 +1,4 @@
-package com.myworkouts.data.repository
+package com.myworkouts.domain.repository
 
 // ponytail: файловый комментарий — `//`, а не KDoc, чтобы избежать
 // `no-consecutive-comments` (ktlint: KDoc не может идти под KDoc).
@@ -22,7 +22,7 @@ class StandardExerciseDeletionException : IllegalStateException("Стандар�
 
 /**
  * Удаление отклонено: на упражнение ссылаются записи (FK). Pre-check
- * через [com.myworkouts.data.db.ExerciseEntryDao.countByExerciseId]
+ * через `ExerciseEntryDao.countByExerciseId`
  * ПЕРЕД `exerciseDao.delete(...)` ловит race до попытки писать в БД
  * (design Decision 8).
  */
@@ -40,7 +40,7 @@ class StandardCategoryDeletionException : IllegalStateException("Стандар�
 /**
  * Удаление категории отклонено: на неё ссылаются упражнения — активные
  * или архивные (custom-categories, design Decision 4). Pre-check через
- * [com.myworkouts.data.db.ExerciseDao.countByCategoryName] внутри
+ * `ExerciseDao.countByCategoryName` внутри
  * транзакции; в rename не возникает — ссылки упражнений обновляются
  * той же транзакцией.
  */

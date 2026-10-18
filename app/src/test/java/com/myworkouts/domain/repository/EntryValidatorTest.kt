@@ -1,4 +1,4 @@
-package com.myworkouts.data.repository
+package com.myworkouts.domain.repository
 
 import com.myworkouts.data.db.standardCategories
 import com.myworkouts.domain.model.ExerciseEntry

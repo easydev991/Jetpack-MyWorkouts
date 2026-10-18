@@ -17,6 +17,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.SubscriptionTimeoutRule
 import com.myworkouts.analytics.NoopAnalyticsProvider
+import com.myworkouts.crash.NoopCrashReporter
 import com.myworkouts.data.db.StandardExercise
 import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.data.preferences.AppSettingsDataStore
@@ -128,7 +129,8 @@ class ExercisesLiveUpdateTest {
                                         ExercisesViewModel.factory(
                                             repository,
                                             AppSettingsDataStore.create(context),
-                                            NoopAnalyticsProvider()
+                                            NoopAnalyticsProvider(),
+                                            NoopCrashReporter()
                                         )
                                 ),
                             onAddExerciseClick = { navController.navigate("stub") },
@@ -192,7 +194,8 @@ class ExercisesLiveUpdateTest {
                                         ExercisesViewModel.factory(
                                             repository,
                                             AppSettingsDataStore.create(context),
-                                            NoopAnalyticsProvider()
+                                            NoopAnalyticsProvider(),
+                                            NoopCrashReporter()
                                         )
                                 ),
                             onAddExerciseClick = { navController.navigate("stub") },
@@ -263,7 +266,8 @@ class ExercisesLiveUpdateTest {
                                         ExercisesViewModel.factory(
                                             repository,
                                             AppSettingsDataStore.create(context),
-                                            NoopAnalyticsProvider()
+                                            NoopAnalyticsProvider(),
+                                            NoopCrashReporter()
                                         )
                                 ),
                             onAddExerciseClick = {},

@@ -1,24 +1,20 @@
 package com.myworkouts.domain.usecase
 
-import android.content.ContentResolver
-import android.content.Context
-import android.net.Uri
+import com.myworkouts.crash.NoopCrashReporter
 import com.myworkouts.data.db.standardCategories
-import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.WorkoutDataRepository
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.domain.model.OverviewTab
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
-import org.json.JSONObject
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
@@ -30,16 +26,15 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.io.ByteArrayInputStream
-import java.util.concurrent.CancellationException
+import java.io.InputStream
 
 /**
  * Unit-тесты восстановления из резервной копии (app-data-screen, design
  * Decisions 4–5): merge-алгоритм и ошибки файла проверяются на уровне
- * `invoke` через mockk — Uri и contentResolver замоканы, файл подаётся
- * потоком из строки (Decision 8).
+ * `invoke` — файл подаётся потоком из строки
+ * (ByteArrayInputStream).
  */
 class ImportBackupUseCaseTest {
-    private val uri = mockk<Uri>()
     private val pullUps =
         Exercise(
             id = 1L,
@@ -141,19 +136,11 @@ class ImportBackupUseCaseTest {
             coEvery { repo.importData(any(), any(), any()) } returns Result.success(Unit)
         }
 
-    private fun useCase(
-        repository: WorkoutDataRepository,
-        fileContent: String,
-        dataStore: AppSettingsDataStore = mockk(relaxed = true)
-    ): ImportBackupUseCase {
-        val contentResolver = mockk<ContentResolver>()
-        every { contentResolver.openInputStream(any()) } answers {
-            ByteArrayInputStream(fileContent.toByteArray())
-        }
-        val context = mockk<Context>(relaxed = true)
-        every { context.contentResolver } returns contentResolver
-        return ImportBackupUseCase(repository, dataStore, context)
-    }
+    private fun useCase(repository: WorkoutDataRepository): ImportBackupUseCase =
+        ImportBackupUseCase(repository, NoopCrashReporter())
+
+    /** Открывает файл-строку потоком — opener-фабрика для `invoke`. */
+    private fun streamOf(fileContent: String): InputStream = ByteArrayInputStream(fileContent.toByteArray())
 
     @Test
     fun import_when_new_exercise_then_inserted_with_isCustom_true_and_zero_id() =
@@ -161,10 +148,11 @@ class ImportBackupUseCaseTest {
             // Given: пустой каталог, файл с одним упражнением (isCustom = false
             // в файле — недоверенное значение) и записью на него
             val repository = repository()
-            val useCase = useCase(repository, plankFile)
+            val useCase = useCase(repository)
+            val stream = streamOf(plankFile)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Новое упражнение и запись добавлены")
@@ -201,10 +189,11 @@ class ImportBackupUseCaseTest {
                   ]
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Упражнение не дублируется, запись добавляется")
@@ -241,10 +230,11 @@ class ImportBackupUseCaseTest {
                   ]
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(
@@ -277,10 +267,11 @@ class ImportBackupUseCaseTest {
                   ]
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Импорт не падает, вставлена одна запись")
@@ -312,10 +303,11 @@ class ImportBackupUseCaseTest {
                   ]
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(
@@ -356,13 +348,14 @@ class ImportBackupUseCaseTest {
                     createdAt = 1_757_371_250_000L,
                     modifiedAt = 1_757_371_250_000L
                 )
-            val useCase = useCase(repository, plankFile)
+            val useCase = useCase(repository)
+            val stream = streamOf(plankFile)
 
             // When
-            val first = useCase(uri)
+            val first = useCase { stream }
             coEvery { repository.getAllExercises() } returns Result.success(listOf(insertedPlank))
             coEvery { repository.getAllEntries() } returns Result.success(listOf(insertedEntry))
-            val second = useCase(uri)
+            val second = useCase { streamOf(plankFile) }
 
             // Then — счётчиков у use-case нет, поэтому контракт «повторный
             // импорт ничего не вставляет» проверяем по аргументам вызовов
@@ -405,10 +398,11 @@ class ImportBackupUseCaseTest {
                   ]
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Неизвестное имя категории не отвергает файл")
@@ -451,10 +445,11 @@ class ImportBackupUseCaseTest {
                   ]
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then — вставленные: цвет и архив из файла, isCustom всегда true
             assertTrue(result.isSuccess, "Категории файла вставляются")
@@ -489,10 +484,11 @@ class ImportBackupUseCaseTest {
                   ]
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Дедуп не ломает импорт")
@@ -522,10 +518,11 @@ class ImportBackupUseCaseTest {
                   ]
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Импорт успешен")
@@ -557,10 +554,11 @@ class ImportBackupUseCaseTest {
                   ]
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Дедуп не ломает импорт")
@@ -590,10 +588,11 @@ class ImportBackupUseCaseTest {
                   ]
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Дедуп не ломает импорт")
@@ -620,10 +619,11 @@ class ImportBackupUseCaseTest {
                   ]
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Категория файла резолвит упражнение")
@@ -654,10 +654,11 @@ class ImportBackupUseCaseTest {
                   "entries": []
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Резолв по ключу без регистра и краёв")
@@ -678,10 +679,11 @@ class ImportBackupUseCaseTest {
             // по текущей БД (spec-сценарий «Старый файл без категорий
             // импортируется»)
             val repository = repository()
-            val useCase = useCase(repository, plankFile)
+            val useCase = useCase(repository)
+            val stream = streamOf(plankFile)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Файл без categories[] остаётся валидным")
@@ -712,10 +714,11 @@ class ImportBackupUseCaseTest {
                   ]
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val first = useCase(uri)
+            val first = useCase { stream }
             coEvery { repository.getAllCategories() } returns
                 Result.success(
                     listOf(
@@ -727,7 +730,7 @@ class ImportBackupUseCaseTest {
                         )
                     )
                 )
-            val second = useCase(uri)
+            val second = useCase { streamOf(file) }
 
             // Then
             assertTrue(first.isSuccess, "Первый импорт вставляет категорию")
@@ -764,10 +767,11 @@ class ImportBackupUseCaseTest {
                   "settings": {"overviewTabVisibility": {}, "lastOverviewTab": "STATS"}
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Версия 2 остаётся читаемой")
@@ -797,10 +801,11 @@ class ImportBackupUseCaseTest {
                   ]
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isFailure, "Неподдерживаемая версия — Result.failure")
@@ -824,10 +829,11 @@ class ImportBackupUseCaseTest {
                   "entries": []
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then — импорт успешен, иконка null
             assertTrue(result.isSuccess, "Старый файл без iconNumber остаётся валидным")
@@ -846,10 +852,11 @@ class ImportBackupUseCaseTest {
             // Given: в каталоге нет «Планки», файл содержит её с iconNumber = 5
             // (spec-сценарий «Номер иконки вставленного упражнения сохраняется»)
             val repository = repository()
-            val useCase = useCase(repository, plankWithIconFile)
+            val useCase = useCase(repository)
+            val stream = streamOf(plankWithIconFile)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Вставка проходит")
@@ -881,10 +888,11 @@ class ImportBackupUseCaseTest {
                     iconNumber = 2
                 )
             val repository = repository(exercises = listOf(existingPlank))
-            val useCase = useCase(repository, plankWithIconFile)
+            val useCase = useCase(repository)
+            val stream = streamOf(plankWithIconFile)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then — дубликат не вставляется, существующее не трогается
             assertTrue(result.isSuccess, "Дедупликация не ломает импорт")
@@ -924,10 +932,11 @@ class ImportBackupUseCaseTest {
                 }
                 """.trimIndent()
             val repository = repository()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then — вставленное упражнение попадает в архив и помечается isCustom
             assertTrue(result.isSuccess, "Импорт архивного упражнения проходит")
@@ -962,10 +971,11 @@ class ImportBackupUseCaseTest {
                   "entries": []
                 }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then — импорт успешен, isArchived по умолчанию = false
             assertTrue(result.isSuccess, "Старый файл без isArchived остаётся валидным")
@@ -1156,10 +1166,11 @@ class ImportBackupUseCaseTest {
                 }
                 """.trimIndent()
             val repository = repository(exercises = listOf(existingActivePlank))
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then — дубликат не вставляется, существующее уходит в архив
             assertTrue(result.isSuccess, "Дедупликация не ломает импорт")
@@ -1180,16 +1191,38 @@ class ImportBackupUseCaseTest {
             // Given — чтение файла прерывается отменой корутины
             // (спека «Отмена корутины не является ошибкой»)
             val repository = repository()
-            val contentResolver = mockk<ContentResolver>()
-            every { contentResolver.openInputStream(any()) } throws
-                CancellationException("Операция отменена")
-            val context = mockk<Context>(relaxed = true)
-            every { context.contentResolver } returns contentResolver
-            val useCase = ImportBackupUseCase(repository, mockk(relaxed = true), context)
+            // Анонимный поток вместо mockk: бросок CancellationException из
+            // read() на реальном IO-диспетчере + MockK-прокси роняет
+            // тест-воркер OOM (coroutine-debug probes)
+            val stream =
+                object : InputStream() {
+                    override fun read(): Int = throw CancellationException("Операция отменена")
+                }
+            val useCase = ImportBackupUseCase(repository, NoopCrashReporter())
 
             // When / Then — CancellationException прокидывается дальше,
             // не превращаясь в Result.failure
-            assertThrows<CancellationException> { useCase(uri) }
+            assertThrows<CancellationException> { useCase { stream } }
+        }
+
+    @Test
+    fun invoke_when_stream_open_returns_null_then_failure_invalid_file() =
+        runTest {
+            // Given — opener (SAF) не отдал поток чтения
+            val repository = repository()
+            val useCase = useCase(repository)
+
+            // When
+            val result = useCase { null }
+
+            // Then
+            val exception = result.exceptionOrNull()
+            assertTrue(result.isFailure, "Нет потока — Result.failure")
+            assertTrue(
+                exception is BackupException && exception.error == BackupError.INVALID_FILE,
+                "Недоступность потока — BackupException(INVALID_FILE)"
+            )
+            coVerify(exactly = 0) { repository.importData(any(), any(), any()) }
         }
 
     @ParameterizedTest(name = "[{index}] {0}")
@@ -1198,10 +1231,11 @@ class ImportBackupUseCaseTest {
         runTest {
             // Given: файл с ошибкой формата (design Decision 5)
             val repository = repository()
-            val useCase = useCase(repository, fileContent)
+            val useCase = useCase(repository)
+            val stream = streamOf(fileContent)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isFailure, "Ошибочный файл — Result.failure")
@@ -1232,13 +1266,59 @@ class ImportBackupUseCaseTest {
                 ]
                   }
                 """.trimIndent()
-            val useCase = useCase(repository, file)
+            val useCase = useCase(repository)
+            val stream = streamOf(file)
 
             // When
-            val result = useCase(uri)
+            val result = useCase { stream }
 
             // Then
             assertTrue(result.isSuccess, "Неизвестные поля не мешают импорту")
+        }
+
+    @Test
+    fun import_when_settings_present_then_result_contains_snapshot() =
+        runTest {
+            // Given — v2 с блоком settings (снапшот возвращается вызывающему,
+            // применение к DataStore — его работа)
+            val repository = repository()
+            val raw =
+                settingsFile(
+                    version = 2,
+                    settingsJson =
+                        """{"overviewTabVisibility": {"ACTIVITY": false}, """ +
+                            """"lastOverviewTab": "RECORDS"}"""
+                )
+            val useCase = useCase(repository)
+            val stream = streamOf(raw)
+
+            // When
+            val result = useCase { stream }
+
+            // Then
+            val settings = result.getOrThrow()
+            assertEquals(
+                mapOf(OverviewTab.ACTIVITY to false),
+                checkNotNull(settings) { "Блок settings распознан" }.tabVisibility,
+                "Видимость вкладок — в снапшоте результата"
+            )
+            assertEquals(OverviewTab.RECORDS, settings?.lastOverviewTab, "Последняя вкладка — в снапшоте")
+        }
+
+    @Test
+    fun import_when_v1_then_result_settings_null() =
+        runTest {
+            // Given — файл версии 1 без блока settings: DataStore не трогать
+            val repository = repository()
+            val useCase = useCase(repository)
+            val stream = streamOf(plankFile)
+
+            // When
+            val result = useCase { stream }
+
+            // Then
+            assertTrue(result.isSuccess, "Бэкап v1 валиден")
+            assertEquals(null, result.getOrThrow(), "Настроек в снапшоте нет")
         }
 
     companion object {
@@ -1247,6 +1327,9 @@ class ImportBackupUseCaseTest {
          *
          * `LongMethod` подавлен осознанно: это таблица данных design
          * Decision 5, а не логика — по одному JSON-кейсу на строку.
+         * Кейсы «version/sets строкой» удалены: декодер kotlinx-serialization
+         * принимает числовые значения в строковых литералах (расширение
+         * толерантности, KDoc parseBackupJson), файл больше не невалиден.
          */
         @Suppress("LongMethod")
         @JvmStatic
@@ -1260,12 +1343,6 @@ class ImportBackupUseCaseTest {
                     Named.of(
                         "version не 1 и не 2",
                         """{"version": 3, "exercises": [], "entries": []}"""
-                    )
-                ),
-                Arguments.of(
-                    Named.of(
-                        "version строкой",
-                        """{"version": "1", "exercises": [], "entries": []}"""
                     )
                 ),
                 Arguments.of(
@@ -1299,13 +1376,6 @@ class ImportBackupUseCaseTest {
                         "запись без exerciseName",
                         """{"version": 1, "exercises": [],
                        "entries": [{"date": 1, "sets": 1, "createdAt": 1}]}"""
-                    )
-                ),
-                Arguments.of(
-                    Named.of(
-                        "sets строкой",
-                        """{"version": 1, "exercises": [],
-                       "entries": [{"exerciseName": "X", "date": 1, "sets": "4", "createdAt": 1}]}"""
                     )
                 ),
                 Arguments.of(
@@ -1349,7 +1419,7 @@ class ImportBackupUseCaseTest {
         """.trimIndent()
 
     @Test
-    fun parseBackupSettings_when_settings_present_then_parsed() {
+    fun parseBackupJson_settings_settings_present_then_parsed() {
         // Given — v2 со скрытой RECORDS и последней вкладкой ACTIVITY
         val raw =
             settingsFile(
@@ -1361,7 +1431,7 @@ class ImportBackupUseCaseTest {
 
         // When
         val settings =
-            checkNotNull(parseBackupSettings(JSONObject(raw))) { "Блок settings распознан" }
+            checkNotNull(parseBackupJson(raw).settings) { "Блок settings распознан" }
 
         // Then
         assertEquals(mapOf(OverviewTab.RECORDS to false), settings.tabVisibility, "Скрытая вкладка")
@@ -1369,18 +1439,18 @@ class ImportBackupUseCaseTest {
     }
 
     @Test
-    fun parseBackupSettings_when_block_absent_then_null() {
+    fun parseBackupJson_settings_block_absent_then_null() {
         // Given — v1 без блока settings
 
         // When
-        val settings = parseBackupSettings(JSONObject(plankFile))
+        val settings = parseBackupJson(plankFile).settings
 
         // Then — обратная совместимость: settings нет
         assertEquals(null, settings, "Файл версии 1 не содержит настроек")
     }
 
     @Test
-    fun parseBackupSettings_when_garbage_last_tab_then_fallback_stats() {
+    fun parseBackupJson_settings_garbage_last_tab_then_fallback_stats() {
         // Given — мусорное имя вкладки
         val raw =
             settingsFile(
@@ -1390,14 +1460,14 @@ class ImportBackupUseCaseTest {
 
         // When
         val settings =
-            checkNotNull(parseBackupSettings(JSONObject(raw))) { "Блок settings распознан" }
+            checkNotNull(parseBackupJson(raw).settings) { "Блок settings распознан" }
 
         // Then — fallback на STATS, паттерн DataStore-Flow
         assertEquals(OverviewTab.STATS, settings.lastOverviewTab)
     }
 
     @Test
-    fun parseBackupSettings_when_unknown_tab_then_ignored() {
+    fun parseBackupJson_settings_unknown_tab_then_ignored() {
         // Given — неизвестное имя вкладки в карте видимости
         val raw =
             settingsFile(
@@ -1409,74 +1479,75 @@ class ImportBackupUseCaseTest {
 
         // When
         val settings =
-            checkNotNull(parseBackupSettings(JSONObject(raw))) { "Блок settings распознан" }
+            checkNotNull(parseBackupJson(raw).settings) { "Блок settings распознан" }
 
         // Then — неизвестные имена игнорируются, известные читаются
         assertEquals(mapOf(OverviewTab.RECORDS to true), settings.tabVisibility)
     }
 
     @Test
-    fun invoke_when_settings_present_then_applied_to_datastore() =
-        runTest {
-            // Given — v2 со скрытой ACTIVITY и последней вкладкой RECORDS
-            val repository = repository()
-            val dataStore = mockk<AppSettingsDataStore>(relaxed = true)
-            val raw =
-                settingsFile(
-                    version = 2,
-                    settingsJson =
-                        """{"overviewTabVisibility": {"ACTIVITY": false}, """ +
-                            """"lastOverviewTab": "RECORDS"}"""
-                )
-            val useCase = useCase(repository, raw, dataStore)
+    fun parseBackupJson_settings_block_not_object_then_null() {
+        // Given — settings не объект (строка): прежний парсер молча
+        // игнорировал блок, файл восстанавливался без настроек
+        val raw = settingsFile(version = 2, settingsJson = """"oops"""")
+        val parsed = parseBackupJson(raw)
 
-            // When
-            val result = useCase(uri)
-
-            // Then — настройки применены после восстановления записей
-            assertTrue(result.isSuccess, "Импорт успешен")
-            coVerify(exactly = 1) { dataStore.setOverviewTabVisible(OverviewTab.ACTIVITY, false) }
-            coVerify(exactly = 1) { dataStore.setLastOverviewTab(OverviewTab.RECORDS) }
-        }
+        // Then — файл не отвергается, настроек в снапшоте нет
+        assertTrue(parsed.exercises.isEmpty(), "Файл валиден, данные читаются")
+        assertEquals(null, parsed.settings, "Неверный тип блока settings игнорируется")
+    }
 
     @Test
-    fun invoke_when_version1_then_datastore_not_changed() =
-        runTest {
-            // Given — файл версии 1 без блока settings
-            val repository = repository()
-            val dataStore = mockk<AppSettingsDataStore>(relaxed = true)
-            val useCase = useCase(repository, plankFile, dataStore)
+    fun parseBackupJson_settings_visibility_not_object_then_empty_map() {
+        // Given — карта видимости не объект
+        val raw =
+            settingsFile(
+                version = 2,
+                settingsJson = """{"overviewTabVisibility": "oops", "lastOverviewTab": "STATS"}"""
+            )
 
-            // When
-            val result = useCase(uri)
+        // When
+        val settings =
+            checkNotNull(parseBackupJson(raw).settings) { "Блок settings распознан" }
 
-            // Then — импорт успешен, DataStore настроек не касается
-            assertTrue(result.isSuccess, "Бэкап v1 валиден")
-            coVerify(exactly = 0) { dataStore.setOverviewTabVisible(any(), any()) }
-            coVerify(exactly = 0) { dataStore.setLastOverviewTab(any()) }
-        }
+        // Then — карта игнорируется, файл не отвергается
+        assertEquals(emptyMap<OverviewTab, Boolean>(), settings.tabVisibility)
+        assertEquals(OverviewTab.STATS, settings.lastOverviewTab)
+    }
 
     @Test
-    fun invoke_when_import_fails_then_settings_not_applied() =
-        runTest {
-            // Given — вставка в БД проваливается
-            val repository = repository()
-            coEvery { repository.importData(any(), any(), any()) } returns
-                Result.failure(RuntimeException("Сбой базы"))
-            val dataStore = mockk<AppSettingsDataStore>(relaxed = true)
-            val raw =
-                settingsFile(
-                    version = 2,
-                    settingsJson = """{"overviewTabVisibility": {"STATS": false}}"""
-                )
-            val useCase = useCase(repository, raw, dataStore)
+    fun parseBackupJson_settings_visibility_value_not_primitive_then_tab_dropped() {
+        // Given — значение карты видимости — объект вместо Boolean
+        val raw =
+            settingsFile(
+                version = 2,
+                settingsJson =
+                    """{"overviewTabVisibility": {"RECORDS": {"junk": 1}, "ACTIVITY": false}, """ +
+                        """"lastOverviewTab": "STATS"}"""
+            )
 
-            // When
-            val result = useCase(uri)
+        // When
+        val settings =
+            checkNotNull(parseBackupJson(raw).settings) { "Блок settings распознан" }
 
-            // Then — при сбое восстановления настройки не применяются
-            assertTrue(result.isFailure, "Ошибка БД — Result.failure")
-            coVerify(exactly = 0) { dataStore.setOverviewTabVisible(any(), any()) }
-            coVerify(exactly = 0) { dataStore.setLastOverviewTab(any()) }
-        }
+        // Then — некорректное значение отброшено, корректное читается
+        assertEquals(mapOf(OverviewTab.ACTIVITY to false), settings.tabVisibility)
+    }
+
+    @Test
+    fun parseBackupJson_settings_last_tab_not_primitive_then_fallback_stats() {
+        // Given — lastOverviewTab — объект вместо строки
+        val raw =
+            settingsFile(
+                version = 2,
+                settingsJson = """{"overviewTabVisibility": {}, "lastOverviewTab": {"junk": 1}}"""
+            )
+
+        // When
+        val settings =
+            checkNotNull(parseBackupJson(raw).settings) { "Блок settings распознан" }
+
+        // Then — fallback на STATS, файл не отвергается
+        assertEquals(OverviewTab.STATS, settings.lastOverviewTab)
+    }
 }

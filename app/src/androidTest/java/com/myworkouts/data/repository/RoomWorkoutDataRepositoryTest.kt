@@ -10,6 +10,12 @@ import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.domain.repository.EntryValidationError
+import com.myworkouts.domain.repository.EntryValidationException
+import com.myworkouts.domain.repository.LastActiveCategoryException
+import com.myworkouts.domain.repository.LastActiveExerciseException
+import com.myworkouts.domain.repository.LinkedEntriesDeletionException
+import com.myworkouts.domain.repository.StandardExerciseDeletionException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first

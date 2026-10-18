@@ -39,6 +39,7 @@ import com.myworkouts.ui.state.ActivityUiState
 import com.myworkouts.ui.state.OverviewUiState
 import com.myworkouts.ui.state.RecordsUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
+import com.myworkouts.ui.util.labelResId
 import com.myworkouts.ui.viewmodel.OverviewViewModel
 
 /**
@@ -195,7 +196,7 @@ private fun OverviewTopBar(
                 Text(text = stringResource(R.string.overview_title))
                 if (visibleTabs.size == 1) {
                     Text(
-                        text = stringResource(visibleTabs.first().labelResId),
+                        text = stringResource(visibleTabs.first().labelResId()),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -231,7 +232,7 @@ private fun OverviewTabs(
             Tab(
                 selected = tab == state.selectedTab,
                 onClick = { onTabSelect(tab) },
-                text = { Text(text = stringResource(id = tab.labelResId)) }
+                text = { Text(text = stringResource(id = tab.labelResId())) }
             )
         }
     }

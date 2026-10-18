@@ -61,6 +61,7 @@ import com.myworkouts.ui.theme.HeatmapLevel4
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.theme.StreakOrangeEnd
 import com.myworkouts.ui.theme.StreakOrangeStart
+import com.myworkouts.ui.util.labelResId
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -148,7 +149,7 @@ internal fun ActivityScreen(
                         onClick = { onPeriodChange(period) },
                         shape = SegmentedButtonDefaults.itemShape(index = index, count = state.visiblePeriods.size)
                     ) {
-                        Text(text = stringResource(id = period.labelResId))
+                        Text(text = stringResource(id = period.labelResId()))
                     }
                 }
             }

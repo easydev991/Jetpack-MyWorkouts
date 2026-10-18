@@ -20,6 +20,14 @@ import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
+import com.myworkouts.domain.repository.CategoryInUseDeletionException
+import com.myworkouts.domain.repository.EntryValidator
+import com.myworkouts.domain.repository.LastActiveCategoryException
+import com.myworkouts.domain.repository.LastActiveExerciseException
+import com.myworkouts.domain.repository.LinkedEntriesDeletionException
+import com.myworkouts.domain.repository.StandardCategoryDeletionException
+import com.myworkouts.domain.repository.StandardExerciseDeletionException
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map

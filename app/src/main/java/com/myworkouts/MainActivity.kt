@@ -13,6 +13,9 @@ import androidx.compose.runtime.getValue
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.FirebaseAnalyticsProvider
 import com.myworkouts.analytics.NoopAnalyticsProvider
+import com.myworkouts.crash.FirebaseCrashReporter
+import com.myworkouts.crash.NoopCrashReporter
+import com.myworkouts.domain.crash.CrashReporter
 import com.myworkouts.domain.model.AppTheme
 import com.myworkouts.domain.model.isDark
 import com.myworkouts.ui.screens.root.RootScreen
@@ -55,6 +58,14 @@ class MainActivity : ComponentActivity() {
                 FirebaseAnalyticsProvider(applicationContext)
             }
 
+        // Репортер сбоев по типу сборки: тот же паттерн выбора, что у аналитики.
+        val crashReporter: CrashReporter =
+            if (BuildConfig.DEBUG) {
+                NoopCrashReporter()
+            } else {
+                FirebaseCrashReporter()
+            }
+
         setContent {
             val theme by dataStore.theme.collectAsState(initial = AppTheme.SYSTEM)
             val useDynamicColors by dataStore.useDynamicColors.collectAsState(initial = true)
@@ -81,7 +92,8 @@ class MainActivity : ComponentActivity() {
                 RootScreen(
                     dataStore = dataStore,
                     repository = repository,
-                    analyticsProvider = analyticsProvider
+                    analyticsProvider = analyticsProvider,
+                    crashReporter = crashReporter
                 )
             }
         }

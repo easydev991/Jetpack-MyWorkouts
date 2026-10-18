@@ -10,19 +10,19 @@ import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.AppErrorOperation
 import com.myworkouts.analytics.UserActionType
-import com.myworkouts.crash.CrashlyticsHelper
 import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.CategoryInUseDeletionException
-import com.myworkouts.data.repository.LastActiveCategoryException
-import com.myworkouts.data.repository.LastActiveExerciseException
-import com.myworkouts.data.repository.LinkedEntriesDeletionException
-import com.myworkouts.data.repository.StandardCategoryDeletionException
-import com.myworkouts.data.repository.StandardExerciseDeletionException
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.crash.CrashReporter
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.DeleteCategoryError
 import com.myworkouts.domain.model.DeleteExerciseError
 import com.myworkouts.domain.model.Exercise
+import com.myworkouts.domain.repository.CategoryInUseDeletionException
+import com.myworkouts.domain.repository.LastActiveCategoryException
+import com.myworkouts.domain.repository.LastActiveExerciseException
+import com.myworkouts.domain.repository.LinkedEntriesDeletionException
+import com.myworkouts.domain.repository.StandardCategoryDeletionException
+import com.myworkouts.domain.repository.StandardExerciseDeletionException
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.ui.state.ExercisesTab
 import com.myworkouts.ui.state.ExercisesUiState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,11 +60,13 @@ private const val LOG_TAG: String = "ExercisesViewModel"
  *   диалога подтверждения архивации; archive-alert-hide, tasks §1.2)
  * @property analyticsProvider Провайдер аналитики: user_action на
  *   подтверждённых действиях, AppError на сбое удаления (design D4, D10)
+ * @property crashReporter репортер сбоев: failure-ветки удаления/архивации
  */
 class ExercisesViewModel(
     private val repository: WorkoutDataRepository,
     private val dataStore: AppSettingsDataStore,
-    private val analyticsProvider: AnalyticsProvider
+    private val analyticsProvider: AnalyticsProvider,
+    private val crashReporter: CrashReporter
 ) : ViewModel() {
     /**
      * Id упражнения, для которого сейчас показан алерт подтверждения
@@ -320,7 +322,7 @@ class ExercisesViewModel(
                             is LastActiveExerciseException -> DeleteExerciseError.LastActive
                             else -> DeleteExerciseError.Other
                         }
-                    CrashlyticsHelper.logException(error, "Удаление упражнения")
+                    crashReporter.logException(error, "Удаление упражнения")
                     analyticsProvider.log(
                         AnalyticsEvent.AppError(AppErrorOperation.DELETE_EXERCISE, error)
                     )
@@ -357,7 +359,7 @@ class ExercisesViewModel(
         logMessage: String,
         set: () -> Unit
     ) {
-        CrashlyticsHelper.logException(error, logMessage)
+        crashReporter.logException(error, logMessage)
         analyticsProvider.log(AnalyticsEvent.AppError(operation, error))
         Log.e(LOG_TAG, "$logMessage, ${error.message}", error)
         set()
@@ -524,7 +526,7 @@ class ExercisesViewModel(
                             is LastActiveCategoryException -> DeleteCategoryError.LastActive
                             else -> DeleteCategoryError.Other
                         }
-                    CrashlyticsHelper.logException(error, "Удаление категории")
+                    crashReporter.logException(error, "Удаление категории")
                     analyticsProvider.log(
                         AnalyticsEvent.AppError(AppErrorOperation.DELETE_CATEGORY, error)
                     )
@@ -634,15 +636,19 @@ class ExercisesViewModel(
          * @param dataStore Настройки приложения (для opt-out диалога
          *   архивации, archive-alert-hide, tasks §1.2)
          * @param analyticsProvider Провайдер аналитики
+         * @param crashReporter репортер сбоев
          * @return Factory для создания ViewModel
          */
         fun factory(
             repository: WorkoutDataRepository,
             dataStore: AppSettingsDataStore,
-            analyticsProvider: AnalyticsProvider
+            analyticsProvider: AnalyticsProvider,
+            crashReporter: CrashReporter
         ): ViewModelProvider.Factory =
             viewModelFactory {
-                initializer { ExercisesViewModel(repository, dataStore, analyticsProvider) }
+                initializer {
+                    ExercisesViewModel(repository, dataStore, analyticsProvider, crashReporter)
+                }
             }
     }
 }

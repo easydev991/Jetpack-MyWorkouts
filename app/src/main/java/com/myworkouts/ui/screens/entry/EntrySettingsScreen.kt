@@ -26,6 +26,8 @@ import com.myworkouts.R
 import com.myworkouts.domain.model.EntryField
 import com.myworkouts.ui.components.SettingToggleRow
 import com.myworkouts.ui.state.EntrySettingsUiState
+import com.myworkouts.ui.util.hintResId
+import com.myworkouts.ui.util.labelResId
 import com.myworkouts.ui.viewmodel.EntrySettingsViewModel
 
 /**
@@ -115,10 +117,10 @@ internal fun EntrySettingsScreenContent(state: EntrySettingsScreenState) {
 
             EntryField.entries.forEach { field ->
                 SettingToggleRow(
-                    labelResId = field.labelResId,
+                    labelResId = field.labelResId(),
                     checked = state.visibility[field] ?: true,
                     onToggle = { state.onToggleField(field, it) },
-                    hintResId = field.hintResId
+                    hintResId = field.hintResId()
                 )
             }
 

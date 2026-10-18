@@ -1,55 +1,45 @@
 package com.myworkouts.domain.usecase
 
-import android.content.Context
-import android.net.Uri
-import com.myworkouts.crash.CrashlyticsHelper
-import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.crash.CrashReporter
 import com.myworkouts.domain.model.BackupSettings
-import com.myworkouts.domain.model.Category
-import com.myworkouts.domain.model.Exercise
-import com.myworkouts.domain.model.ExerciseEntry
+import com.myworkouts.domain.repository.WorkoutDataRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
-import java.util.concurrent.CancellationException
+import java.io.OutputStream
 
 /**
- * Экспорт всех данных приложения в файл резервной копии
- * (app-data-screen, design Decision 3).
+ * Экспорт всех данных приложения в поток резервной копии
+ * (app-data-screen, design Decision 3 — сигнатуры без Android: поток
+ * открывает вызывающий, настройки — снапшотом параметром).
  *
  * Снимок каталога, записей и категорий берётся разовыми методами
  * репозитория ([WorkoutDataRepository.getAllExercises] /
  * [WorkoutDataRepository.getAllEntries] /
- * [WorkoutDataRepository.getAllCategories]), настройки вкладок обзора —
- * из [AppSettingsDataStore] (overview-screen, design D8), JSON собирается
- * чистой функцией [buildBackupJson] и пишется в
- * `context.contentResolver.openOutputStream(uri)` на [Dispatchers.IO].
- * Поток открывается лениво — после успешного снимка и сборки: при сбое
- * снимка файл, созданный SAF, не трогается.
+ * [WorkoutDataRepository.getAllCategories]), JSON собирается чистой
+ * функцией [buildBackupJson] и только затем открывается файл — через
+ * [openStream]: при сбое снимка или сборки документ не открывается,
+ * а значит и не обнуляется провайдером. Запись идёт на
+ * [Dispatchers.IO]; поток закрывается здесь (`use`).
  *
  * Ошибки репозитория проходят в `Result.failure` как есть (design
- * Decision 3); ошибки сборки и записи файла оборачиваются в
- * [BackupException] с [BackupError.EXPORT]; [CancellationException]
- * прокидывается, не превращаясь в ошибку пользователя (design, Risks).
+ * Decision 3); недоступность потока, ошибки сборки и записи файла
+ * оборачиваются в [BackupException] с [BackupError.EXPORT];
+ * [CancellationException] прокидывается, не превращаясь в ошибку
+ * пользователя (design, Risks).
  *
  * @property repository доступ к данным приложения
- * @property dataStore хранилище настроек: видимость вкладок и последняя
- *   вкладка обзора входят в резервную копию (design D8)
- * @property context контекст приложения; потоки открываются через
- *   `contentResolver` (в [com.myworkouts.ui.viewmodel.AppDataViewModel]
- *   передаётся `context.applicationContext`)
+ * @property crashReporter репортер сбоев: failure-ветки записи файла
  */
 class ExportBackupUseCase(
     private val repository: WorkoutDataRepository,
-    private val dataStore: AppSettingsDataStore,
-    private val context: Context
+    private val crashReporter: CrashReporter
 ) {
     /**
      * Выгружает все упражнения, категории, записи и настройки вкладок
-     * в файл по [uri].
+     * в поток, открытый [openStream], и закрывает его. [openStream]
+     * вызывается после успешного снимка и сборки JSON; `null` —
+     * [BackupException] с [BackupError.EXPORT].
      *
      * `ReturnCount` и `TooGenericExceptionCaught` подавлены осознанно:
      * early-return на ошибке снимка репозитория («как есть», design
@@ -57,140 +47,46 @@ class ExportBackupUseCase(
      * требуют общий `catch` и несколько точек выхода.
      */
     @Suppress("ReturnCount", "TooGenericExceptionCaught")
-    suspend operator fun invoke(uri: Uri): Result<Unit> {
-        val exercises =
-            repository.getAllExercises().getOrElse { error ->
-                return Result.failure(error)
-            }
-        val entries =
-            repository.getAllEntries().getOrElse { error ->
-                return Result.failure(error)
-            }
-        val categories =
-            repository.getAllCategories().getOrElse { error ->
-                return Result.failure(error)
-            }
-        return try {
-            val settings =
-                BackupSettings(
-                    tabVisibility = dataStore.overviewTabVisibility.first(),
-                    lastOverviewTab = dataStore.lastOverviewTab.first()
-                )
-            val json = buildBackupJson(exercises, entries, settings, categories)
-            withContext(Dispatchers.IO) {
+    suspend operator fun invoke(
+        settings: BackupSettings,
+        openStream: suspend () -> OutputStream?
+    ): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val exercises =
+                repository.getAllExercises().getOrElse { error ->
+                    return@withContext Result.failure(error)
+                }
+            val entries =
+                repository.getAllEntries().getOrElse { error ->
+                    return@withContext Result.failure(error)
+                }
+            val categories =
+                repository.getAllCategories().getOrElse { error ->
+                    return@withContext Result.failure(error)
+                }
+            try {
+                val json = buildBackupJson(exercises, entries, settings, categories)
                 val stream =
-                    context.contentResolver.openOutputStream(uri)
-                        ?: throw BackupException(
-                            "Поток записи недоступен: $uri",
-                            BackupError.EXPORT
-                        )
+                    openStream() ?: return@withContext Result.failure(
+                        BackupException("Поток записи недоступен", BackupError.EXPORT)
+                    )
                 stream.use { it.write(json.toByteArray()) }
-            }
-            Result.success(Unit)
-        } catch (e: CancellationException) {
-            // Отмена корутины — не ошибка: rethrow строго до логирования
-            // (спека «Отмена корутины не является ошибкой»).
-            throw e
-        } catch (e: BackupException) {
-            CrashlyticsHelper.logException(e, "Экспорт резервной копии: сбой записи файла")
-            Result.failure(e)
-        } catch (e: Exception) {
-            CrashlyticsHelper.logException(e, "Экспорт резервной копии: сбой записи файла")
-            Result.failure(
-                BackupException(
-                    "Сбой записи резервной копии: ${e.message}",
-                    BackupError.EXPORT
+                Result.success(Unit)
+            } catch (e: CancellationException) {
+                // Отмена корутины — не ошибка: rethrow строго до логирования
+                // (спека «Отмена корутины не является ошибкой»)
+                throw e
+            } catch (e: BackupException) {
+                crashReporter.logException(e, "Экспорт резервной копии: сбой записи файла")
+                Result.failure(e)
+            } catch (e: Exception) {
+                crashReporter.logException(e, "Экспорт резервной копии: сбой записи файла")
+                Result.failure(
+                    BackupException(
+                        "Сбой записи резервной копии: ${e.message}",
+                        BackupError.EXPORT
+                    )
                 )
-            )
-        }
-    }
-}
-
-/**
- * Чистая функция сборки JSON резервной копии (design Decision 2,
- * overview-screen design D8): версия `1` — блоки `settings` и
- * `categories` — обратно совместимые расширения без подъёма версии
- * (custom-categories, design Decision 9); массивы
- * `exercises`/`categories`/`entries` в порядке переданных списков, запись
- * с отступом 2 (`JSONObject.toString(2)`) — файл читается текстовым
- * редактором и в diff. Связь записи с упражнением — только по имени
- * (`exerciseName`), id строк БД и `modifiedAt` в файл не пишутся;
- * `null`-поля сериализуются явно. Категория в файле — `name`, `colorArgb`,
- * `isArchived`; `isCustom` не пишется (файл недоверенный при импорте —
- * вставленные категории всегда пользовательские).
- */
-internal fun buildBackupJson(
-    exercises: List<Exercise>,
-    entries: List<ExerciseEntry>,
-    settings: BackupSettings = BackupSettings.defaults(),
-    categories: List<Category> = emptyList()
-): String {
-    val namesById = exercises.associate { it.id to it.name }
-    val fileExercises = JSONArray()
-    exercises.forEach { exercise ->
-        fileExercises.put(
-            JSONObject()
-                .put("name", exercise.name)
-                .put("category", exercise.category)
-                .put("measuredBy", exercise.measuredBy.name)
-                .put("isCustom", exercise.isCustom)
-                .put("comment", exercise.comment ?: JSONObject.NULL)
-                .put("iconNumber", exercise.iconNumber ?: JSONObject.NULL)
-                .put("createdAt", exercise.createdAt)
-                .put("isArchived", exercise.isArchived)
-        )
-    }
-    val fileEntries = JSONArray()
-    entries.forEach { entry ->
-        val exerciseName =
-            checkNotNull(namesById[entry.exerciseId]) {
-                "Запись id=${entry.id} ссылается на упражнение " +
-                    "id=${entry.exerciseId}, которого нет в снимке каталога"
             }
-        fileEntries.put(
-            JSONObject()
-                .put("exerciseName", exerciseName)
-                .put("date", entry.date)
-                .put("sets", entry.sets)
-                .put("reps", entry.reps ?: JSONObject.NULL)
-                .put("weightKg", entry.weightKg ?: JSONObject.NULL)
-                .put("durationSec", entry.durationSec ?: JSONObject.NULL)
-                .put("comment", entry.comment ?: JSONObject.NULL)
-                .put("createdAt", entry.createdAt)
-        )
-    }
-    val settingsVisibility = JSONObject()
-    settings.tabVisibility.forEach { (tab, visible) ->
-        settingsVisibility.put(tab.name, visible)
-    }
-    val settingsJson =
-        JSONObject()
-            .put("overviewTabVisibility", settingsVisibility)
-            .put("lastOverviewTab", settings.lastOverviewTab.name)
-    return JSONObject()
-        .put("version", 1)
-        .put("exercises", fileExercises)
-        .put("categories", buildCategoriesJson(categories))
-        .put("entries", fileEntries)
-        .put("settings", settingsJson)
-        .toString(2)
-}
-
-/**
- * Массив `categories` файла (custom-categories, design D9): `name`,
- * `colorArgb`, `isArchived`; `isCustom` не пишется — файл недоверенный
- * при импорте, вставленные категории всегда пользовательские. Вынесено
- * из [buildBackupJson] — detekt `LongMethod`.
- */
-private fun buildCategoriesJson(categories: List<Category>): JSONArray {
-    val fileCategories = JSONArray()
-    categories.forEach { category ->
-        fileCategories.put(
-            JSONObject()
-                .put("name", category.name)
-                .put("colorArgb", category.colorArgb)
-                .put("isArchived", category.isArchived)
-        )
-    }
-    return fileCategories
+        }
 }

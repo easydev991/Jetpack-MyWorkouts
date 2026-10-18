@@ -1,19 +1,25 @@
 package com.myworkouts.ui.viewmodel
 
+import android.content.ContentResolver
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AppErrorOperation
 import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.domain.crash.FakeCrashReporter
 import com.myworkouts.domain.model.BackupEntry
+import com.myworkouts.domain.model.BackupSettings
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.domain.model.OverviewTab
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.domain.usecase.BackupError
 import com.myworkouts.domain.usecase.BackupException
 import com.myworkouts.domain.usecase.ExportBackupUseCase
@@ -30,6 +36,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
@@ -45,6 +53,10 @@ import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.io.OutputStream
 
 /**
  * Fake [WorkoutDataRepository] на `MutableStateFlow` для JVM-тестов
@@ -163,11 +175,17 @@ private class AppDataViewModelFakeRepository(
 class AppDataViewModelTest {
     private lateinit var testDispatcher: TestDispatcher
     private lateinit var uri: Uri
+    private lateinit var dataStore: AppSettingsDataStore
+    private lateinit var context: Context
+    private lateinit var contentResolver: ContentResolver
     private lateinit var exportUseCase: ExportBackupUseCase
     private lateinit var importUseCase: ImportBackupUseCase
 
     /** Перехватчик событий аналитики (design D9). */
     private val analyticsProvider = FakeAnalyticsProvider()
+
+    /** Перехватчик сбоев: журнал вместо Crashlytics. */
+    private val crashReporter = FakeCrashReporter()
 
     private val standardExercise =
         Exercise(
@@ -211,11 +229,22 @@ class AppDataViewModelTest {
         mockkStatic(Log::class)
         every { Log.e(any(), any<String>()) } returns 0
         uri = mockk()
+        dataStore = mockk(relaxed = true)
+        every { dataStore.overviewTabVisibility } returns
+            flowOf(OverviewTab.entries.associateWith { true })
+        every { dataStore.lastOverviewTab } returns flowOf(OverviewTab.STATS)
+        contentResolver = mockk(relaxed = true)
+        context = mockk(relaxed = true)
+        every { context.contentResolver } returns contentResolver
+        every { context.applicationContext } returns context
+        every { contentResolver.openOutputStream(any()) } returns ByteArrayOutputStream()
+        every { contentResolver.openInputStream(any()) } answers { ByteArrayInputStream(ByteArray(0)) }
         exportUseCase = mockk()
         importUseCase = mockk()
-        coEvery { exportUseCase.invoke(any()) } returns Result.success(Unit)
-        coEvery { importUseCase.invoke(any()) } returns
-            Result.success(Unit)
+        coEvery {
+            exportUseCase.invoke(any<BackupSettings>(), any<suspend () -> OutputStream?>())
+        } returns Result.success(Unit)
+        coEvery { importUseCase.invoke(any<suspend () -> InputStream?>()) } returns Result.success(null)
     }
 
     @AfterEach
@@ -225,7 +254,16 @@ class AppDataViewModelTest {
     }
 
     private fun viewModel(repository: AppDataViewModelFakeRepository): AppDataViewModel =
-        AppDataViewModel(repository, exportUseCase, importUseCase, analyticsProvider)
+        AppDataViewModel(
+            repository,
+            dataStore,
+            context,
+            exportUseCase,
+            importUseCase,
+            analyticsProvider,
+            crashReporter,
+            ioDispatcher = testDispatcher
+        )
 
     @Test
     fun hasData_false_when_only_standard_exercises() =
@@ -389,7 +427,9 @@ class AppDataViewModelTest {
             // Given — use-case задержан гейтом: операция «в полёте»
             val repository = AppDataViewModelFakeRepository()
             val gate = CompletableDeferred<Unit>()
-            coEvery { exportUseCase.invoke(any()) } coAnswers {
+            coEvery {
+                exportUseCase.invoke(any<BackupSettings>(), any<suspend () -> OutputStream?>())
+            } coAnswers {
                 gate.await()
                 Result.success(Unit)
             }
@@ -418,7 +458,7 @@ class AppDataViewModelTest {
                 "isBusy должен сбрасываться по завершении"
             )
             assertEquals(AppDataResult.EXPORTED, viewModel.uiState.value.result)
-            coVerify { exportUseCase.invoke(uri) }
+            coVerify { exportUseCase.invoke(any<BackupSettings>(), any<suspend () -> OutputStream?>()) }
         }
 
     @Test
@@ -426,7 +466,9 @@ class AppDataViewModelTest {
         runTest(testDispatcher) {
             // Given — use-case вернул типизированную ошибку экспорта
             val failure = BackupException("SAF не отдал поток", BackupError.EXPORT)
-            coEvery { exportUseCase.invoke(any()) } returns Result.failure(failure)
+            coEvery {
+                exportUseCase.invoke(any<BackupSettings>(), any<suspend () -> OutputStream?>())
+            } returns Result.failure(failure)
             val repository = AppDataViewModelFakeRepository()
             val viewModel = viewModel(repository)
             backgroundScope.launch { viewModel.uiState.collect {} }
@@ -454,7 +496,7 @@ class AppDataViewModelTest {
         runTest(testDispatcher) {
             // Given — use-case отверг файл копии
             val failure = BackupException("Файл не является JSON", BackupError.INVALID_FILE)
-            coEvery { importUseCase.invoke(any()) } returns Result.failure(failure)
+            coEvery { importUseCase.invoke(any<suspend () -> InputStream?>()) } returns Result.failure(failure)
             val repository = AppDataViewModelFakeRepository()
             val viewModel = viewModel(repository)
             backgroundScope.launch { viewModel.uiState.collect {} }
@@ -482,7 +524,7 @@ class AppDataViewModelTest {
         runTest(testDispatcher) {
             // Given — файл валиден, но вставка в БД падает ошибкой «как есть»
             val failure = IllegalStateException("БД недоступна")
-            coEvery { importUseCase.invoke(any()) } returns Result.failure(failure)
+            coEvery { importUseCase.invoke(any<suspend () -> InputStream?>()) } returns Result.failure(failure)
             val repository = AppDataViewModelFakeRepository()
             val viewModel = viewModel(repository)
             backgroundScope.launch { viewModel.uiState.collect {} }
@@ -521,7 +563,146 @@ class AppDataViewModelTest {
             // Then
             assertEquals(AppDataResult.RESTORED, viewModel.uiState.value.result)
             assertFalse(viewModel.uiState.value.isBusy)
-            coVerify { importUseCase.invoke(uri) }
+            coVerify { importUseCase.invoke(any<suspend () -> InputStream?>()) }
+        }
+
+    // ---------- Настройки бэкапа применяются VM (design D8) ----------
+
+    @Test
+    fun restoreBackup_whenSettingsPresent_thenAppliedToDataStore() =
+        runTest(testDispatcher) {
+            // Given — use-case вернул снапшот настроек из файла v2
+            val settings =
+                BackupSettings(
+                    tabVisibility = mapOf(OverviewTab.ACTIVITY to false),
+                    lastOverviewTab = OverviewTab.RECORDS
+                )
+            coEvery { importUseCase.invoke(any<suspend () -> InputStream?>()) } returns Result.success(settings)
+            val repository = AppDataViewModelFakeRepository()
+            val viewModel = viewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // When
+            viewModel.restoreFromBackup(uri)
+            advanceUntilIdle()
+
+            // Then — настройки применены после успешного восстановления
+            assertEquals(AppDataResult.RESTORED, viewModel.uiState.value.result)
+            coVerify(exactly = 1) { dataStore.applyBackupSettings(settings) }
+        }
+
+    @Test
+    fun restoreBackup_whenVersion1_thenDataStoreNotChanged() =
+        runTest(testDispatcher) {
+            // Given — бэкап v1: снапшот null, хранилище не трогается
+            coEvery { importUseCase.invoke(any<suspend () -> InputStream?>()) } returns Result.success(null)
+            val repository = AppDataViewModelFakeRepository()
+            val viewModel = viewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // When
+            viewModel.restoreFromBackup(uri)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(AppDataResult.RESTORED, viewModel.uiState.value.result)
+            coVerify(exactly = 1) { dataStore.applyBackupSettings(null) }
+        }
+
+    @Test
+    fun restoreBackup_whenImportFails_thenSettingsNotApplied() =
+        runTest(testDispatcher) {
+            // Given — вставка в БД проваливается
+            coEvery { importUseCase.invoke(any<suspend () -> InputStream?>()) } returns
+                Result.failure(IllegalStateException("БД недоступна"))
+            val repository = AppDataViewModelFakeRepository()
+            val viewModel = viewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // When
+            viewModel.restoreFromBackup(uri)
+            advanceUntilIdle()
+
+            // Then — при сбое восстановления настройки не применяются
+            assertEquals(AppDataResult.ERROR_IMPORT, viewModel.uiState.value.result)
+            coVerify(exactly = 0) { dataStore.applyBackupSettings(any()) }
+        }
+
+    @Test
+    fun restoreBackup_whenApplySettingsFails_thenRestored() =
+        runTest(testDispatcher) {
+            // Given — данные восстановлены в БД, но запись настроек в
+            // DataStore падает (повреждённые preferences, диск полон)
+            coEvery { importUseCase.invoke(any<suspend () -> InputStream?>()) } returns
+                Result.success(
+                    BackupSettings(
+                        tabVisibility = mapOf(OverviewTab.ACTIVITY to false),
+                        lastOverviewTab = OverviewTab.RECORDS
+                    )
+                )
+            coEvery { dataStore.applyBackupSettings(any()) } throws java.io.IOException("Диск переполнен")
+            val repository = AppDataViewModelFakeRepository()
+            val viewModel = viewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // When
+            viewModel.restoreFromBackup(uri)
+            advanceUntilIdle()
+
+            // Then — восстановление считается успешным: данные уже в БД,
+            // сбой настроек залогирован, но не проваливает операцию
+            assertEquals(AppDataResult.RESTORED, viewModel.uiState.value.result)
+            assertFalse(viewModel.uiState.value.isBusy)
+            assertEquals(1, crashReporter.logged.size, "Сбой применения настроек залогирован")
+        }
+
+    // ---------- Ошибки открытия SAF-потока ----------
+
+    @Test
+    fun exportBackup_whenUseCaseThrows_thenErrorExport() =
+        runTest(testDispatcher) {
+            // Given — use-case бросает вместо возврата Result.failure
+            coEvery {
+                exportUseCase.invoke(any<BackupSettings>(), any<suspend () -> OutputStream?>())
+            } throws RuntimeException("Внутренний сбой")
+            val repository = AppDataViewModelFakeRepository()
+            val viewModel = viewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // When
+            viewModel.exportBackup(uri)
+            advanceUntilIdle()
+
+            // Then — guard каркаса операций: результат, не падение
+            assertEquals(AppDataResult.ERROR_EXPORT, viewModel.uiState.value.result)
+            assertEquals(1, crashReporter.logged.size, "Сбой залогирован в crashReporter")
+        }
+
+    @Test
+    fun exportBackup_whenSettingsReadFails_thenErrorExport() =
+        runTest(testDispatcher) {
+            // Given — чтение настроек из DataStore падает (повреждённые preferences)
+            every { dataStore.overviewTabVisibility } returns
+                flow { throw java.io.IOException("Повреждены preferences") }
+            val repository = AppDataViewModelFakeRepository()
+            val viewModel = viewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // When
+            viewModel.exportBackup(uri)
+            advanceUntilIdle()
+
+            // Then
+            assertEquals(AppDataResult.ERROR_EXPORT, viewModel.uiState.value.result)
+            coVerify(exactly = 0) {
+                exportUseCase.invoke(any<BackupSettings>(), any<suspend () -> OutputStream?>())
+            }
         }
 
     @Test

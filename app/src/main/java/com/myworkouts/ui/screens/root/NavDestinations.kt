@@ -7,7 +7,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.data.preferences.AppSettingsDataStore
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.crash.CrashReporter
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.screens.appdata.AppDataScreen
 import com.myworkouts.ui.screens.appearance.AppearanceScreen
@@ -37,10 +38,14 @@ import kotlinx.coroutines.launch
 internal fun MainNavDestination(
     repository: WorkoutDataRepository,
     analyticsProvider: AnalyticsProvider,
+    crashReporter: CrashReporter,
     navController: NavHostController
 ) {
     MainScreen(
-        viewModel = viewModel(factory = MainViewModel.factory(repository, analyticsProvider)),
+        viewModel =
+            viewModel(
+                factory = MainViewModel.factory(repository, analyticsProvider, crashReporter)
+            ),
         onAddEntryClick = { navController.navigate(Screen.EntryCreate.createRoute()) },
         onEditEntryClick = { entryId ->
             navController.navigate(Screen.EntryCreate.createRoute(entryId))
@@ -88,13 +93,15 @@ internal fun AppDataNavDestination(
     repository: WorkoutDataRepository,
     dataStore: AppSettingsDataStore,
     analyticsProvider: AnalyticsProvider,
+    crashReporter: CrashReporter,
     navController: NavHostController
 ) {
     val context = LocalContext.current
     AppDataScreen(
         viewModel =
             viewModel(
-                factory = AppDataViewModel.factory(repository, dataStore, context, analyticsProvider)
+                factory =
+                    AppDataViewModel.factory(repository, dataStore, context, analyticsProvider, crashReporter)
             ),
         onBackClick = { navController.popBackStack() }
     )

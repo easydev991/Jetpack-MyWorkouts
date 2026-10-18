@@ -43,8 +43,8 @@ camelCase — главное, что разделители `_`. Подробн�
 ### Файлы тестов в `app/src/test/`, зеркалят `app/src/main/`
 
 ```
-app/src/main/java/com/myworkouts/data/repository/EntryValidator.kt
-app/src/test/java/com/myworkouts/data/repository/EntryValidatorTest.kt
+app/src/main/java/com/myworkouts/domain/repository/EntryValidator.kt
+app/src/test/java/com/myworkouts/domain/repository/EntryValidatorTest.kt
 ```
 
 ### Имя тест-класса = `<Class>Test`

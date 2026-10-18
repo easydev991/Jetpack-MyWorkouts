@@ -8,7 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.UserActionType
-import com.myworkouts.data.repository.WorkoutDataRepository
+import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.ui.state.ArchivedExercisesUiState
 import com.myworkouts.ui.state.ArchivedTab
 import kotlinx.coroutines.flow.MutableStateFlow

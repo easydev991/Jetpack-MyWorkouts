@@ -10,7 +10,7 @@ import java.time.ZoneId
  * @property currentStreak Длина текущей серии (0 — стрик прерван)
  * @property recordStreak  Рекордная длина серии за всё время
  * @property workedOutToday Есть ли тренировка сегодня — нужно UI, чтобы
- *   отличать [com.myworkouts.ui.state.StreakCardState.Active]
+ *   отличать `StreakCardState.Active`
  *   (тренировались сегодня) от Pending (сегодня ещё нет, но вчера была)
  */
 data class StreakResult(

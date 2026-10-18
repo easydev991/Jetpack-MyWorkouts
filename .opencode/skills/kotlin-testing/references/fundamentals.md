@@ -8,8 +8,8 @@
 Unit-тесты лежат в `app/src/test/java/` и **зеркалят структуру main**:
 
 ```
-app/src/main/java/com/myworkouts/data/repository/EntryValidator.kt
-app/src/test/java/com/myworkouts/data/repository/EntryValidatorTest.kt
+app/src/main/java/com/myworkouts/domain/repository/EntryValidator.kt
+app/src/test/java/com/myworkouts/domain/repository/EntryValidatorTest.kt
 ```
 
 Правила:

@@ -1,5 +1,38 @@
 #!/bin/bash
 
+# Guard: Room экспортирует app/schemas/*.json на каждом билде, поэтому правка
+# entity без bump версии молча перезаписывает эталон, а MigrationTest это не
+# ловит (сравнивает код с его же выводом). Две защиты:
+# 1) unstaged diff — эталон перезаписан, но не замечен;
+# 2) staged diff без bump'а версии — схема уезжает в коммит молча (git add .).
+if ! git diff --quiet -- app/schemas; then
+    echo "✗ app/schemas изменены, но не застейджены: похоже, entity правилась без bump версии БД."
+    echo "  Смотри git diff app/schemas. Осознанное изменение схемы: bump version + MIGRATION + .addMigrations (WorkoutDatabase.kt), затем застейджь схемы."
+    exit 1
+fi
+if ! git diff --cached --quiet -- app/schemas; then
+    if ! git diff --cached -- '*Database.kt' | grep -qE '^\+\s*version\s*=\s*[0-9]'; then
+        echo "✗ app/schemas в коммите, но bump версии в *Database.kt не найден."
+        echo "  Осознанное изменение схемы: подними version в WorkoutDatabase.kt, добавь MIGRATION + .addMigrations, застейджь вместе со схемами."
+        exit 1
+    fi
+fi
+
+# Guard чистоты домена: домен не тянет android/androidx и слои приложения —
+# проверка в DomainPurityTest (импорты + голые FQN). Запускается, только
+# когда коммит трогает domain/ (код или сам guard-тест): тест сканирует
+# рабочее дерево, а не индекс, поэтому постороннее WIP-нарушение не должно
+# блокировать чужие коммиты.
+# shortcut: застейдженное нарушение с исправленным деревом хук пропустит —
+# index-based скан не нужен до переезда домена в KMP-модуль (план, фаза 1).
+if git diff --cached --name-only | grep -qE '^app/src/(main|test)/java/com/myworkouts/domain/'; then
+    if ! make guard_domain; then
+        echo "✗ Guard-прогон домена упал — реальная причина в выводе выше; отчёт: app/build/reports/tests/testGithubDebugUnitTest/index.html"
+        echo "  Отчёт тестов перезаписан этим прогоном: для полного отчёта прогони make test."
+        exit 1
+    fi
+fi
+
 echo "Обновляю версии в README.md..."
 if ./gradlew updateReadmeVersions --no-configuration-cache --quiet; then
     echo "✓ Версии обновлены успешно"
