@@ -7,7 +7,7 @@
 ## What Changes
 
 - Добавляется статический шорткат лаунчера `add_workout` (res/xml/shortcuts.xml + meta-data в манифесте) с подписью из существующей строки `add_workout`.
-- Шорткат объявляется без собственной иконки (`android:icon` не задаётся) — в меню лаунчера пункт отображается текстом; новых строковых и drawable-ресурсов не заводится.
+- Шорткат получает собственную статичную иконку — белый круг с тёмным плюсом (`res/drawable/ic_shortcut_add_workout`), по образцу «Добавить контакт» в «Контактах»; новых строковых ресурсов не заводится.
 - Шорткат использует собственный action `com.myworkouts.action.ADD_WORKOUT`; в MainActivity добавляется соответствующий intent-filter.
 - MainActivity переключается на `launchMode="singleTop"` и обрабатывает intent (холодный старт и `onNewIntent`): переход на экран создания записи (`Screen.EntryCreate.createRoute()`) — тот же destination, что и по FAB; если экран создания записи уже открыт, повторно поверх него он не открывается.
 - Стартовый маршрут NavHost не меняется (`Screen.Main.route`): экран создания записи открывается навигацией, «назад» возвращает на главный экран.
@@ -24,6 +24,7 @@
 ## Impact
 
 - app/src/main/res/xml/shortcuts.xml — новый файл: объявление статического шортката.
+- app/src/main/res/drawable/ic_shortcut_add_workout.xml — новый файл: векторная иконка шортката (белый круг с тёмным плюсом).
 - app/src/main/AndroidManifest.xml — meta-data `android.app.shortcuts` у MainActivity, intent-filter action шортката, `launchMode="singleTop"`.
 - app/src/main/java/com/myworkouts/MainActivity.kt — обработка intent шортката (onCreate/onNewIntent): запрос навигации на экран создания записи без дублирования уже открытого экрана.
 - app/src/main/java/com/myworkouts/navigation/ShortcutLaunchResolver.kt — новый файл: константа action шортката и чистые функции решения (разбор action, guard от дублирования экрана).

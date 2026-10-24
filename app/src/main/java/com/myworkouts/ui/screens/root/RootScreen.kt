@@ -43,6 +43,7 @@ import com.myworkouts.ui.viewmodel.EntryCreateViewModel
 import com.myworkouts.ui.viewmodel.EntrySettingsViewModel
 import com.myworkouts.ui.viewmodel.ExerciseCreateViewModel
 import com.myworkouts.ui.viewmodel.ExercisesViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Корневой экран с нижней навигацией и вложенными маршрутами.
@@ -54,14 +55,18 @@ import com.myworkouts.ui.viewmodel.ExercisesViewModel
  * @param dataStore единый экземпляр [AppSettingsDataStore] для всего приложения
  * @param repository репозиторий данных тренировок (создан в `MyWorkoutsApplication`)
  * @param crashReporter репортер сбоев (выбран в `MainActivity` по типу сборки)
+ * @param pendingAddWorkout одноразовый запрос шортката «Добавить тренировку»
+ * из `MainActivity` (add-workout-quick-action); сбрасывается здесь после обработки
  * @param modifier внешний модификатор для [Scaffold]
  */
+@Suppress("LongParameterList")
 @Composable
 fun RootScreen(
     dataStore: AppSettingsDataStore,
     repository: WorkoutDataRepository,
     analyticsProvider: AnalyticsProvider,
     crashReporter: CrashReporter,
+    pendingAddWorkout: MutableStateFlow<Boolean>,
     modifier: Modifier = Modifier
 ) {
     val navController = rememberNavController()
@@ -88,6 +93,7 @@ fun RootScreen(
         navController.addOnDestinationChangedListener(listener)
         onDispose { navController.removeOnDestinationChangedListener(listener) }
     }
+    ShortcutLaunchEffect(navController, pendingAddWorkout, analyticsProvider)
     val currentRoute = navBackStackEntry?.destination?.route
     // Настройка видимости вкладки «Упражнения» (exercises-tab, design
     // Decision 8): единая подписка здесь — значение уходит и в бар, и

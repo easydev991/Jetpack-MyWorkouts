@@ -27,6 +27,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.JetpackMyWorkouts"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -34,6 +35,18 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Шорткат лаунчера «Добавить тренировку» (shortcuts.xml):
+                 статические шорткаты шлют intent с category.DEFAULT —
+                 без этого фильтра платформа не стартует шорткат. -->
+            <intent-filter>
+                <action android:name="com.myworkouts.action.ADD_WORKOUT" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
     </application>
 

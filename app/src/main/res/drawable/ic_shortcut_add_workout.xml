@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Иконка шортката «Добавить тренировку» (решение владельца после 4.1):
+     статичный белый круг с тёмным плюсом — по образцу «Добавить контакт»
+     в приложении «Контакты». Не adaptive: слот пункта меню лаунчера. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,54m-54,0a54,54 0,1 1,108 0a54,54 0,1 1,-108 0Z" />
+    <path
+        android:fillColor="#FF1C1B1F"
+        android:pathData="M48,24h12v24h24v12h-24v24h-12v-24h-24v-12h24z" />
+</vector>

@@ -1,5 +1,6 @@
 package com.myworkouts
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -18,8 +19,10 @@ import com.myworkouts.crash.NoopCrashReporter
 import com.myworkouts.domain.crash.CrashReporter
 import com.myworkouts.domain.model.AppTheme
 import com.myworkouts.domain.model.isDark
+import com.myworkouts.navigation.isAddWorkoutAction
 import com.myworkouts.ui.screens.root.RootScreen
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Главная (и единственная) Activity приложения.
@@ -30,6 +33,14 @@ import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
  * Activity больше не плодит инстансы БД/DataStore.
  */
 class MainActivity : ComponentActivity() {
+    /**
+     * Одноразовый запрос «открыть создание записи» от intent шортката
+     * (add-workout-quick-action, design D4): MainActivity не знает про
+     * навигацию — [RootScreen] читает флаг после построения графа и
+     * сбрасывает его, переподнимая на следующий шорткат.
+     */
+    private val pendingAddWorkout = MutableStateFlow(false)
+
     /**
      * Запускает Compose-граф: подписывается на настройки темы и динамических
      * цветов, перекрашивает статус-бар под текущую тему.
@@ -44,6 +55,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Intent шортката разбирается только при первом создании: при
+        // пересоздании Activity (поворот, смена темы) платформа доставляет
+        // тот же launch-intent повторно (design D3).
+        if (savedInstanceState == null && isAddWorkoutAction(intent?.action)) {
+            pendingAddWorkout.value = true
+        }
 
         val app = application as MyWorkoutsApplication
         val dataStore = app.dataStore
@@ -93,9 +111,27 @@ class MainActivity : ComponentActivity() {
                     dataStore = dataStore,
                     repository = repository,
                     analyticsProvider = analyticsProvider,
-                    crashReporter = crashReporter
+                    crashReporter = crashReporter,
+                    pendingAddWorkout = pendingAddWorkout
                 )
             }
+        }
+    }
+
+    /**
+     * Повторный запуск уже наверху стека (`singleTop`): свёрнутое
+     * приложение, тап по иконке, выбор шортката (design D3). Чужие
+     * action игнорируются — приложение остаётся на текущем экране
+     * (осознанное отличие от стандартного launchMode, который
+     * перезапускал приложение на список тренировок).
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Синхронизируем intent Activity: без setIntent getIntent()
+        // продолжал бы отдавать launch-intent первого запуска.
+        setIntent(intent)
+        if (isAddWorkoutAction(intent.action)) {
+            pendingAddWorkout.value = true
         }
     }
 }

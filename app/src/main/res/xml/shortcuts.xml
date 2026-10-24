@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Статический шорткат лаунчера «Добавить тренировку» (openspec
+     add-workout-quick-action): иконка — статичный белый круг с тёмным
+     плюсом (запрос владельца после 4.1); action должен совпадать с
+     ACTION_ADD_WORKOUT в ShortcutLaunchResolver.kt. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_add_workout"
+        android:shortcutId="add_workout"
+        android:shortcutShortLabel="@string/add_workout">
+        <intent
+            android:action="com.myworkouts.action.ADD_WORKOUT"
+            android:targetClass="com.myworkouts.MainActivity"
+            android:targetPackage="com.myworkouts" />
+    </shortcut>
+</shortcuts>
