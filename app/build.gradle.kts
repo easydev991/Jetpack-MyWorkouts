@@ -105,7 +105,7 @@ android {
     // MigrationTestHelper не найдёт JSON для createDatabase/runMigrationsAndValidate
     // (custom-categories, задача 1.3)
     sourceSets {
-        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+        getByName("androidTest").assets.directories += "$projectDir/schemas"
     }
 }
 
@@ -140,6 +140,9 @@ dependencies {
     // заглушки, бросающие "not mocked" (app-data-screen, design Decision 1).
     testImplementation(libs.org.json)
     testRuntimeOnly(libs.junit.platform.launcher)
+    // BOM обязан дублироваться: констрейнты implementation до androidTest-класспаса
+    // не доходят, без этого ui-test-junit4 разрешается без версии (Gradle sync warning
+    // «declared multiple times» — ложное срабатывание IDE)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -183,7 +186,7 @@ tasks.withType<Test> {
     failOnNoDiscoveredTests = false
 }
 
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile> {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
     }
