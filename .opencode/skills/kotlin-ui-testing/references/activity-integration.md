@@ -4,9 +4,10 @@
 стек: Activity + Compose + продакшен-Room (БД на диске) + ViewModel
 + manual DI.
 
-Таких тестов в проекте четыре:
+Таких тестов в проекте пять:
 `EntryListLiveUpdateIntegrationTest`, `ExerciseCreateLiveUpdateIntegrationTest`,
-`RootScreenTest`, `MainScreenDetailCardRecreateTest`. Канонический
+`RootScreenTest`, `MainScreenDetailCardRecreateTest`,
+`ExercisesCategoriesTabRecreateTest`. Канонический
 разбор ниже — `ExerciseCreateLiveUpdateIntegrationTest`
 (см.
 `app/src/androidTest/java/com/myworkouts/ExerciseCreateLiveUpdateIntegrationTest.kt`).
@@ -16,7 +17,8 @@
 у `EntryListLiveUpdateIntegrationTest` и `RootScreenTest`;
 `MainScreenDetailCardRecreateTest` собственного `databaseBuilder`
 не создаёт — пишет в ту же production-БД через продакшен-репозиторий
-процесса `app.repository`).
+процесса `app.repository`; `ExercisesCategoriesTabRecreateTest` сам БД
+не пишет, но VM его экрана читает production-БД приложения при старте).
 
 Большинство остальных интеграционных сценариев (навигация, секции,
 поиск,
@@ -153,3 +155,31 @@ class ExerciseCreateLiveUpdateIntegrationTest {
 Проверка взаимного расположения элементов (`boundsInRoot`, sticky-заголовки,
 сортировка секций) — в `references/compose-selectors.md` → «Проверка
 позиции нод (boundsInRoot)».
+
+## Известный флейк: `SQLiteException: no such table` в production-БД
+
+В отличие от in-memory-тестов, эти пять зависят от состояния данных
+приложения на AVD. Диагноз:
+
+- падают **только** они (остальные ~350 — Room in-memory, зелёные);
+- стек — `SQLiteException: no such table: exercises/exercise_entries`;
+
+причина — застойный/повреждённый файл `workout_database` в данных
+приложения (например, AVD используется и генерацией скриншотов с
+демо-данными). Лечение — переустановка приложения:
+
+```bash
+adb uninstall com.myworkouts   # AGP обычно снимает APK после прогона:
+                               # pm list packages без myworkouts — не поломка
+```
+
+затем точечный перегон упавших классов (см. `running-tests.md` →
+«Один класс») и полный `make android-test`. Проверенный кейс
+(2026-10-25): 3 таких теста падали на AVD «RuStore-Screenshots»,
+после переустановки — зелёные.
+
+Укрепление при повторении: `@Before` с
+`runCatching { context.deleteDatabase(WorkoutDatabase.DATABASE_NAME) }`
+в классе — процесс теста удаляет старый файл до первого обращения к
+`by lazy`-репозиторию, БД пересоздаётся с предзаполнением. DI-корень
+не переписывается; добавлять по факту повторения, не профилактически.

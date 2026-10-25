@@ -151,4 +151,4 @@ composeTestRule
 | Отдельный Compose-компонент (экран с готовым `*ScreenState`, диалог, кнопка) | Компонентный | `createComposeRule()`, готовый `*ScreenState`, `JetpackMyWorkoutsTheme` (по необходимости) |
 | Экран с реальной ViewModel поверх Room in-memory | Компонентный | `createComposeRule()` + реальная VM + Room in-memory + `NavHost`-harness |
 | DAO / база / репозиторий | Интеграционный | Room in-memory, `runBlocking`, `.first()` |
-| Сквозной сценарий с реальной Activity | Интеграционный | `createAndroidComposeRule<MainActivity>()` — 4 теста в проекте (`EntryListLiveUpdateIntegrationTest`, `ExerciseCreateLiveUpdateIntegrationTest`, `RootScreenTest`, `MainScreenDetailCardRecreateTest`) |
+| Сквозной сценарий с реальной Activity | Интеграционный | `createAndroidComposeRule<MainActivity>()` — 5 тестов в проекте (`EntryListLiveUpdateIntegrationTest`, `ExerciseCreateLiveUpdateIntegrationTest`, `RootScreenTest`, `MainScreenDetailCardRecreateTest`, `ExercisesCategoriesTabRecreateTest`) |

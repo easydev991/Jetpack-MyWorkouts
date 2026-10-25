@@ -40,7 +40,8 @@ description: >
   `references/activity-integration.md`, `references/room-repository.md`).
   С реальной `MainActivity` — `EntryListLiveUpdateIntegrationTest`,
   `ExerciseCreateLiveUpdateIntegrationTest`, `RootScreenTest`,
-  `MainScreenDetailCardRecreateTest`; кроме них, два компонентных
+  `MainScreenDetailCardRecreateTest`, `ExercisesCategoriesTabRecreateTest`;
+  кроме них, два компонентных
   теста живут на `ComponentActivity` (см. правило 2).
 
 > Unit-тесты — это `app/src/test/` (JUnit 5, MockK). Их правила описаны
@@ -207,7 +208,8 @@ description: >
     покрывают навигацию без Activity. С реальной `MainActivity`
     — `EntryListLiveUpdateIntegrationTest`,
     `ExerciseCreateLiveUpdateIntegrationTest`, `RootScreenTest`,
-    `MainScreenDetailCardRecreateTest`; для `DropdownMenu` в
+    `MainScreenDetailCardRecreateTest`, `ExercisesCategoriesTabRecreateTest`;
+    для `DropdownMenu` в
     компонентном тесте — `createAndroidComposeRule(
     ComponentActivity)` (правило 2).
   - Нужна ли production-БД? Собственный
@@ -216,7 +218,9 @@ description: >
     `ExerciseCreateLiveUpdateIntegrationTest` и `RootScreenTest`;
     `MainScreenDetailCardRecreateTest` пишет в ту же production-БД
     через продакшен-репозиторий процесса (`app.repository`, без
-    собственного `databaseBuilder`). Остальные тесты — Room
+    собственного `databaseBuilder`; `ExercisesCategoriesTabRecreateTest`
+    сам БД не открывает — VM читает production-БД приложения
+    при старте). Остальные тесты — Room
     in-memory или без БД.
 
 ## Routing map (читай нужный reference быстро)
