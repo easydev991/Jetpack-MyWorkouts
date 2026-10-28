@@ -12,19 +12,30 @@ ru/en подписями.
 `MoreScreen` SHALL be a `@Composable fun MoreScreen(navController:
 NavHostController, showExercisesTab: Boolean, onShowExercisesTabChange:
 (Boolean) -> Unit, modifier: Modifier = Modifier)` annotated with
-`@OptIn(ExperimentalMaterial3Api::class)`. Новые параметры — без
-default-значений: состояние и запись — выше по потоку, в `RootScreen`
-(ADDED-требование про тоггл выше; design Decision 8). Its `Scaffold`
-SHALL contain `topBar = { TopAppBar(title = {
-Text(stringResource(R.string.more_title)) }) }`. The `Scaffold` body
-SHALL contain a `Box` with a `Column(fillMaxSize,
-verticalArrangement = Arrangement.spacedBy(spacing_xxsmall),
-horizontalAlignment = Alignment.CenterHorizontally)`; its direct
-children — кнопки экрана без layout-обёрток (интервал между ними задаёт
-`spacedBy`), первая — `FilledTonalButton(...) {
-Text(stringResource(R.string.appearance_title)) }` near the top; and a
-`Text` with the app version at the bottom, aligned via
-`Alignment.BottomCenter` as a direct child of the `Box`.
+`@OptIn(ExperimentalMaterial3Api::class)`. Its `Scaffold` SHALL contain
+`topBar = { TopAppBar(title = { Text(stringResource(
+R.string.more_title)) }) }` and a body with the screen buttons and the
+app version text at the bottom.
+
+#### Scenario: Параметры без default-значений
+
+- **WHEN** объявляется сигнатура `MoreScreen`
+- **THEN** новые параметры — без default-значений: состояние и запись —
+  выше по потоку, в `RootScreen` (ADDED-требование про тоггл выше;
+  design Decision 8)
+
+#### Scenario: Структура body Scaffold
+
+- **WHEN** рендерится body `Scaffold` экрана
+- **THEN** это `Box` с `Column(fillMaxSize,
+  verticalArrangement = Arrangement.spacedBy(spacing_xxsmall),
+  horizontalAlignment = Alignment.CenterHorizontally)`
+- **AND** direct children `Column` — кнопки экрана без layout-обёрток
+  (интервал между ними задаёт `spacedBy`), первая —
+  `FilledTonalButton(...) { Text(stringResource(R.string.
+  appearance_title)) }` near the top
+- **AND** `Text` with the app version at the bottom, aligned via
+  `Alignment.BottomCenter` as a direct child of the `Box`
 
 #### Scenario: MoreScreen renders with localized title
 
@@ -78,7 +89,21 @@ The string `more_title` (used for both `NavigationBarItem.label` and `TopAppBar.
 
 ### Requirement: MoreScreen version text shows BuildConfig.VERSION_NAME
 
-`MoreScreen` SHALL display the value of `BuildConfig.VERSION_NAME` formatted via `stringResource(R.string.app_version, BuildConfig.VERSION_NAME)`. The `Text` SHALL use `MaterialTheme.typography.bodyMedium`, `MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)`, `TextAlign.Center`, and `Modifier.fillMaxWidth()`. The string `app_version` SHALL exist in both `res/values/strings.xml` (Russian: "Версия приложения: %1$s") and `res/values-en/strings.xml` (English: "App version: %1$s") with a `%1$s` placeholder for the version value.
+`MoreScreen` SHALL display the value of `BuildConfig.VERSION_NAME`
+formatted via `stringResource(R.string.app_version,
+BuildConfig.VERSION_NAME)`. The string `app_version` SHALL exist in
+both `res/values/strings.xml` and `res/values-en/strings.xml` with a
+`%1$s` placeholder for the version value.
+
+#### Scenario: Стиль и ресурсы версии
+
+- **WHEN** рендерится `Text` версии
+- **THEN** он использует `MaterialTheme.typography.bodyMedium`,
+  `MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)`,
+  `TextAlign.Center` and `Modifier.fillMaxWidth()`
+- **AND** `app_version` — "Версия приложения: %1$s" (Russian,
+  `res/values/strings.xml`) и "App version: %1$s" (English,
+  `res/values-en/strings.xml`)
 
 #### Scenario: Russian locale shows version
 
@@ -93,13 +118,10 @@ The string `more_title` (used for both `NavigationBarItem.label` and `TopAppBar.
 ### Requirement: MoreScreen accepts a required NavController
 
 `MoreScreen` SHALL accept `navController: NavHostController` as a
-required first parameter. The `navController` is used to navigate to
+required first parameter; it is used to navigate to
 `Screen.Appearance.route` when the appearance button is tapped. There
 is no fallback or `LocalNavController` lookup — the parameter is
-explicit and required. Параметры `showExercisesTab: Boolean` и
-`onShowExercisesTabChange: (Boolean) -> Unit` — также обязательные,
-без default-значений (design Decision 8): пара используется кнопкой
-видимости вкладки из ADDED-требования выше.
+explicit and required.
 
 #### Scenario: NavController is passed from RootScreen
 
@@ -109,6 +131,10 @@ explicit and required. Параметры `showExercisesTab: Boolean` и
   onShowExercisesTabChange)` with the `RootScreen`'s
   `rememberNavController()` and the setting collected from
   `AppSettingsDataStore`
+- **AND** параметры `showExercisesTab: Boolean` и
+  `onShowExercisesTabChange: (Boolean) -> Unit` — также обязательные,
+  без default-значений (design Decision 8): пара используется кнопкой
+  видимости вкладки из ADDED-требования выше
 
 ### Requirement: Appearance button navigates to Screen.Appearance
 
@@ -173,16 +199,24 @@ dimensionResource(R.dimen.button_horizontal_padding))` where
 ### Requirement: MoreScreen имеет кнопку видимости вкладки «Упражнения»
 
 На экране «Ещё» сразу после навигационных кнопок и до feedback-кнопки
-(`R.string.feedback_send`) SHALL быть кнопка (`FilledTonalButton`, в стиле
-остальных кнопок экрана) переключения видимости вкладки «Упражнения».
-`MoreScreen` SHALL принимать параметры `showExercisesTab: Boolean` и
-`onShowExercisesTabChange: (Boolean) -> Unit` (состояние и запись — выше по
-потоку, в `RootScreen`; у экрана нет ViewModel). Надпись кнопки SHALL
-зависеть от состояния: `R.string.more_exercises_tab_show` («Показать вкладку
-"Упражнения"» / "Show Exercises tab") при `showExercisesTab = false`,
-`R.string.more_exercises_tab_hide` («Скрыть вкладку "Упражнения"» /
-"Hide Exercises tab") при `showExercisesTab = true`; нажатие кнопки SHALL
-вызывать `onShowExercisesTabChange` с новым значением.
+(`R.string.feedback_send`) SHALL быть кнопка переключения видимости
+вкладки «Упражнения». Надпись кнопки SHALL зависеть от состояния:
+`R.string.more_exercises_tab_show` при `showExercisesTab = false`,
+`R.string.more_exercises_tab_hide` при `showExercisesTab = true`;
+нажатие кнопки SHALL вызывать `onShowExercisesTabChange` с новым
+значением.
+
+#### Scenario: Стиль и параметры кнопки видимости
+
+- **WHEN** рендерится кнопка переключения видимости вкладки
+- **THEN** это `FilledTonalButton` в стиле остальных кнопок экрана
+- **AND** `MoreScreen` принимает параметры `showExercisesTab: Boolean` и
+  `onShowExercisesTabChange: (Boolean) -> Unit` (состояние и запись —
+  выше по потоку, в `RootScreen`; у экрана нет ViewModel)
+- **AND** подписи: `R.string.more_exercises_tab_show` («Показать вкладку
+  "Упражнения"» / "Show Exercises tab"),
+  `R.string.more_exercises_tab_hide` («Скрыть вкладку "Упражнения"» /
+  "Hide Exercises tab")
 
 #### Scenario: Russian locale button label when tab is hidden
 
@@ -210,13 +244,20 @@ dimensionResource(R.dimen.button_horizontal_padding))` where
 ### Requirement: Настройка видимости вкладки сохраняется в DataStore
 
 Настройка SHALL храниться в `AppSettingsDataStore` (ключ
-`show_exercises_tab`, файл `appearance_prefs` — правило хранилища «новые
-ключи — точечно по фичам»): `Flow<Boolean>` с дефолтом `false` при первом
-запуске + suspend-setter. `RootScreen` SHALL собирать настройку из
-`dataStore` (тот же экземпляр, что передан из `MainActivity`) и при
-переключении кнопки писать её в DataStore. Включение настройки SHALL
-добавлять вкладку «Упражнения» в `NavigationBar`, выключение — убирать
-(видимые вкладки — см. `tab-navigation/spec.md`).
+`show_exercises_tab`, файл `appearance_prefs`): `Flow<Boolean>` с
+дефолтом `false` при первом запуске + suspend-setter. `RootScreen` SHALL
+собирать настройку из `dataStore` и при переключении кнопки писать её в
+DataStore. Включение настройки SHALL добавлять вкладку «Упражнения» в
+`NavigationBar`, выключение — убирать.
+
+#### Scenario: Правила хранилища настройки
+
+- **WHEN** определяется хранилище настройки
+- **THEN** файл `appearance_prefs` — правило хранилища «новые ключи —
+  точечно по фичам»
+- **AND** `RootScreen` использует тот же экземпляр `dataStore`, что
+  передан из `MainActivity`
+- **AND** видимые вкладки — см. `tab-navigation/spec.md`
 
 #### Scenario: Первый запуск — вкладка скрыта
 
@@ -240,33 +281,43 @@ dimensionResource(R.dimen.button_horizontal_padding))` where
 ### Requirement: MoreScreen имеет кнопки «Оценить приложение» и «Поделиться приложением» на flavor rustore
 
 На экране «Ещё» после кнопки «Отправить обратную связь»
-(`R.string.feedback_send`) SHALL быть две кнопки в стиле остальных кнопок
-экрана, в порядке: «Оценить приложение» (`R.string.rate_the_app`), затем
-«Поделиться приложением» (`R.string.share_the_app`). Кнопки SHALL
-отрисовываться только когда флейв-флаг `BuildConfig.RUSTORE_FEATURES`
-равен `true` (flavor rustore); на flavor github (`false`) кнопки SHALL
-отсутствовать в UI — компайл-тайм-гейт, а не runtime-условие по данным.
+(`R.string.feedback_send`) SHALL быть две кнопки в стиле остальных
+кнопок экрана, в порядке: «Оценить приложение»
+(`R.string.rate_the_app`), затем «Поделиться приложением»
+(`R.string.share_the_app`). Кнопки SHALL отрисовываться только когда
+`BuildConfig.RUSTORE_FEATURES` равен `true` (flavor rustore); на flavor
+github (`false`) кнопки SHALL отсутствовать в UI.
 
-- «Оценить приложение» SHALL открывать страницу отзывов приложения в
-  RuStore: `ACTION_VIEW` на `https://apps.rustore.ru/app/com.myworkouts/reviews`.
-- «Поделиться приложением» SHALL открывать системный chooser
-  (`Intent.createChooser`) для `ACTION_SEND` с `type = "text/plain"`,
-  `EXTRA_TEXT` = `share_text(app_name)` + `"\n"` +
+#### Scenario: Intents кнопок rustore
+
+- **WHEN** пользователь нажимает «Оценить приложение»
+- **THEN** открывается страница отзывов приложения в RuStore:
+  `ACTION_VIEW` на
+  `https://apps.rustore.ru/app/com.myworkouts/reviews`
+- **WHEN** пользователь нажимает «Поделиться приложением»
+- **THEN** открывается системный chooser (`Intent.createChooser`) для
+  `ACTION_SEND` с `type = "text/plain"`, `EXTRA_TEXT` =
+  `share_text(app_name)` + `"\n"` +
   `https://apps.rustore.ru/app/com.myworkouts`, `EXTRA_TITLE` =
-  `R.string.share_the_app` (отдельный `share_chooser_title` не заводится —
-  текст совпадает с подписью кнопки байт-в-байт).
-- Запуск каждого intent SHALL быть обёрнут в `try/catch
-  ActivityNotFoundException` с логированием ошибки (`Log.e`, без падения
+  `R.string.share_the_app` (отдельный `share_chooser_title` не
+  заводится — текст совпадает с подписью кнопки байт-в-байт)
+
+#### Scenario: Обработка ошибок и строки ресурсов
+
+- **WHEN** запуск intent падает
+- **THEN** каждый запуск intent обёрнут в `try/catch
+  ActivityNotFoundException`, ошибка логируется (`Log.e`, без падения
   приложения): для `rateApp` — сообщение «Не удалось открыть страницу
-  приложения», для `shareApp` — «Не удалось открыть ShareSheet».
-- Строки SHALL существовать в `res/values/strings.xml` и
-  `res/values-en/strings.xml`:
-  - `rate_the_app`: «Оценить приложение» / "Rate app"
-  - `share_the_app`: «Поделиться приложением» / "Share app"
-  - `share_text`: «%1$s — приложение-дневник тренировок» /
-    "%1$s - workout tracking app" (плейсхолдер — название приложения из
-    существующего `app_name`)
-- Аналитические события на тапы по кнопкам SHALL NOT добавляться.
+  приложения», для `shareApp` — «Не удалось открыть ShareSheet»
+- **AND** строки существуют в `res/values/strings.xml` и
+  `res/values-en/strings.xml`: `rate_the_app` — «Оценить приложение» /
+  "Rate app"; `share_the_app` — «Поделиться приложением» / "Share app";
+  `share_text` — «%1$s — приложение-дневник тренировок» / "%1$s -
+  workout tracking app" (плейсхолдер — название приложения из
+  существующего `app_name`)
+- **AND** гейт `RUSTORE_FEATURES` — компайл-тайм, а не runtime-условие
+  по данным; аналитические события на тапы по кнопкам SHALL NOT
+  добавляться
 
 #### Scenario: Кнопки видны на rustore
 
@@ -317,17 +368,23 @@ dimensionResource(R.dimen.button_horizontal_padding))` where
 ### Requirement: MoreScreen имеет кнопку-ссылку на GitHub
 
 На экране «Ещё» SHALL быть кнопка «GitHub» (`R.string.github_button`,
-`FilledTonalButton`, в стиле остальных кнопок экрана), размещённая
-последней в `Column` — после flavor-гейта
-`BuildConfig.RUSTORE_FEATURES` (кнопки «Оценить приложение» /
-«Поделиться приложением»). Кнопка SHALL отрисовываться на обоих
-флейворах (flavor-нейтральна). Нажатие SHALL открывать
+`FilledTonalButton` в стиле остальных кнопок экрана), размещённая
+последней в `Column`; кнопка SHALL отрисовываться на обоих флейворах.
+Нажатие SHALL открывать
 `https://github.com/easydev991/Jetpack-MyWorkouts` в системном браузере
-через `Intent.ACTION_VIEW`. Если ни одно приложение не обработало
-intent, ошибка SHALL логироваться через `Log.e("MoreScreen", …)` без
-падения приложения — пользователь остаётся на экране «Ещё». Тап по
-кнопке SHALL NOT порождать аналитическое событие (по образцу кнопок
-«Оценить приложение» / «Поделиться приложением»).
+через `Intent.ACTION_VIEW`; при необработанном intent ошибка SHALL
+логироваться без падения приложения.
+
+#### Scenario: Позиция и аналитика кнопки GitHub
+
+- **WHEN** рендерится `Column` кнопок экрана «Ещё»
+- **THEN** кнопка «GitHub» стоит последней — после flavor-гейта
+  `BuildConfig.RUSTORE_FEATURES` (кнопки «Оценить приложение» /
+  «Поделиться приложением»)
+- **AND** тап по кнопке SHALL NOT порождать аналитическое событие (по
+  образцу кнопок «Оценить приложение» / «Поделиться приложением»)
+- **AND** при `ActivityNotFoundException` логирование — через
+  `Log.e("MoreScreen", …)`; пользователь остаётся на экране «Ещё»
 
 #### Scenario: Кнопка видна на обоих флейворах
 

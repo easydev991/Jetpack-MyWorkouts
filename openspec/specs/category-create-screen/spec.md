@@ -11,28 +11,14 @@
 
 ### Requirement: CategoryCreateScreenContent — Scaffold с TopAppBar и bottomBar
 
-`CategoryCreateScreenContent` SHALL содержать `Scaffold` с `topBar =
-{ TopAppBar(title = { Text(stringResource(titleResId)) },
-navigationIcon = { IconButton(onClick = attemptClose) {
-Icon(Icons.AutoMirrored.Filled.ArrowBack,
-contentDescription = stringResource(R.string.back)) } }) }` и
-`bottomBar` с единственной кнопкой «Сохранить» (`R.string.entry_save`) —
-паттерн `SaveBottomBar` (`ui/components`) с блоком ошибки под кнопкой при
-`state.uiState.isSaveError == true` (см. требование «Сохранение — create
-и update с popBackStack»). Заголовок SHALL зависеть от режима:
-`R.string.category_create_title` («Новая категория» / "New category") в
-create-режиме, `R.string.category_edit_title` («Изменить категорию» /
-"Edit category") в edit-режиме (`state.uiState.isEditMode == true`).
-Форма SHALL содержать поле «Название» и `CategoryColorPicker` под ним
-(требование «CategoryColorPicker — отображение и регенерация цвета»).
-`attemptClose` — единая точка входа для системного back и стрелки
-`TopAppBar` (требование «BackHandler + hasChanges» — переименовано
-в этой дельте, поведение не меняется).
-Обёртка `CategoryCreateScreen` делегирует в Content через
-`CategoryCreateScreenState` (паттерн `ExerciseCreateScreen — обёртка +
-Content + ScreenState`: `collectAsState` + data class state с колбэками
-`onNameChange` / `onRegenerateColorClick` / `onSaveClick` /
-`onBackClick`).
+`CategoryCreateScreenContent` SHALL содержать `Scaffold` с `topBar`
+(`TopAppBar` с заголовком по режиму и стрелкой назад через `attemptClose`)
+и `bottomBar` с единственной кнопкой «Сохранить» (`R.string.entry_save`) —
+паттерн `SaveBottomBar` (`ui/components`). Заголовок SHALL зависеть от
+режима: `R.string.category_create_title` в create-режиме,
+`R.string.category_edit_title` в edit-режиме. Обёртка
+`CategoryCreateScreen` делегирует в Content через
+`CategoryCreateScreenState`.
 
 #### Scenario: Открытие в create-режиме
 
@@ -49,6 +35,39 @@ Content + ScreenState`: `collectAsState` + data class state с колбэкам�
   "Edit category" (en)
 + **AND** поле «Название» предзаполнено именем категории
 + **AND** кружок пикера показывает текущий `colorArgb` категории
++ **AND** признак режима — `state.uiState.isEditMode == true`
+
+#### Scenario: Структура TopAppBar
+
++ **WHEN** `topBar` экрана composed
++ **THEN** используется
+  `TopAppBar(title = { Text(stringResource(titleResId)) },
+  navigationIcon = { IconButton(onClick = attemptClose) {
+  Icon(Icons.AutoMirrored.Filled.ArrowBack,
+  contentDescription = stringResource(R.string.back)) } })`
+
+#### Scenario: Блок ошибки в bottomBar
+
++ **WHEN** `state.uiState.isSaveError == true`
++ **THEN** в `SaveBottomBar` под кнопкой «Сохранить» отображается блок
+  ошибки (см. требование «Сохранение — create и update с popBackStack»)
+
+#### Scenario: attemptClose — единая точка входа
+
++ **WHEN** нажимается системный back или стрелка `TopAppBar`
++ **THEN** вызывается `attemptClose` — единая точка входа (требование
+  «BackHandler + hasChanges» — переименовано в этой дельте, поведение не
+  меняется)
+
+#### Scenario: Обёртка делегирует в Content
+
++ **WHEN** `CategoryCreateScreen` composed
++ **THEN** он делегирует в Content через `CategoryCreateScreenState` по
+  паттерну `ExerciseCreateScreen — обёртка + Content + ScreenState`:
+  `collectAsState` + data class state с колбэками `onNameChange` /
+  `onRegenerateColorClick` / `onSaveClick` / `onBackClick`
++ **AND** `CategoryColorPicker` размещается под полем «Название»
+  (требование «CategoryColorPicker — отображение и регенерация цвета»)
 
 ### Requirement: Поле «Название» — однострочное, обязательное
 
@@ -66,18 +85,12 @@ R.string.category_field_name` («Название» / "Name"), `singleLine = tru
 ### Requirement: CategoryColorPicker — отображение и регенерация цвета
 
 Форма SHALL содержать компонент `CategoryColorPicker` под полем
-«Название»: `Row` с заголовком «Цвет» (`R.string.category_field_color` —
-«Цвет» / "Color"), занимающим всю доступную ширину (`Modifier.weight(1f)`),
-справа — вложенный `Row` из двух элементов: `IconButton` со стандартной
-иконкой `Icons.Default.Refresh` и кружок текущего цвета (заливка
-`colorArgb`, форма `CircleShape`). Компонент SHALL работать в обоих
-режимах экрана (create и edit) и SHALL быть доступным: contentDescription
-кнопки (`R.string.category_color_regenerate` — «Обновить цвет» /
-"Regenerate color") и кружка (`R.string.category_color_current` —
-«Текущий цвет» / "Current color"). `colorArgb == null` SHALL отображаться
-нейтральным плейсхолдером (цвет темы), не пустотой. Тап по `IconButton`
-SHALL вызывать колбэк регенерации цвета `onRegenerateColorClick`
-(требование «ViewModel, UiState и canSave»).
+«Название»: `Row` с заголовком «Цвет» (`R.string.category_field_color`) и
+вложенный `Row` из `IconButton` со стандартной иконкой и кружка текущего
+цвета. Компонент SHALL работать в обоих режимах экрана (create и edit) и
+SHALL быть доступным (contentDescription кнопки и кружка). Тап по
+`IconButton` SHALL вызывать колбэк регенерации цвета
+`onRegenerateColorClick`.
 
 #### Scenario: Отображение в create-режиме
 
@@ -96,12 +109,31 @@ SHALL вызывать колбэк регенерации цвета `onRegener
 + **WHEN** нажимается `IconButton` refresh
 + **THEN** вызывается `onRegenerateColorClick` AND кружок перерисовывается
   актуальным цветом (возможно, тем же по значению — спека `category-data`)
++ **AND** колбэк — `onRegenerateColorClick` (требование «ViewModel, UiState
+  и canSave»)
 
 #### Scenario: Доступность
 
 + **WHEN** компонент отрисован
 + **THEN** кнопка имеет contentDescription «Обновить цвет» AND кружок —
   «Текущий цвет» (ru) / "Regenerate color" и "Current color" (en)
++ **AND** ресурсы — `R.string.category_color_regenerate` (кнопка) и
+  `R.string.category_color_current` (кружок)
+
+#### Scenario: Структура пикера
+
++ **WHEN** `CategoryColorPicker` composed
++ **THEN** заголовок «Цвет» (`R.string.category_field_color` — «Цвет» /
+  "Color") занимает всю доступную ширину (`Modifier.weight(1f)`)
++ **AND** справа — вложенный `Row` из двух элементов: `IconButton` со
+  стандартной иконкой `Icons.Default.Refresh` и кружок текущего цвета
+  (заливка `colorArgb`, форма `CircleShape`)
+
+#### Scenario: Null-цвет отображается плейсхолдером
+
++ **WHEN** `colorArgb == null`
++ **THEN** кружок отображается нейтральным плейсхолдером (цвет темы), не
+  пустотой
 
 ### Requirement: Валидация уникальности имени категории
 
@@ -109,11 +141,7 @@ SHALL вызывать колбэк регенерации цвета `onRegener
 `name.trim().lowercase()` против всех существующих категорий (активных и
 архивных), кроме самой редактируемой в edit-режиме. При дубликате имени
 `canSave` SHALL быть `false`, а форма SHALL показывать локализованную
-подсказку об ошибке под полем (`R.string.category_error_duplicate` —
-«Категория с таким названием уже существует» / "A category with this name
-already exists") в `colorScheme.error`. Источник существующих имён SHALL
-обновляться реактивно (снимок/Flow репозитория), чтобы категория, созданная
-в другой сессии, учитывалась без пересоздания экрана.
+подсказку об ошибке под полем в `colorScheme.error`.
 
 #### Scenario: Дубликат блокирует сохранение с подсказкой
 
@@ -121,6 +149,9 @@ already exists") в `colorScheme.error`. Источник существующи
   в форме создания
 + **THEN** `canSave == false`
 + **AND** под полем отображается «Категория с таким названием уже существует»
++ **AND** ресурс подсказки — `R.string.category_error_duplicate`
+  («Категория с таким названием уже существует» / "A category with this
+  name already exists") в `colorScheme.error`
 
 #### Scenario: Собственное имя в edit-режиме не дубликат
 
@@ -129,33 +160,20 @@ already exists") в `colorScheme.error`. Источник существующи
   уникальностью), `hasChanges = false` (формула — «Edit-режим: загрузка и
   предзаполнение»: `trim()` без `lowercase()`)
 
+#### Scenario: Реактивный источник имён
+
++ **WHEN** категория создана в другой сессии
++ **THEN** источник существующих имён обновляется реактивно (снимок/Flow
+  репозитория) и учитывается без пересоздания экрана
+
 ### Requirement: ViewModel, UiState и canSave
 
-`CategoryCreateUiState` SHALL быть data class с полями `name: String? =
-null`, `isEditMode: Boolean = false`, `hasChanges: Boolean = false`,
-`isDuplicateName: Boolean = false`, `isCategoryMissing: Boolean = false`,
-`isSaveError: Boolean = false`, `colorArgb: Int? = null` (текущий цвет
-кружка; `null` — ещё не сгенерирован или не загружен) — по образцу
-`ExerciseCreateUiState`. Отдельный флаг изменения цвета НЕ вводится:
-стартовая линия (в create — первый сгенерированный цвет, в edit —
-исходный `colorArgb` категории) хранится приватно в VM; сравнение
-строго по значению `colorArgb`. `canSave` SHALL быть computed-свойством
+`CategoryCreateUiState` SHALL быть data class с полями `name: String?`,
+`isEditMode`, `hasChanges`, `isDuplicateName`, `isCategoryMissing`,
+`isSaveError` (Boolean, по `false`) и `colorArgb: Int? = null` — по
+образцу `ExerciseCreateUiState`. `canSave` SHALL быть computed-свойством
 `!name.isNullOrBlank() && !isDuplicateName && (!isEditMode || hasChanges)
-&& !isCategoryMissing` (`isSaveError` НЕ входит в формулу — ошибка не
-блокирует кнопку, только показывается и сбрасывается на вводе; в
-create-режиме терм `(!isEditMode || hasChanges)` истинен по построению
-— `canSave` от `hasChanges` не зависит). `hasChanges` — единый флаг
-изменения относительно стартовой линии: имя после `trim()` ИЛИ цвет по
-значению `colorArgb` (в обоих режимах). Колбэк `onNameChange`
-SHALL сбрасывать `isDuplicateName` и `isSaveError = false` при каждом
-вводе (перепроверка дубликата — по актуальному списку имён; паттерн
-`ExerciseCreateViewModel.onXChange`); колбэк `onRegenerateColorClick`
-SHALL сбрасывать `isSaveError = false`. В create-режиме VM SHALL
-генерировать начальный цвет при
-первой эмиссии списка категорий, регенерация SHALL выполняться по
-правилам спеки `category-data` (требование «Генерация и регенерация
-цвета категории») от цветов всех известных категорий (активных и
-архивных).
+&& !isCategoryMissing`.
 
 #### Scenario: Валидная форма — canSave = true
 
@@ -186,26 +204,63 @@ SHALL сбрасывать `isSaveError = false`. В create-режиме VM SHAL
   в другое значение
 + **THEN** `hasChanges == true` (диалог подтверждения закрытия)
 
+#### Scenario: Поля и дефолты UiState
+
++ **WHEN** `CategoryCreateUiState()` создан без аргументов
++ **THEN** поля: `name: String? = null`, `isEditMode: Boolean = false`,
+  `hasChanges: Boolean = false`, `isDuplicateName: Boolean = false`,
+  `isCategoryMissing: Boolean = false`, `isSaveError: Boolean = false`,
+  `colorArgb: Int? = null` (текущий цвет кружка; `null` — ещё не
+  сгенерирован или не загружен)
+
+#### Scenario: Стартовая линия изменения цвета
+
++ **WHEN** определяется изменение цвета
++ **THEN** отдельный флаг изменения цвета НЕ вводится: стартовая линия (в
+  create — первый сгенерированный цвет, в edit — исходный `colorArgb`
+  категории) хранится приватно в VM; сравнение строго по значению
+  `colorArgb`
+
+#### Scenario: isSaveError не входит в canSave
+
++ **WHEN** вычисляется `canSave`
++ **THEN** `isSaveError` НЕ входит в формулу — ошибка не блокирует кнопку,
+  только показывается и сбрасывается на вводе
++ **AND** в create-режиме терм `(!isEditMode || hasChanges)` истинен по
+  построению — `canSave` от `hasChanges` не зависит
+
+#### Scenario: Формула hasChanges
+
++ **WHEN** вычисляется `hasChanges`
++ **THEN** это единый флаг изменения относительно стартовой линии: имя
+  после `trim()` ИЛИ цвет по значению `colorArgb` (в обоих режимах)
+
+#### Scenario: Сброс флагов на ввод
+
++ **WHEN** вызывается `onNameChange`
++ **THEN** `isDuplicateName` сбрасывается и перепроверяется по актуальному
+  списку имён, `isSaveError = false` сбрасывается при каждом вводе
+  (паттерн `ExerciseCreateViewModel.onXChange`)
++ **WHEN** вызывается `onRegenerateColorClick`
++ **THEN** `isSaveError = false` сбрасывается
+
+#### Scenario: Начальный цвет и регенерация в create
+
++ **WHEN** в create-режиме приходит первая эмиссия списка категорий
++ **THEN** VM генерирует начальный цвет
++ **AND** регенерация выполняется по правилам спеки `category-data`
+  (требование «Генерация и регенерация цвета категории») от цветов всех
+  известных категорий (активных и архивных)
+
 ### Requirement: Сохранение — create и update с popBackStack
 
-`save(onSaved: () -> Unit)` SHALL начинаться с guard `if (!canSave) return`.
-В create-режиме SHALL вызываться `addCategory(name, colorArgb)` — имя
-`trim()`-ится, цвет передаётся из пикера; если к моменту сохранения
-цвет ещё не сгенерирован (`colorArgb == null` — имя введено раньше
-первой эмиссии списка), VM SHALL сгенерировать его на месте теми же
-правилами (правила генерации — спека `category-data`, требование
-«Генерация и регенерация цвета категории»); в edit-режиме —
-`updateCategory(id, name, colorArgb)`
-(транзакция обновляет категорию и каскад ссылок упражнений по имени).
-При `Result.success` SHALL вызываться `onSaved()` (`popBackStack()`); при
-`Result.failure` экран SHALL оставаться открытым; текст ошибки SHALL
-показываться под кнопкой «Сохранить» в `colorScheme.error`
-(`R.string.category_save_error`) — паттерн `SaveBottomBar`
-(`ui/components`).
-Отказ update не различает причину — любой `Result.failure` показывает
-общий `category_save_error` (типизированное исключение
-`StandardCategoryDeletionException` — защита на уровне репозитория, UI
-не открывает редактирование стандартной категории).
+`save(onSaved: () -> Unit)` SHALL начинаться с guard
+`if (!canSave) return`. В create-режиме SHALL вызываться
+`addCategory(name, colorArgb)` (имя `trim()`-ится, цвет передаётся из
+пикера); в edit-режиме — `updateCategory(id, name, colorArgb)`. При
+`Result.success` SHALL вызываться `onSaved()` (`popBackStack()`); при
+`Result.failure` экран SHALL оставаться открытым, а текст ошибки SHALL
+показываться под кнопкой «Сохранить» в `colorScheme.error`.
 
 #### Scenario: Успешное создание закрывает экран
 
@@ -219,6 +274,8 @@ SHALL сбрасывать `isSaveError = false`. В create-режиме VM SHAL
   возвращает `Result.success`
 + **THEN** `onSaved()` вызывается ровно один раз
 + **AND** в репозиторий переданы id, имя с `trim()` и `colorArgb` из пикера
++ **AND** транзакция обновляет категорию и каскад ссылок упражнений по
+  имени
 
 #### Scenario: Неуспешное сохранение показывает ошибку
 
@@ -226,6 +283,8 @@ SHALL сбрасывать `isSaveError = false`. В create-режиме VM SHAL
 + **THEN** экран остаётся открытым
 + **AND** `isSaveError == true` AND под кнопкой «Сохранить» виден
   текст ошибки
++ **AND** текст ошибки — `R.string.category_save_error`, паттерн
+  `SaveBottomBar` (`ui/components`)
 
 #### Scenario: Ввод после неуспешного сохранения скрывает ошибку
 
@@ -238,28 +297,50 @@ SHALL сбрасывать `isSaveError = false`. В create-режиме VM SHAL
 + **WHEN** нажимается «Сохранить» при `canSave == false`
 + **THEN** репозиторий НЕ вызывается AND `onSaved()` НЕ вызывается
 
+#### Scenario: Генерация цвета при сохранении, если не сгенерирован
+
++ **WHEN** в create-режиме сохраняется форма с `colorArgb == null` (имя
+  введено раньше первой эмиссии списка)
++ **THEN** VM генерирует цвет на месте теми же правилами (правила
+  генерации — спека `category-data`, требование «Генерация и регенерация
+  цвета категории»)
+
+#### Scenario: Отказ update не различает причину
+
++ **WHEN** `updateCategory` возвращает `Result.failure` (в том числе
+  типизированное исключение `StandardCategoryDeletionException` — защита
+  на уровне репозитория, UI не открывает редактирование стандартной
+  категории)
++ **THEN** показывается общий `category_save_error`
+
 ### Requirement: Edit-режим: загрузка и предзаполнение
 
-`CategoryCreateViewModel` SHALL принимать `categoryId: Long` (`NO_CATEGORY_ID`
-— create-режим). В edit-режиме VM SHALL загрузить категорию по id: при
-отсутствии/ошибке — `isCategoryMissing = true` (кнопка «Сохранить»
-недостижимо disabled, поведение по паттерну `isExerciseMissing`); при
-успехе — предзаполнить поле имени, `colorArgb` (исходный цвет категории —
-кружок до первой регенерации) и запомнить оригинал (имя и цвет).
-`hasChanges` — результат сравнения черновика с оригиналом: имя после
-`trim()` (без `lowercase()` — он применяется только при проверке
-уникальности) ИЛИ цвет по значению `colorArgb`.
+`CategoryCreateViewModel` SHALL принимать `categoryId: Long`
+(`NO_CATEGORY_ID` — create-режим). В edit-режиме VM SHALL загрузить
+категорию по id: при отсутствии/ошибке — `isCategoryMissing = true`; при
+успехе — предзаполнить поле имени, `colorArgb` и запомнить оригинал (имя
+и цвет). `hasChanges` — результат сравнения черновика с оригиналом.
 
 #### Scenario: Предзаполнение из БД
 
 + **WHEN** экран открыт для категории «Плечи»
 + **THEN** поле «Название» содержит «Плечи» AND кружок — цвет категории
   AND «Сохранить» disabled
++ **AND** `colorArgb` — исходный цвет категории (кружок до первой
+  регенерации)
 
 #### Scenario: Категория не найдена
 
 + **WHEN** категория удалена в другой сессии
 + **THEN** `isCategoryMissing == true` AND «Сохранить» disabled
++ **AND** поведение по паттерну `isExerciseMissing`
+
+#### Scenario: Формула hasChanges в edit-режиме
+
++ **WHEN** вычисляется `hasChanges` в edit-режиме
++ **THEN** это результат сравнения черновика с оригиналом: имя после
+  `trim()` (без `lowercase()` — он применяется только при проверке
+  уникальности) ИЛИ цвет по значению `colorArgb`
 
 ### Requirement: BackHandler + hasChanges
 

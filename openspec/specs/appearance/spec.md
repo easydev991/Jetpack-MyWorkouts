@@ -12,17 +12,10 @@ DataStore и применением темы ко всему приложени�
 
 `AppearanceScreen` SHALL be a `@Composable fun AppearanceScreen(viewModel:
 AppearanceViewModel, onBackClick: () -> Unit)`. The `Scaffold` SHALL contain
-a `topBar` with `TopAppBar` showing localized title from
-`R.string.appearance_title` and a navigation icon button (`Icons.AutoMirrored.Filled.ArrowBack`)
-with `contentDescription` from `R.string.back` that calls `onBackClick`. The
-body SHALL be a `Column(verticalArrangement = Arrangement.spacedBy(16.dp))`
-with `modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-.padding(paddingValues).padding(16.dp)` (the modifier order matters:
-`padding(paddingValues)` consumes the `Scaffold` content insets,
-`padding(16.dp)` adds the screen-body margin; see
-`AppearanceScreen.kt:117–125`), containing a `ThemeSection` and — when
-dynamic colors are available on the device — a `DynamicColorsSection`,
-separated by a `HorizontalDivider`.
+a `topBar` with `TopAppBar` (localized title from
+`R.string.appearance_title`, back navigation icon calling `onBackClick`)
+and a scrollable body containing a `ThemeSection` and — when dynamic colors
+are available — a `DynamicColorsSection`, separated by a `HorizontalDivider`.
 
 #### Scenario: Russian locale shows localized title and back content description
 
@@ -41,16 +34,31 @@ separated by a `HorizontalDivider`.
 - **WHEN** user taps the back navigation icon
 - **THEN** `onBackClick` is invoked
 
+#### Scenario: Back navigation icon details
+
+- **WHEN** `AppearanceScreen` is composed
+- **THEN** the `TopAppBar` navigation icon button is
+  `Icons.AutoMirrored.Filled.ArrowBack`
+- **AND** its `contentDescription` comes from `R.string.back`
+
+#### Scenario: Body column layout
+
+- **WHEN** the body of `AppearanceScreen` is composed
+- **THEN** it is a
+  `Column(verticalArrangement = Arrangement.spacedBy(16.dp))` with
+  `modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+  .padding(paddingValues).padding(16.dp)` (the modifier order matters:
+  `padding(paddingValues)` consumes the `Scaffold` content insets,
+  `padding(16.dp)` adds the screen-body margin; see
+  `AppearanceScreen.kt:117–125`)
+
 ### Requirement: ThemeSection exposes three radio options
 
 `ThemeSection` SHALL display the localized section header from
 `R.string.app_theme` and exactly three selectable rows — one per
-`AppTheme` value (`LIGHT`, `DARK`, `SYSTEM`). Each row SHALL consist of
-a `RadioButton` and a `Text` label localized via `R.string.light`,
-`R.string.dark`, `R.string.system` respectively. The `Row` SHALL be
-marked `Modifier.selectable(selected, onClick, enabled, role = Role.RadioButton)`
-with `height(56.dp)`. The currently selected theme's row SHALL have
-`enabled = false` (selected radio is not re-clickable).
+`AppTheme` value (`LIGHT`, `DARK`, `SYSTEM`), each with a `RadioButton`
+and a localized `Text` label. The currently selected theme's row SHALL
+have `enabled = false` (selected radio is not re-clickable).
 
 #### Scenario: All three theme rows are displayed
 
@@ -71,17 +79,26 @@ with `height(56.dp)`. The currently selected theme's row SHALL have
   when current theme is `LIGHT`)
 - **THEN** `onThemeChange(DARK)` is invoked
 
+#### Scenario: Row labels come from dedicated string resources
+
+- **WHEN** the three theme rows are composed
+- **THEN** their `Text` labels are localized via `R.string.light`,
+  `R.string.dark`, `R.string.system` respectively
+
+#### Scenario: Row selectable modifier
+
+- **WHEN** a theme row is composed
+- **THEN** the `Row` is marked
+  `Modifier.selectable(selected, onClick, enabled, role = Role.RadioButton)`
+  with `height(56.dp)`
+
 ### Requirement: DynamicColorsSection is conditionally rendered
 
 `AppearanceScreen` SHALL hide the entire `DynamicColorsSection` (and the
 preceding `HorizontalDivider` MUST NOT become an orphan) when
-`isDynamicColorsAvailable = false` (i.e. on devices with
-`Build.VERSION.SDK_INT < S` / Android < 12). When
-`isDynamicColorsAvailable = true`, the section SHALL contain a header
-localized via `R.string.dynamic_colors`, a `Row` with localized label
-`R.string.use_dynamic_colors` + a `Switch(checked = useDynamicColors,
-onCheckedChange = onDynamicColorsChange)`, and a hint localized via
-`R.string.dynamic_colors_hint` rendered as `Text(typography.bodySmall)`.
+`isDynamicColorsAvailable = false` (Android < 12). When
+`isDynamicColorsAvailable = true`, the section SHALL contain a localized
+header, a label with a `Switch`, and a hint.
 
 #### Scenario: Section visible when dynamic colors available
 
@@ -108,6 +125,21 @@ onCheckedChange = onDynamicColorsChange)`, and a hint localized via
 - **THEN** `onDynamicColorsChange(false)` is invoked
 - **WHEN** user clicks the `Switch` while `useDynamicColors = false`
 - **THEN** `onDynamicColorsChange(true)` is invoked
+
+#### Scenario: Unavailability corresponds to SDK below S
+
+- **WHEN** the device runs `Build.VERSION.SDK_INT < S` (Android < 12)
+- **THEN** `isDynamicColorsAvailable = false` and the entire section is
+  hidden
+
+#### Scenario: Section content composition
+
+- **WHEN** `isDynamicColorsAvailable = true` and the section is composed
+- **THEN** it contains a header localized via `R.string.dynamic_colors`, a
+  `Row` with localized label `R.string.use_dynamic_colors` +
+  `Switch(checked = useDynamicColors, onCheckedChange =
+  onDynamicColorsChange)`, and a hint localized via
+  `R.string.dynamic_colors_hint` rendered as `Text(typography.bodySmall)`
 
 ### Requirement: isDynamicColorsAvailable is computed outside Content
 
@@ -215,14 +247,10 @@ respectively. An unrecognized stored theme name SHALL fall back to
 
 `AppearanceViewModel(dataStore: AppSettingsDataStore) : ViewModel` SHALL
 expose `val uiState: StateFlow<AppearanceUiState>` and methods
-`updateTheme(theme: AppTheme)` and `updateDynamicColors(useDynamicColors:
-Boolean)`. `uiState` SHALL be derived from
-`combine(dataStore.theme, dataStore.useDynamicColors).stateIn(viewModelScope,
-SharingStarted.WhileSubscribed(5000L), AppearanceUiState())`.
-`updateTheme` SHALL launch `dataStore.setTheme(theme)` in `viewModelScope`;
-similarly for `updateDynamicColors`. The companion SHALL provide
-`fun factory(dataStore: AppSettingsDataStore): ViewModelProvider.Factory`
-via `viewModelFactory { initializer { AppearanceViewModel(dataStore) } }`.
+`updateTheme(theme: AppTheme)` and
+`updateDynamicColors(useDynamicColors: Boolean)` delegating to the
+dataStore in `viewModelScope`. The companion SHALL provide
+`fun factory(dataStore: AppSettingsDataStore): ViewModelProvider.Factory`.
 
 #### Scenario: uiState combines theme and useDynamicColors
 
@@ -248,6 +276,16 @@ via `viewModelFactory { initializer { AppearanceViewModel(dataStore) } }`.
   `viewModel<T>(factory = ...)` and the ViewModel is resolved
 - **THEN** the resulting `AppearanceViewModel`'s dataStore is the
   provided instance
+- **AND** the factory is built via
+  `viewModelFactory { initializer { AppearanceViewModel(dataStore) } }`
+
+#### Scenario: uiState construction
+
+- **WHEN** `uiState` is created
+- **THEN** it is derived from
+  `combine(dataStore.theme, dataStore.useDynamicColors).stateIn(
+  viewModelScope, SharingStarted.WhileSubscribed(5000L),
+  AppearanceUiState())`
 
 ### Requirement: AppearanceUiState is a plain data class
 
@@ -296,23 +334,12 @@ it SHALL use the static `LightColorScheme` / `DarkColorScheme`.
 ### Requirement: MainActivity creates DataStore and subscribes directly
 
 `MyWorkoutsApplication` SHALL create exactly one
-`AppSettingsDataStore(applicationContext)` instance, lazily (`val
-dataStore: AppSettingsDataStore by lazy { ... }`), so that the
-singleton scope is the **process** (`Application`), not per-Activity —
-пересоздание Activity (смена конфигурации) более не плодит
-инстансов DataStore и `InvalidationTracker` нотифицирует одну
-подписку. `MainActivity.onCreate` SHALL получить этот инстанс через
-`val dataStore = (application as MyWorkoutsApplication).dataStore`
-BEFORE `setContent`. Внутри `setContent` активность подписывается на
-`dataStore.theme.collectAsState(initial = AppTheme.SYSTEM)` и
-`dataStore.useDynamicColors.collectAsState(initial = true)`,
-вычисляет `val isDarkTheme = theme.isDark(isSystemInDarkTheme())` и
-вызывает `LaunchedEffect(isDarkTheme) { enableEdgeToEdge(statusBarStyle
-= if (isDarkTheme) SystemBarStyle.dark(Color.TRANSPARENT) else
-SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)) }` для
-перекраски статус-бара при смене темы. `RootScreen(dataStore =
-dataStore)` SHALL компониться внутри `JetpackMyWorkoutsTheme(appTheme
-= theme, dynamicColor = useDynamicColors)`.
+`AppSettingsDataStore(applicationContext)` instance, lazily, so that the
+singleton scope is the **process** (`Application`), not per-Activity.
+`MainActivity.onCreate` SHALL get this instance via
+`val dataStore = (application as MyWorkoutsApplication).dataStore` BEFORE
+`setContent`; `RootScreen(dataStore = dataStore)` SHALL be composed inside
+`JetpackMyWorkoutsTheme(appTheme = theme, dynamicColor = useDynamicColors)`.
 
 #### Scenario: DataStore singleton lives on MyWorkoutsApplication
 
@@ -323,6 +350,20 @@ dataStore)` SHALL компониться внутри `JetpackMyWorkoutsTheme(ap
   обращения; повторные обращения возвращают тот же instance — второй
   instance на тот же файл `appearance_prefs` бросил бы
   `IllegalStateException`)
+- **AND** пересоздание Activity (смена конфигурации) более не плодит
+  инстансов DataStore и `InvalidationTracker` нотифицирует одну подписку
+
+#### Scenario: setContent subscriptions and status bar restyle
+
+- **WHEN** inside `setContent` the activity subscribes to
+  `dataStore.theme.collectAsState(initial = AppTheme.SYSTEM)` and
+  `dataStore.useDynamicColors.collectAsState(initial = true)`
+- **THEN** it computes
+  `val isDarkTheme = theme.isDark(isSystemInDarkTheme())`
+- **AND** calls `LaunchedEffect(isDarkTheme) { enableEdgeToEdge(
+  statusBarStyle = if (isDarkTheme) SystemBarStyle.dark(Color.TRANSPARENT)
+  else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)) }` для
+  перекраски статус-бара при смене темы
 
 #### Scenario: Status bar style follows theme at runtime
 
@@ -342,18 +383,13 @@ dataStore)` SHALL компониться внутри `JetpackMyWorkoutsTheme(ap
 ### Requirement: AppSettingsDataStore persists archive-dialog preference
 
 `AppSettingsDataStore` SHALL expose `val dontShowArchiveDialog:
-Flow<Boolean>` (default `false`) и suspend-метод
+Flow<Boolean>` (default `false`) with suspend-метод
 `setDontShowArchiveDialog(value: Boolean)` — чекбокс «Больше не
-показывать» алерта архивации упражнения. Для алерта архивации категории —
-ОТДЕЛЬНЫЙ флаг: `val dontShowCategoryArchiveDialog: Flow<Boolean>`
-(default `false`) и suspend-метод
-`setDontShowCategoryArchiveDialog(value: Boolean)` (ключ
-`dont_show_category_archive_dialog`, НЕ общий с упражнениями
-`dont_show_archive_dialog`). Оба ключа SHALL храниться в том же файле
-`appearance_prefs` (БЕЗ отдельного `DataStore` и БЕЗ миграции —
-Preferences DataStore расширяет схему автоматически при добавлении нового
-ключа; существующие установки видят default `false` до явного opt-out
-пользователя).
+показывать» алерта архивации упражнения, and a separate
+`val dontShowCategoryArchiveDialog: Flow<Boolean>` (default `false`)
+with suspend-метод `setDontShowCategoryArchiveDialog(value: Boolean)` для
+алерта архивации категории. Оба ключа SHALL храниться в том же файле
+`appearance_prefs`.
 
 #### Scenario: dontShowArchiveDialog returns false on first launch
 
@@ -375,6 +411,17 @@ Preferences DataStore расширяет схему автоматически �
 - **WHEN** `AppSettingsDataStore.dontShowCategoryArchiveDialog` is
   collected with no prior writes
 - **THEN** the first emitted value is `false`
+- **AND** ключ `dont_show_category_archive_dialog`, НЕ общий с
+  упражнениями `dont_show_archive_dialog`
+
+#### Scenario: Schema extends without migration
+
+- **WHEN** новые ключи добавляются в `appearance_prefs`
+- **THEN** хранение — БЕЗ отдельного `DataStore` и БЕЗ миграции:
+  Preferences DataStore расширяет схему автоматически при добавлении
+  нового ключа
+- **AND** существующие установки видят default `false` до явного opt-out
+  пользователя
 
 #### Scenario: setDontShowCategoryArchiveDialog persists and Flow re-emits
 

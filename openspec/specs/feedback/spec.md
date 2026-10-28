@@ -18,12 +18,24 @@
 
 ### Requirement: Tapping the button launches a prefilled email intent
 
-Tapping the feedback button SHALL launch `Intent.ACTION_SENDTO` with a `mailto:` URI containing the recipient address `easy_dev991@mail.ru` and the following query parameters:
+Tapping the feedback button SHALL launch `Intent.ACTION_SENDTO` with a
+`mailto:` URI containing the recipient address `easy_dev991@mail.ru` and
+query parameters `subject` and `body`, both URL-encoded via
+`android.net.Uri.encode` before insertion into the URI. The intent SHALL
+be launched via `context.startActivity(intent)` without
+`Intent.createChooser` — `ACTION_SENDTO` combined with `mailto:` is
+already filtered by the system to email clients only.
 
-- `subject`: the value of `R.string.feedback_subject` with `%1$s` substituted by the localized `R.string.app_name` (yielding `"<app_name>: Обратная связь"` in Russian, `"<app_name>: Feedback"` in English).
-- `body`: the value of `R.string.feedback_body` with `%1$s` substituted by `Build.VERSION.RELEASE` and `%2$s` substituted by `BuildConfig.VERSION_NAME`.
+#### Scenario: Subject and body substitution
 
-Both `subject` and `body` SHALL be URL-encoded via `android.net.Uri.encode` before insertion into the URI. The intent SHALL be launched via `context.startActivity(intent)` without `Intent.createChooser` — `ACTION_SENDTO` combined with `mailto:` is already filtered by the system to email clients only.
+- **WHEN** the `mailto:` URI query parameters are built
+- **THEN** `subject` is the value of `R.string.feedback_subject` with
+  `%1$s` substituted by the localized `R.string.app_name` (yielding
+  `"<app_name>: Обратная связь"` in Russian, `"<app_name>: Feedback"` in
+  English)
+- **AND** `body` is the value of `R.string.feedback_body` with `%1$s`
+  substituted by `Build.VERSION.RELEASE` and `%2$s` substituted by
+  `BuildConfig.VERSION_NAME`
 
 #### Scenario: Tapping opens email composition with prefilled fields
 - **WHEN** the user taps the feedback button

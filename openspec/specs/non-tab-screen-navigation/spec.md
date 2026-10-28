@@ -13,12 +13,16 @@
 `Screen` SHALL be `sealed class Screen(val route: String)` and SHALL
 NOT contain `icon`, `titleResId`, or other UI metadata. Each subclass
 is an `object` with a unique `route` string. `Screen` SHALL be the
-single source of truth for navigation route strings; the navigation
-graph in `RootScreen` SHALL use `Screen.Main.route`, `Screen.Exercises.route`,
-`Screen.More.route`, `Screen.Appearance.route`, `Screen.AppData.route`,
-`Screen.EntryCreate.route`, `Screen.ExerciseCreate.route`,
-`Screen.ArchivedExercises.route`, `Screen.EntrySettings.route`,
-`Screen.CategoryCreate.route` as the registered destinations.
+single source of truth for navigation route strings.
+
+#### Scenario: Registered destinations use Screen routes
+
+- **WHEN** the navigation graph in `RootScreen` is composed
+- **THEN** it uses `Screen.Main.route`, `Screen.Exercises.route`,
+  `Screen.More.route`, `Screen.Appearance.route`, `Screen.AppData.route`,
+  `Screen.EntryCreate.route`, `Screen.ExerciseCreate.route`,
+  `Screen.ArchivedExercises.route`, `Screen.EntrySettings.route`,
+  `Screen.CategoryCreate.route` as the registered destinations
 
 #### Scenario: Screen has only route parameter
 
@@ -70,18 +74,7 @@ graph in `RootScreen` SHALL use `Screen.Main.route`, `Screen.Exercises.route`,
 `icon: ImageVector`, and `titleResId: Int`, used to populate the
 `NavigationBar` in `RootScreen`. `BottomTabs: List<BottomTab>` SHALL list
 exactly the tabs that appear in the bottom navigation, in left-to-right
-order. The list SHALL contain entries for `Screen.Main.route` (icon
-`Icons.Filled.Home`, title `R.string.workouts_title`),
-`Screen.Exercises.route` (icon `Icons.Filled.FitnessCenter`, title
-`R.string.exercises_title`), and `Screen.More.route` (icon
-`Icons.Filled.Menu`, title `R.string.more_title`) — Exercises between
-Main and More. `Screen.Appearance`, `Screen.AppData` и
-`Screen.ArchivedExercises` SHALL NOT be in `BottomTabs` (они не
-являются tab-экранами). `BottomTabs` SHALL remain the full static list
-(order and membership — single source of truth); runtime visibility of
-individual tabs is NOT filtered here — it is governed by
-`tab-navigation/spec.md` (the Exercises entry is hidden when the
-`show_exercises_tab` setting is off).
+order, and SHALL remain the full static list.
 
 #### Scenario: BottomTabs contains Main, Exercises and More
 
@@ -89,6 +82,27 @@ individual tabs is NOT filtered here — it is governed by
 - **THEN** the routes are `["main", "exercises", "more"]` in that order
 - **AND** no entry has route `"appearance"`, `"app_data"` or
   `"archived_exercises"`
+- **AND** entries: `Screen.Main.route` (icon `Icons.Filled.Home`, title
+  `R.string.workouts_title`), `Screen.Exercises.route` (icon
+  `Icons.Filled.FitnessCenter`, title `R.string.exercises_title`),
+  `Screen.More.route` (icon `Icons.Filled.Menu`, title
+  `R.string.more_title`) — Exercises between Main and More
+
+#### Scenario: Non-tab screens are excluded from BottomTabs
+
+- **WHEN** `Screen.Appearance`, `Screen.AppData` или
+  `Screen.ArchivedExercises` проверяются на членство
+- **THEN** они SHALL NOT быть в `BottomTabs` (они не являются
+  tab-экранами)
+
+#### Scenario: Runtime visibility is governed elsewhere
+
+- **WHEN** the `show_exercises_tab` setting is off
+- **THEN** runtime visibility of individual tabs is NOT filtered in
+  `BottomTabs` — it is governed by `tab-navigation/spec.md` (the
+  Exercises entry is hidden when the setting is off)
+- **AND** `BottomTabs` remains the full static list (order and membership
+  — single source of truth)
 
 #### Scenario: NavigationBar iterates BottomTabs
 
@@ -100,23 +114,20 @@ individual tabs is NOT filtered here — it is governed by
 
 `Screen.ExerciseCreate` SHALL быть `object ExerciseCreate : Screen(route =
 "exercise_create?exerciseId={exerciseId}")` с query-параметром
-`exerciseId` — паттерн `Screen.EntryCreate`. Объект SHALL содержать:
-константу `const val ARG_EXERCISE_ID: String = "exerciseId"`,
-`const val NO_EXERCISE_ID: Long = -1L`, фабрику маршрута
-`fun createRoute(exerciseId: Long = NO_EXERCISE_ID) =
-"exercise_create?$ARG_EXERCISE_ID=$exerciseId"` и
-`val arguments = listOf(navArgument(ARG_EXERCISE_ID) { type =
-NavType.LongType; defaultValue = NO_EXERCISE_ID })`. Регистрация в
-`NavHost` `RootScreen`: `composable(Screen.ExerciseCreate.route,
-arguments = Screen.ExerciseCreate.arguments) { ... }`; значение
-`exerciseId` SHALL читаться из `backStackEntry.arguments?.getLong(
-ARG_EXERCISE_ID, Screen.ExerciseCreate.NO_EXERCISE_ID)` и передаваться в
-фабрику `ExerciseCreateViewModel` (по аналогии с `entryId` →
-`EntryCreateViewModel`). Create-режим использует фабрику маршрута без
-параметра: `Screen.ExerciseCreate.createRoute()` даёт
-`"exercise_create?exerciseId=-1"`. `Screen`
-остаётся единственным источником истины для строк навигационных
-маршрутов.
+`exerciseId` — паттерн `Screen.EntryCreate`. Объект SHALL содержать
+константу `ARG_EXERCISE_ID`, `NO_EXERCISE_ID`, фабрику маршрута
+`createRoute(...)` и `arguments`. `Screen` остаётся единственным
+источником истины для строк навигационных маршрутов.
+
+#### Scenario: Константы и аргументы объекта
+
+- **WHEN** объявляется `Screen.ExerciseCreate`
+- **THEN** он содержит `const val ARG_EXERCISE_ID: String = "exerciseId"`,
+  `const val NO_EXERCISE_ID: Long = -1L`, фабрику маршрута
+  `fun createRoute(exerciseId: Long = NO_EXERCISE_ID) =
+  "exercise_create?$ARG_EXERCISE_ID=$exerciseId"` и
+  `val arguments = listOf(navArgument(ARG_EXERCISE_ID) { type =
+  NavType.LongType; defaultValue = NO_EXERCISE_ID })`
 
 #### Scenario: ExerciseCreate object added to sealed Screen
 
@@ -146,6 +157,10 @@ ARG_EXERCISE_ID, Screen.ExerciseCreate.NO_EXERCISE_ID)` и передавать�
   destination рядом с `EntryCreate`
 - **AND** `exerciseId` из аргументов backStackEntry передаётся в фабрику
   `ExerciseCreateViewModel`
+- **AND** значение `exerciseId` читается из
+  `backStackEntry.arguments?.getLong(ARG_EXERCISE_ID,
+  Screen.ExerciseCreate.NO_EXERCISE_ID)` (по аналогии с `entryId` →
+  `EntryCreateViewModel`)
 
 #### Scenario: Bottom navigation скрыта на ExerciseCreate
 
@@ -162,12 +177,8 @@ ARG_EXERCISE_ID, Screen.ExerciseCreate.NO_EXERCISE_ID)` и передавать�
 паттерн `Screen.Appearance`: не-tab экран, доступный через
 навигацию с `ExercisesScreen` (тап кнопки архива в `TopAppBar`).
 Нижняя навигация SHALL быть скрыта при активном маршруте
-`Screen.ArchivedExercises.route` — паттерн по образцу `Screen.Appearance`
-(см. Scenario «Bottom navigation скрыта на ExerciseCreate» и
-архивный `2026-08-26-feature-appearance-screen/design.md`). Контракт:
-`shouldShowBottomBar = currentRoute in tabs.map { it.route }` —
-`archived_exercises` НЕ в списке → бар скрыт. Никаких правок в
-`RootScreen` для скрытия бара не требуется.
+`Screen.ArchivedExercises.route`; правок в `RootScreen` для скрытия бара
+не требуется.
 
 #### Scenario: Bottom navigation скрыта на ArchivedExercises
 
@@ -178,62 +189,70 @@ ARG_EXERCISE_ID, Screen.ExerciseCreate.NO_EXERCISE_ID)` и передавать�
   фиксируется)
 - **AND** активный экран — `ArchivedExercisesScreen` (см. capability
   `archived-exercises-screen`)
+- **AND** паттерн по образцу `Screen.Appearance` (см. Scenario «Bottom
+  navigation скрыта на ExerciseCreate» и архивный
+  `2026-08-26-feature-appearance-screen/design.md`); контракт:
+  `shouldShowBottomBar = currentRoute in tabs.map { it.route }` —
+  `archived_exercises` НЕ в списке → бар скрыт
 
 ### Requirement: Маршруты экрана обзора и его настроек
 
 `Screen.Overview : Screen(route = "overview")` и
 `Screen.OverviewSettings : Screen(route = "overview_settings")` —
 нетабовые маршруты по паттерну `Screen.Appearance`: без аргументов, без
-UI-метаданных, `Screen` остаётся единственным источником строк маршрутов.
-Оба маршрута SHALL быть зарегистрированы в `NavHost` `RootScreen`;
-`Overview` открывается с главного экрана (кнопка обзора в `TopAppBar`),
-`OverviewSettings` — с экрана обзора (кнопка настроек), системный Back
-возвращает на предыдущий экран. `screenForRoute` SHALL отображать маршруты
-на значения `AppScreen.OverviewScreen` и `AppScreen.OverviewSettingsScreen`
-для аналитики просмотра экранов. Нижняя панель навигации SHALL быть скрыта
-на обоих маршрутах — существующий контракт
-`shouldShowBottomBar = currentRoute in tabs.map { it.route }`:
-`overview` и `overview_settings` не входят в список табов, правок
-`RootScreen` для скрытия не требуется.
+UI-метаданных. Оба маршрута SHALL быть зарегистрированы в `NavHost`
+`RootScreen`; `Overview` открывается с главного экрана, `OverviewSettings`
+— с экрана обзора; системный Back возвращает на предыдущий экран. Нижняя
+панель навигации SHALL быть скрыта на обоих маршрутах.
 
 #### Scenario: Регистрация и переход
 
 - **WHEN** пользователь нажимает кнопку обзора на главном экране
 - **THEN** `NavHost` навигирует на `Screen.Overview.route` и `screenForRoute` отдаёт `AppScreen.OverviewScreen`
+- **AND** `Overview` открывается с главного экрана (кнопка обзора в
+  `TopAppBar`), `OverviewSettings` — с экрана обзора (кнопка настроек)
 
 #### Scenario: Bottom navigation скрыта на экранах обзора
 
 - **WHEN** активен маршрут `overview` или `overview_settings`
 - **THEN** нижняя панель навигации не отображается
 - **AND** контент экрана использует освободившееся место без двойных отступов
+- **AND** контракт — `shouldShowBottomBar = currentRoute in tabs.map {
+  it.route }`: `overview` и `overview_settings` не входят в список табов,
+  правок `RootScreen` для скрытия не требуется
 
 #### Scenario: Переход к настройкам обзора и возврат
 
 - **WHEN** на экране обзора нажимается кнопка настроек, затем системный Back
 - **THEN** открывается `Screen.OverviewSettings.route`, затем Back возвращает на экран обзора
 
+#### Scenario: Аналитика экранов обзора
+
+- **WHEN** `screenForRoute` вычисляется для маршрутов обзора
+- **THEN** маршруты отображаются на значения `AppScreen.OverviewScreen` и
+  `AppScreen.OverviewSettingsScreen` для аналитики просмотра экранов
+- **AND** `Screen` остаётся единственным источником строк маршрутов
+
 ### Requirement: CategoryCreate object added to sealed Screen
 
 `Screen.CategoryCreate` SHALL быть `object CategoryCreate : Screen(route =
 "category_create?categoryId={categoryId}")` с query-параметром
-`categoryId` — паттерн `Screen.ExerciseCreate`. Объект SHALL содержать:
-константу `const val ARG_CATEGORY_ID: String = "categoryId"`, `const val
-NO_CATEGORY_ID: Long = -1L`, фабрику маршрута `fun createRoute(categoryId:
-Long = NO_CATEGORY_ID) = "category_create?$ARG_CATEGORY_ID=$categoryId"` и
-`val arguments = listOf(navArgument(ARG_CATEGORY_ID) { type =
-NavType.LongType; defaultValue = NO_CATEGORY_ID })`. Регистрация в
-`NavHost` `RootScreen`: `composable(Screen.CategoryCreate.route, arguments
-= Screen.CategoryCreate.arguments) { ... }`; значение `categoryId` SHALL
-читаться из `backStackEntry.arguments?.getLong(ARG_CATEGORY_ID,
-Screen.CategoryCreate.NO_CATEGORY_ID)` и передаваться в фабрику
-`CategoryCreateViewModel`. Create-режим использует фабрику маршрута без
-параметра. `Screen` остаётся единственным источником истины для строк
-навигационных маршрутов. `screenForRoute` SHALL отображать маршрут на
-значение `AppScreen.CategoryCreateScreen` для аналитики просмотра экранов.
-Нижняя навигация SHALL быть скрыта при активном маршруте (контракт
-`shouldShowBottomBar = currentRoute in tabs.map { it.route }` —
-`category_create` не входит в список, правок `RootScreen` для скрытия бара
-не требуется).
+`categoryId` — паттерн `Screen.ExerciseCreate`. Объект SHALL содержать
+константу `ARG_CATEGORY_ID`, `NO_CATEGORY_ID`, фабрику маршрута
+`createRoute(...)` и `arguments`; create-режим использует фабрику маршрута
+без параметра. Регистрация в `NavHost` `RootScreen` —
+`composable(Screen.CategoryCreate.route, arguments =
+Screen.CategoryCreate.arguments) { ... }`.
+
+#### Scenario: Константы и аргументы объекта CategoryCreate
+
+- **WHEN** объявляется `Screen.CategoryCreate`
+- **THEN** он содержит `const val ARG_CATEGORY_ID: String = "categoryId"`,
+  `const val NO_CATEGORY_ID: Long = -1L`, фабрику маршрута
+  `fun createRoute(categoryId: Long = NO_CATEGORY_ID) =
+  "category_create?$ARG_CATEGORY_ID=$categoryId"` и
+  `val arguments = listOf(navArgument(ARG_CATEGORY_ID) { type =
+  NavType.LongType; defaultValue = NO_CATEGORY_ID })`
 
 #### Scenario: CategoryCreate object added to sealed Screen
 
@@ -242,6 +261,14 @@ Screen.CategoryCreate.NO_CATEGORY_ID)` и передаваться в фабри
   "category_create?categoryId={categoryId}"`
 - **AND** `Screen.CategoryCreate` declared as `object` inside sealed
   `Screen`
+- **AND** `Screen` остаётся единственным источником истины для строк
+  навигационных маршрутов
+
+#### Scenario: Аналитика маршрута CategoryCreate
+
+- **WHEN** `screenForRoute` вычисляется для `category_create`
+- **THEN** маршрут отображается на значение
+  `AppScreen.CategoryCreateScreen` для аналитики просмотра экранов
 
 #### Scenario: Фабрика маршрута с categoryId
 
@@ -256,6 +283,9 @@ Screen.CategoryCreate.NO_CATEGORY_ID)` и передаваться в фабри
   arguments = ...) { ... }` destination рядом с `ExerciseCreate`
 - **AND** `categoryId` из аргументов backStackEntry передаётся в фабрику
   `CategoryCreateViewModel`
+- **AND** значение `categoryId` читается из
+  `backStackEntry.arguments?.getLong(ARG_CATEGORY_ID,
+  Screen.CategoryCreate.NO_CATEGORY_ID)`
 
 #### Scenario: Bottom navigation скрыта на CategoryCreate
 
@@ -263,3 +293,6 @@ Screen.CategoryCreate.NO_CATEGORY_ID)` и передаваться в фабри
 - **THEN** нижний бар навигации скрыт
 - **AND** активный экран — `CategoryCreateScreen` (см. capability
   `category-create-screen`)
+- **AND** контракт — `shouldShowBottomBar = currentRoute in tabs.map {
+  it.route }`: `category_create` не входит в список, правок `RootScreen`
+  для скрытия бара не требуется

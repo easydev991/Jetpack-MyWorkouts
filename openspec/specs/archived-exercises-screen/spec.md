@@ -13,14 +13,9 @@
 `ArchivedExercisesScreen` SHALL быть `@Composable fun
 ArchivedExercisesScreen(viewModel: ArchivedExercisesViewModel,
 onBackClick: () -> Unit, modifier: Modifier = Modifier)` (аналог
-`AppearanceScreen`). Экран SHALL содержать `Scaffold` с `TopAppBar` и телом:
-`SecondaryTabRow` с вкладками «Упражнения» / «Категории» (когда видны —
-требование «Табы "Упражнения" / "Категории" и видимость таб-бара») и
-`when`-свитч содержимого по выбранной вкладке (LazyColumn архивных
-упражнений / LazyColumn архивных категорий / заглушка пустого архива).
-`Scaffold` SHALL устанавливать `contentWindowInsets = WindowInsets.safeDrawing
-.only(WindowInsetsSides.Horizontal)` — симметрично `ExercisesScreen` и
-`AppearanceScreen`.
+`AppearanceScreen`). Экран SHALL содержать `Scaffold` с `TopAppBar`,
+`SecondaryTabRow` с вкладками «Упражнения» / «Категории» (когда видны) и
+`when`-свитч содержимого по выбранной вкладке.
 
 #### Scenario: Экран рендерится с локализованным заголовком
 
@@ -32,6 +27,23 @@ onBackClick: () -> Unit, modifier: Modifier = Modifier)` (аналог
 - **WHEN** `ArchivedExercisesScreen` composed с активной английской
   локалью
 - **THEN** `TopAppBar` отображает "Archive"
+
+#### Scenario: Тело экрана
+
+- **WHEN** тело `Scaffold` composed
+- **THEN** содержимое выбирается `when`-свитчем по выбранной вкладке:
+  LazyColumn архивных упражнений / LazyColumn архивных категорий /
+  заглушка пустого архива
+- **AND** таб-роу виден по правилам требования «Табы "Упражнения" /
+  "Категории" и видимость таб-бара»
+
+#### Scenario: Content insets scaffold
+
+- **WHEN** `Scaffold` экрана composed
+- **THEN** он устанавливает
+  `contentWindowInsets = WindowInsets.safeDrawing
+  .only(WindowInsetsSides.Horizontal)` — симметрично `ExercisesScreen` и
+  `AppearanceScreen`
 
 ### Requirement: TopAppBar со стрелкой назад
 
@@ -78,23 +90,19 @@ ArchivedExercisesUiState` и колбэки `onUnarchiveExercise: (Long) -> Unit
 `ArchivedExercisesViewModel` SHALL подписываться на
 `repository.archivedExercises()` и `repository.archivedCategories()`
 (реактивные `Flow`, НЕ разовые снимки), на внутренний
-`selectedTab: MutableStateFlow<ArchivedTab>` и формировать
-`StateFlow<ArchivedExercisesUiState>` через `stateIn(
-viewModelScope, SharingStarted.WhileSubscribed(5000),
-ArchivedExercisesUiState.Loading)`. `ArchivedExercisesUiState` SHALL
-быть sealed-иерархией `Loading` / `Success(exercises:
-List<Exercise>, categories: List<Category>, selectedTab: ArchivedTab)` без
-`Error`-ветки (единственный источник — офлайн Room-Flow). При
-восстановлении упражнения или категории реактивные Flow SHALL автоматически
-обновить списки без ручного refresh; ViewModel SHALL выравнивать
-`selectedTab` при опустошении вкладки (требование «Табы "Упражнения" /
-"Категории" и видимость таб-бара»).
+`selectedTab: MutableStateFlow<ArchivedTab>`, и формировать
+`StateFlow<ArchivedExercisesUiState>`. `ArchivedExercisesUiState` SHALL
+быть sealed-иерархией без `Error`-ветки. При восстановлении упражнения
+или категории реактивные Flow SHALL автоматически обновить списки без
+ручного refresh.
 
 #### Scenario: Loading до первой эмиссии
 
 - **WHEN** `ArchivedExercisesViewModel` создан, но репозиторий ещё не
   эмитил
 - **THEN** `uiState.value` is `ArchivedExercisesUiState.Loading`
+- **AND** поток собран через `stateIn(viewModelScope,
+  SharingStarted.WhileSubscribed(5000), ArchivedExercisesUiState.Loading)`
 
 #### Scenario: Success со списком после первой эмиссии
 
@@ -115,6 +123,20 @@ List<Exercise>, categories: List<Category>, selectedTab: ArchivedTab)` без
 - **WHEN** пользователь тапает «Вернуть» на архивной категории Y
 - **THEN** `repository.setCategoryArchived(Y.id, false)` вызывается
 - **AND** `uiState.value` обновляется без перезапуска ViewModel
+
+#### Scenario: Состав sealed-иерархии UiState
+
+- **WHEN** `ArchivedExercisesUiState` объявлен
+- **THEN** это sealed-иерархия `Loading` /
+  `Success(exercises: List<Exercise>, categories: List<Category>,
+  selectedTab: ArchivedTab)` без `Error`-ветки (единственный источник —
+  офлайн Room-Flow)
+
+#### Scenario: Выравнивание selectedTab при опустошении вкладки
+
+- **WHEN** вкладка опустела после восстановления
+- **THEN** ViewModel выравнивает `selectedTab` (требование «Табы
+  "Упражнения" / "Категории" и видимость таб-бара»)
 
 ### Requirement: Переиспользование ExerciseListItemRow
 
@@ -139,18 +161,11 @@ List<Exercise>, categories: List<Category>, selectedTab: ArchivedTab)` без
 Долгое нажатие на строке архивного упражнения SHALL открывать
 контекстное меню с единственным пунктом «Вернуть» / "Restore"
 (`exercise_list_menu_unarchive`, иконка `Icons.Filled.Unarchive`).
-В отличие от `ExercisesScreen`, проверки `isCustom` нет — для
-архивных строк меню ВСЕГДА показывается (и для стандартных, и для
-кастомных архивных упражнений доступен возврат). Жест
-`detectTapGestures(onLongPress)` — по образцу в `ExercisesScreen`
-(дефолтный platform long-press ≈500 мс). Меню (`DropdownMenu`) SHALL
-располагаться в точке нажатия и подсвечивать строку.
-
+В отличие от `ExercisesScreen`, проверки `isCustom` нет — меню для
+архивных строк показывается ВСЕГДА. Меню SHALL подсвечивать строку.
 Дополнительно к жесту каждая строка архива SHALL предоставлять
-локализованное accessibility-действие «Открыть меню» / "Open menu":
-активация действия из меню действий скринридера SHALL открывать то
-же меню «Вернуть». При открытии accessibility-действием позиция меню
-по умолчанию (центр строки) SHALL допускаться.
+локализованное accessibility-действие «Открыть меню» / "Open menu",
+открывающее то же меню «Вернуть».
 
 #### Scenario: Long-press архивного открывает меню с пунктом «Вернуть»
 
@@ -159,6 +174,9 @@ List<Exercise>, categories: List<Category>, selectedTab: ArchivedTab)` без
 - **THEN** в точке нажатия открывается меню с единственным пунктом
   «Вернуть»
 - **AND** строка подсвечена, пока меню открыто
+- **AND** жест — `detectTapGestures(onLongPress)` по образцу в
+  `ExercisesScreen` (дефолтный platform long-press ≈500 мс)
+- **AND** меню (`DropdownMenu`) располагается в точке нажатия
 
 #### Scenario: Accessibility-действие строки открывает меню «Вернуть»
 
@@ -166,6 +184,8 @@ List<Exercise>, categories: List<Category>, selectedTab: ArchivedTab)` без
   упражнения accessibility-действие «Открыть меню»
 - **THEN** открывается то же меню с единственным пунктом «Вернуть»
 - **AND** выбор «Вернуть» работает как при открытии долгим нажатием
+- **AND** при открытии accessibility-действием позиция меню по умолчанию
+  (центр строки) допускается
 
 #### Scenario: Тап «Вернуть» восстанавливает упражнение
 
@@ -188,15 +208,11 @@ List<Exercise>, categories: List<Category>, selectedTab: ArchivedTab)` без
 ### Requirement: Пустое состояние списка
 
 Когда архив пуст целиком (нет ни архивных упражнений, ни архивных
-категорий), экран SHALL показывать текст `R.string.archived_exercises_empty`
-(«В архиве пусто» / "Archive is empty") по центру body — паттерн заглушки
-как `exercises_list_empty` на `ExercisesScreen`. Таб-бар SHALL быть скрыт,
-`LazyColumn` SHALL NOT содержать строк, экран НЕ закрывается
-автоматически. Это состояние достижимо восстановлением последнего
-архивного объекта любого типа. При пустом списке одного типа и непустом
-другом заглушка SHALL NOT показываться — отображается таб-бар и пустой
-список выбранной вкладки (или просто список непустого типа, если таб-бар
-скрыт по правилу «Табы "Упражнения" / "Категории" и видимость таб-бара»).
+категорий), экран SHALL показывать текст
+`R.string.archived_exercises_empty` («В архиве пусто» / "Archive is
+empty") по центру body. Таб-бар SHALL быть скрыт, `LazyColumn` SHALL NOT
+содержать строк, экран НЕ закрывается автоматически. При пустом списке
+одного типа и непустом другом заглушка SHALL NOT показываться.
 
 #### Scenario: Архив пуст — заглушка по центру
 
@@ -204,6 +220,10 @@ List<Exercise>, categories: List<Category>, selectedTab: ArchivedTab)` без
 - **THEN** по центру экрана отображается «В архиве пусто» /
   "Archive is empty"
 - **AND** `LazyColumn` не содержит строк AND экран не закрывается
+- **AND** паттерн заглушки — как `exercises_list_empty` на
+  `ExercisesScreen`
+- **AND** состояние достижимо восстановлением последнего архивного объекта
+  любого типа
 
 #### Scenario: Восстановление последней категории — заглушка без закрытия
 
@@ -217,6 +237,8 @@ List<Exercise>, categories: List<Category>, selectedTab: ArchivedTab)` без
 - **WHEN** на вкладке «Категории» нет категорий AND в архиве есть упражнения
 - **THEN** таб-бар отображается, вкладка «Категории» показывает пустой
   список (заглушка «В архиве пусто» НЕ показывается — архив в целом непуст)
+- **AND** при скрытом таб-баре отображается просто список непустого типа
+  (по правилу «Табы "Упражнения" / "Категории" и видимость таб-бара»)
 
 ### Requirement: Сортировка архива
 
@@ -254,23 +276,20 @@ is_custom DESC, created_at DESC, name COLLATE NOCASE`. Контракт
 
 ### Requirement: Табы «Упражнения» / «Категории» и видимость таб-бара
 
-Экран архива SHALL отображать вкладки «Упражнения» (`R.string.exercises_tab_exercises`)
-и «Категории» (`R.string.exercises_tab_categories`) — общие ключи с экраном
-упражнений. Таб-бар (`SecondaryTabRow`) SHALL рендериться только когда в
-архиве есть И упражнения, И категории (`archivedExercises` непуст AND
-`archivedCategories` непуст) — паттерн «таб-бар при ≥ 2 видимых вкладках»
-из `OverviewScreen`. Если в архиве только один тип объектов — таб-бар скрыт,
-отображается просто список этого типа. Если архив пуст целиком (обе
-коллекции пусты) — таб-бар скрыт, отображается заглушка «В архиве пусто».
-Выбранная вкладка SHALL храниться в ViewModel и переживать поворот экрана;
-при смене видимости вкладок (последний объект типа восстановлен) SHALL
-автоматически выбираться оставшаяся непустая вкладка без закрытия экрана.
+Экран архива SHALL отображать вкладки «Упражнения»
+(`R.string.exercises_tab_exercises`) и «Категории»
+(`R.string.exercises_tab_categories`) — общие ключи с экраном упражнений.
+Таб-бар (`SecondaryTabRow`) SHALL рендериться только когда в архиве есть
+И упражнения, И категории. Выбранная вкладка SHALL храниться в ViewModel и
+переживать поворот экрана.
 
 #### Scenario: В архиве и упражнения, и категории — таб-бар
 
 - **WHEN** в архиве 2 упражнения AND 1 категория
 - **THEN** под `TopAppBar` отображается `SecondaryTabRow` с вкладками
   «Упражнения» и «Категории»
+- **AND** паттерн — «таб-бар при ≥ 2 видимых вкладках» из `OverviewScreen`
+  (`archivedExercises` непуст AND `archivedCategories` непуст)
 
 #### Scenario: Только упражнения — список без таб-бара
 
@@ -282,6 +301,12 @@ is_custom DESC, created_at DESC, name COLLATE NOCASE`. Контракт
 - **WHEN** в архиве 0 упражнений AND 3 категории
 - **THEN** таб-бар скрыт AND отображается список архивных категорий
 
+#### Scenario: Пустой архив — таб-бар скрыт, заглушка
+
+- **WHEN** архив пуст целиком (обе коллекции пусты)
+- **THEN** таб-бар скрыт
+- **AND** отображается заглушка «В архиве пусто»
+
 #### Scenario: Восстановление последнего упражнения переключает вкладку
 
 - **WHEN** на вкладке «Упражнения» восстановлено последнее архивное
@@ -289,33 +314,47 @@ is_custom DESC, created_at DESC, name COLLATE NOCASE`. Контракт
 - **THEN** экран НЕ закрывается AND автоматически выбирается вкладка
   «Категории»
 
+#### Scenario: Восстановление последней категории переключает вкладку
+
+- **WHEN** на вкладке «Категории» восстановлена последняя архивная
+  категория AND в архиве остаются упражнения
+- **THEN** экран НЕ закрывается
+- **AND** автоматически выбирается оставшаяся непустая вкладка
+  «Упражнения» (при смене видимости вкладок — последний объект типа
+  восстановлен)
+
 ### Requirement: Вкладка «Категории» в архиве
 
 Вкладка «Категории» в архиве SHALL отображать `LazyColumn` с `key = {
-it.id }` архивных категорий (`archivedCategories()` репозитория, сортировка
-`is_custom DESC, created_at DESC, name COLLATE NOCASE`). Строка SHALL
-использовать тот же компонент `CategoryListItemRow` (создаётся в пакете
-`exercises/` отдельным файлом по образцу `ExerciseListItemRow.kt` —
-конвенция «строки живут у своих экранов»; контракт — название +
-цветовой индикатор), без дубликата. Долгое
-нажатие на строке (и accessibility-действие «Открыть меню») SHALL открывать
-контекстное меню с единственным пунктом «Вернуть» / "Restore"
-(`exercise_list_menu_unarchive`, иконка `Icons.Filled.Unarchive`) — для
-стандартных и кастомных архивных категорий, по образцу архивных упражнений.
-Тап «Вернуть» SHALL вызывать `setCategoryArchived(id, false)`; категория
-реактивно исчезает из списка архива и появляется в активном списке на
-вкладке «Категории» экрана упражнений.
+it.id }` архивных категорий (`archivedCategories()` репозитория). Строка
+SHALL использовать тот же компонент `CategoryListItemRow` без дубликата.
+Долгое нажатие на строке (и accessibility-действие «Открыть меню») SHALL
+открывать контекстное меню с единственным пунктом «Вернуть» / "Restore".
+Тап «Вернуть» SHALL вызывать `setCategoryArchived(id, false)`.
 
 #### Scenario: Список архивных категорий
 
 - **WHEN** в архиве 1 стандартная и 1 кастомная категория
 - **THEN** отображаются 2 строки с цветовыми индикаторами, кастомная выше
+- **AND** сортировка — `is_custom DESC, created_at DESC, name COLLATE
+  NOCASE`
+
+#### Scenario: Компонент строки категории
+
+- **WHEN** создаётся строка архивной категории
+- **THEN** используется `CategoryListItemRow`, создаваемый в пакете
+  `exercises/` отдельным файлом по образцу `ExerciseListItemRow.kt`
+  (конвенция «строки живут у своих экранов»)
+- **AND** контракт строки — название + цветовой индикатор
 
 #### Scenario: Long-press архивной категории открывает меню «Вернуть»
 
 - **WHEN** пользователь делает долгое нажатие на строке архивной категории
   (стандартной или кастомной)
 - **THEN** открывается меню с единственным пунктом «Вернуть»
+- **AND** пункт — `exercise_list_menu_unarchive` с иконкой
+  `Icons.Filled.Unarchive`, для стандартных и кастомных архивных категорий,
+  по образцу архивных упражнений
 
 #### Scenario: Тап «Вернуть» восстанавливает категорию
 

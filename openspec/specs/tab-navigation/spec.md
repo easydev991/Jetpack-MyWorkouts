@@ -21,13 +21,10 @@
 
 `Screen` SHALL be a `sealed class` with a single `val route: String`
 parameter and SHALL NOT contain `icon` or `titleResId` properties
-(UI metadata for the `NavigationBar` is held in a separate `BottomTab`
-data class — see `non-tab-screen-navigation/spec.md`). Subclasses SHALL
-be `object Main` (`route = "main"`), `object More` (`route = "more"`),
-and `object Appearance` (`route = "appearance"`, NOT a tab — no entry
-in `BottomTabs`). `Screen` SHALL NOT expose `val AllTabs` (removed —
-the source of truth for the bottom navigation is now `BottomTabs: List<BottomTab>`
-in `non-tab-screen-navigation/spec.md`).
+(UI metadata is held in a separate `BottomTab` data class — see
+`non-tab-screen-navigation/spec.md`). Subclasses SHALL be `object Main`
+(`route = "main"`), `object More` (`route = "more"`), and `object
+Appearance` (`route = "appearance"`, NOT a tab).
 
 #### Scenario: Screen fields are non-null
 
@@ -46,6 +43,13 @@ in `non-tab-screen-navigation/spec.md`).
 - **AND** the order of `NavigationBarItem`s matches the order in
   `BottomTabs`
 
+#### Scenario: AllTabs removed from Screen
+
+- **WHEN** `Screen` is inspected
+- **THEN** it does NOT expose `val AllTabs` (removed — the source of
+  truth for the bottom navigation is now `BottomTabs: List<BottomTab>`
+  in `non-tab-screen-navigation/spec.md`)
+
 #### Scenario: Appearance is a Screen object but not a tab
 
 - **WHEN** `Screen.Appearance` is referenced
@@ -56,28 +60,34 @@ in `non-tab-screen-navigation/spec.md`).
 
 ### Requirement: RootScreen hosts NavHost with the registered destinations
 
-`RootScreen` SHALL use `rememberNavController()` and a `NavHost` containing
-a `composable` entry for each registered destination: `Screen.Main.route`
-calling `MainScreen(...)`, `Screen.Exercises.route` calling
-`ExercisesScreen(viewModel = viewModel(factory =
-ExercisesViewModel.factory(repository)))`, `Screen.More.route` calling
-`MoreScreen(navController = navController, showExercisesTab =
-showExercisesTab, onShowExercisesTabChange = ...)`, `Screen.Appearance.route`
-calling `AppearanceScreen(...)`, `Screen.AppData.route` calling
-`AppDataScreen(...)`, and `Screen.EntryCreate.route` (with arguments)
-calling `EntryCreateScreen(...)`. The start destination SHALL be
-`Screen.Main.route`. `RootScreen` SHALL accept `dataStore:
-AppSettingsDataStore` and `repository: WorkoutDataRepository` as required
-parameters (passed from `MainActivity`) — it SHALL NOT construct a second
-`AppSettingsDataStore` for the same `appearance_prefs` file. `RootScreen`
-SHALL collect `dataStore.showExercisesTab` as state, filter the visible
-tabs from it (see «NavigationBar visibility follows current route») and
-pass the value plus a write-through callback into `MoreScreen`.
+`RootScreen` SHALL use `rememberNavController()` and a `NavHost` with a
+`composable` entry for each registered destination; the start destination
+SHALL be `Screen.Main.route`. It SHALL accept `dataStore` and `repository`
+as required parameters and SHALL NOT construct a second
+`AppSettingsDataStore` for the same `appearance_prefs` file.
 
-The `exercises` destination SHALL stay registered in the `NavHost`
-regardless of the setting — hiding the tab hides only the
-`NavigationBarItem`, so re-enabling the tab is instant and needs no graph
-change.
+#### Scenario: Destination composables
+
+- **WHEN** the `NavHost` destinations are composed
+- **THEN** `Screen.Main.route` calls `MainScreen(...)`,
+  `Screen.Exercises.route` calls
+  `ExercisesScreen(viewModel = viewModel(factory =
+  ExercisesViewModel.factory(repository)))`, `Screen.More.route` calls
+  `MoreScreen(navController = navController, showExercisesTab =
+  showExercisesTab, onShowExercisesTabChange = ...)`,
+  `Screen.Appearance.route` calls `AppearanceScreen(...)`,
+  `Screen.AppData.route` calls `AppDataScreen(...)`, and
+  `Screen.EntryCreate.route` (with arguments) calls
+  `EntryCreateScreen(...)`
+- **AND** `dataStore` and `repository` are passed from `MainActivity`
+
+#### Scenario: showExercisesTab collection
+
+- **WHEN** `RootScreen` is composed
+- **THEN** it collects `dataStore.showExercisesTab` as state, filters the
+  visible tabs from it (see «NavigationBar visibility follows current
+  route») and passes the value plus a write-through callback into
+  `MoreScreen`
 
 #### Scenario: Navigation to the Exercises tab
 
@@ -93,6 +103,8 @@ change.
 - **THEN** the `NavHost` still contains the `composable` entry for
   `Screen.Exercises.route`
 - **AND** no `NavigationBarItem` for it is rendered
+- **AND** hiding the tab hides only the `NavigationBarItem`, so
+  re-enabling the tab is instant and needs no graph change
 
 #### Scenario: Navigation to the More tab
 
@@ -172,19 +184,12 @@ change.
 
 ### Requirement: NavigationBar visibility follows current route
 
-`RootScreen`'s `Scaffold.bottomBar` SHALL render the `NavigationBar`
-only when `currentRoute` (from
+`RootScreen`'s `Scaffold.bottomBar` SHALL render the `NavigationBar` only
+when `currentRoute` (from
 `navController.currentBackStackEntryAsState()?.destination?.route`)
-equals one of the routes of the VISIBLE tabs. The visible tabs SHALL be
-computed as `BottomTabs` filtered by the `show_exercises_tab` setting:
-when the setting is `false`, the Exercises entry is excluded; when
-`true`, all of `BottomTabs` is visible. For any route outside the
-visible-tab routes (e.g. `Screen.Appearance.route`, or
-`Screen.Exercises.route` while the setting is off), the `bottomBar`
-slot SHALL render nothing — the `NavigationBar` MUST NOT be present
-in the composition tree. The routes SHALL be derived from `BottomTabs`
-(single source of truth for tab order and membership), not hardcoded —
-the only runtime filter is the Exercises entry per the setting.
+equals one of the routes of the VISIBLE tabs. For any route outside the
+visible-tab routes, the `bottomBar` slot SHALL render nothing — the
+`NavigationBar` MUST NOT be present in the composition tree.
 
 #### Scenario: NavigationBar visible on Main
 
@@ -235,6 +240,10 @@ the only runtime filter is the Exercises entry per the setting.
   visible tabs (no hardcoded list of tab routes)
 - **AND** the visible tabs are `BottomTabs` with the Exercises entry
   excluded iff `showExercisesTab == false`
+- **AND** when the setting is `true`, all of `BottomTabs` is visible
+- **AND** the routes are derived from `BottomTabs` (single source of truth
+  for tab order and membership); the only runtime filter is the Exercises
+  entry per the setting
 
 #### Scenario: Adding a new tab automatically shows the bar on it
 
