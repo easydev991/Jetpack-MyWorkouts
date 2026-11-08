@@ -8,6 +8,7 @@
 
 ## Requirements
 
+
 ### Requirement: Screen sealed class holds only route
 
 `Screen` SHALL be `sealed class Screen(val route: String)` and SHALL
@@ -22,7 +23,9 @@ single source of truth for navigation route strings.
   `Screen.More.route`, `Screen.Appearance.route`, `Screen.AppData.route`,
   `Screen.EntryCreate.route`, `Screen.ExerciseCreate.route`,
   `Screen.ArchivedExercises.route`, `Screen.EntrySettings.route`,
-  `Screen.CategoryCreate.route` as the registered destinations
+  `Screen.CategoryCreate.route`, `Screen.Overview.route`,
+  `Screen.OverviewSettings.route`, `Screen.EntryDetail.route` as the
+  registered destinations
 
 #### Scenario: Screen has only route parameter
 
@@ -295,4 +298,66 @@ Screen.CategoryCreate.arguments) { ... }`.
   `category-create-screen`)
 - **AND** контракт — `shouldShowBottomBar = currentRoute in tabs.map {
   it.route }`: `category_create` не входит в список, правок `RootScreen`
+  для скрытия бара не требуется
+
+### Requirement: EntryDetail object added to sealed Screen
+
+`Screen.EntryDetail` SHALL быть
+`object EntryDetail : Screen(route = "entry_detail/{entryId}")` с
+обязательным path-аргументом `entryId` (`NavType.LongType`, без
+`defaultValue`) — паттерн JetpackDays `Screen.ItemDetail`, в отличие от
+query-аргументов `EntryCreate`/`ExerciseCreate` (у деталей нет
+create-режима). Объект SHALL содержать `ARG_ENTRY_ID` и
+`createRoute(entryId: Long)`; маршрут без id SHALL NOT матчиться;
+`Screen` остаётся единственным источником истины маршрутов.
+
+#### Scenario: Константы и фабрика маршрута
+
+- **WHEN** объявляется `Screen.EntryDetail`
+- **THEN** он содержит `const val ARG_ENTRY_ID: String = "entryId"`,
+  фабрику маршрута
+  `fun createRoute(entryId: Long): String = "entry_detail/$entryId"` и
+  `val arguments = listOf(navArgument(ARG_ENTRY_ID) { type =
+  NavType.LongType })` — без `defaultValue`
+- **AND** `Screen.EntryDetail` declared as `object` inside sealed
+  `Screen`
+
+#### Scenario: Фабрика маршрута с entryId
+
+- **WHEN** `Screen.EntryDetail.createRoute(7)` вычислен
+- **THEN** результат `"entry_detail/7"`
+
+#### Scenario: Маршрут без аргумента не матчится
+
+- **WHEN** выполняется попытка навигации на `"entry_detail"` без аргумента
+- **THEN** маршрут не матчится: `entryId` — обязательный path-аргумент без
+  `defaultValue`
+
+#### Scenario: NavHost registers EntryDetail destination
+
+- **WHEN** `RootScreen` is composed
+- **THEN** `NavHost` has a
+  `composable(Screen.EntryDetail.route, arguments = ...) { ... }`
+  destination рядом с `EntryCreate`
+- **AND** `entryId` из аргументов backStackEntry передаётся в фабрику
+  `EntryDetailViewModel`
+- **AND** экран открывается переходом с главного экрана (тап по строке
+  или пункт «Открыть» меню), системный Back возвращает на главный экран
+
+#### Scenario: Аналитика маршрута EntryDetail
+
+- **WHEN** `screenForRoute` вычисляется для `entry_detail/{entryId}`
+- **THEN** маршрут отображается на значение
+  `AppScreen.EntryDetailScreen` для аналитики просмотра экранов
+
+#### Scenario: Bottom navigation скрыта на EntryDetail
+
+- **WHEN** активный route is `Screen.EntryDetail.route`
+- **THEN** нижний бар навигации скрыт (контракт — `BottomTab`-бар не
+  отображается; реализация в `RootScreen` оставлена на усмотрение
+  разработчика — конкретное имя локального флага/переменной не фиксируется)
+- **AND** активный экран — детальный экран записи (см. capability
+  `workout-entry-detail-screen`)
+- **AND** контракт — `shouldShowBottomBar = currentRoute in tabs.map {
+  it.route }`: `entry_detail` не входит в список, правок `RootScreen`
   для скрытия бара не требуется
