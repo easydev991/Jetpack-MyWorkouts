@@ -138,6 +138,31 @@ sealed class Screen(
     }
 
     /**
+     * Экран деталей записи (не в нижней навигации): только просмотр,
+     * без редактирования (workout-entry-detail-screen). Обязательный
+     * path-аргумент `entryId` (LongType без `defaultValue`) — экран
+     * всегда открывается с конкретным id записи (design Decision 1),
+     * паттерн — [EntryCreate]: [arguments] передаётся в место
+     * регистрации `composable(route, arguments)`, нижний бар скрыт
+     * контрактом `currentRoute in tabs.map { it.route }`.
+     */
+    object EntryDetail : Screen(route = "entry_detail/{entryId}") {
+        /** Ключ path-аргумента маршрута. */
+        const val ARG_ENTRY_ID: String = "entryId"
+
+        /** Аргументы маршрута для регистрации в `composable(...)`. */
+        val arguments =
+            listOf(
+                navArgument(ARG_ENTRY_ID) {
+                    type = NavType.LongType
+                }
+            )
+
+        /** Route для навигации: `entry_detail/{id}`. */
+        fun createRoute(entryId: Long): String = "entry_detail/$entryId"
+    }
+
+    /**
      * Экран создания/редактирования категории (custom-categories, tasks
      * 6.1): один composable на оба режима. Опциональный query-аргумент
      * `categoryId` выбирает режим: отсутствует/[NO_CATEGORY_ID] —

@@ -25,6 +25,7 @@ import androidx.navigation.compose.rememberNavController
 import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.AppScreen
+import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
 import com.myworkouts.domain.crash.CrashReporter
 import com.myworkouts.domain.repository.WorkoutDataRepository
@@ -33,6 +34,7 @@ import com.myworkouts.navigation.Screen
 import com.myworkouts.navigation.visibleTabs
 import com.myworkouts.ui.screens.entry.EntryCreateScreen
 import com.myworkouts.ui.screens.entry.EntrySettingsScreen
+import com.myworkouts.ui.screens.entrydetail.EntryDetailScreen
 import com.myworkouts.ui.screens.exercises.ArchivedExercisesScreen
 import com.myworkouts.ui.screens.exercises.CategoryCreateScreen
 import com.myworkouts.ui.screens.exercises.ExerciseCreateScreen
@@ -40,6 +42,7 @@ import com.myworkouts.ui.screens.exercises.ExercisesScreen
 import com.myworkouts.ui.viewmodel.ArchivedExercisesViewModel
 import com.myworkouts.ui.viewmodel.CategoryCreateViewModel
 import com.myworkouts.ui.viewmodel.EntryCreateViewModel
+import com.myworkouts.ui.viewmodel.EntryDetailViewModel
 import com.myworkouts.ui.viewmodel.EntrySettingsViewModel
 import com.myworkouts.ui.viewmodel.ExerciseCreateViewModel
 import com.myworkouts.ui.viewmodel.ExercisesViewModel
@@ -193,6 +196,9 @@ private fun AppNavHost(
         composable(Screen.EntryCreate.route, arguments = Screen.EntryCreate.arguments) { backStackEntry ->
             EntryCreateNavDestination(backStackEntry, repository, dataStore, analyticsProvider, navController)
         }
+        composable(Screen.EntryDetail.route, arguments = Screen.EntryDetail.arguments) { backStackEntry ->
+            EntryDetailNavDestination(backStackEntry, repository, analyticsProvider, crashReporter, navController)
+        }
         composable(Screen.ExerciseCreate.route, arguments = Screen.ExerciseCreate.arguments) { backStackEntry ->
             ExerciseCreateNavDestination(
                 backStackEntry = backStackEntry,
@@ -230,6 +236,7 @@ private fun screenForRoute(route: String?): AppScreen? =
         Screen.AppData.route -> AppScreen.AppDataScreen
         Screen.ArchivedExercises.route -> AppScreen.ArchivedExercisesScreen
         Screen.EntryCreate.route -> AppScreen.EntryCreateScreen
+        Screen.EntryDetail.route -> AppScreen.EntryDetailScreen
         Screen.EntrySettings.route -> AppScreen.EntrySettingsScreen
         Screen.ExerciseCreate.route -> AppScreen.ExerciseCreateScreen
         Screen.CategoryCreate.route -> AppScreen.CategoryCreateScreen
@@ -283,6 +290,36 @@ private fun EntryCreateNavDestination(
             ),
         onBackClick = { navController.popBackStack() },
         onOpenSettings = { navController.navigate(Screen.EntrySettings.route) }
+    )
+}
+
+/**
+ * `composable(Screen.EntryDetail.route) { ... }` — вынесено из
+ * `AppNavHost` ради соблюдения detekt `LongMethod`. Обязательный
+ * path-аргумент entryId (workout-entry-detail-screen, design Decision 1):
+ * тап «Изменить» логирует `UserAction EDIT` и открывает форму
+ * редактирования записи.
+ */
+@Composable
+private fun EntryDetailNavDestination(
+    backStackEntry: NavBackStackEntry,
+    repository: WorkoutDataRepository,
+    analyticsProvider: AnalyticsProvider,
+    crashReporter: CrashReporter,
+    navController: NavHostController
+) {
+    val entryId = backStackEntry.arguments?.getLong(Screen.EntryDetail.ARG_ENTRY_ID) ?: 0L
+    EntryDetailScreen(
+        viewModel =
+            viewModel(
+                factory =
+                    EntryDetailViewModel.factory(repository, analyticsProvider, crashReporter, entryId)
+            ),
+        onBackClick = { navController.popBackStack() },
+        onEditClick = {
+            analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.EDIT))
+            navController.navigate(Screen.EntryCreate.createRoute(entryId))
+        }
     )
 }
 

@@ -1,14 +1,10 @@
 package com.myworkouts.ui.screens.main
 
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
-import androidx.compose.ui.test.filter
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
@@ -25,23 +21,24 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Сценарий «поворот экрана при открытой карточке деталей»
- * (workout-detail-view, task 4.6): карточка остаётся открытой с
- * данными той же записи, выделение строки сохраняется.
+ * Сценарий «пересоздание Activity на экране деталей записи»
+ * (workout-entry-detail-screen, task 5.2): после recreate остаёмся на
+ * детальном экране той же записи — заголовок «Детали записи» и данные
+ * записи отображаются (маршрут `entry_detail/{entryId}` восстановлен
+ * NavController'ом из saved state).
  *
  * Использует реальную [com.myworkouts.MainActivity] (а не
  * `ComponentActivity`), потому что `scenario.recreate()` пересоздаёт
  * Activity, и только `MainActivity.onCreate` вызывает `setContent`
- * (восстанавливает Compose-иерархию); с `ComponentActivity`
+ * (восстанавливает Compose-иерархию и NavHost); с `ComponentActivity`
  * Compose-дерево после recreate пустеет — `No compose hierarchies
  * found in the app` (kotlin-ui-testing, references/activity-integration.md).
  *
  * Данные вставляются через продакшен-репозиторий процесса приложения
  * (`MyWorkoutsApplication.repository`): один инстанс Room с одним
- * `InvalidationTracker` — реактивный Flow `MainViewModel.uiState`
- * сразу видит вставку, без отдельного окна > `WhileSubscribed(5000)`
- * и без навигационных трюков. Имя упражнения уникально на прогон
- * (метка времени) — вставки предыдущих прогонов не маскируют ассерты.
+ * `InvalidationTracker` — реактивный Flow `MainViewModel.uiState` сразу
+ * видит вставку. Имя упражнения уникально на прогон (метка времени) —
+ * вставки предыдущих прогонов не маскируют ассерты.
  */
 @RunWith(AndroidJUnit4::class)
 class MainScreenDetailCardRecreateTest {
@@ -53,8 +50,20 @@ class MainScreenDetailCardRecreateTest {
     /** Уникальное имя на прогон — старые данные приложения не маскируют. */
     private val entryName = "Recreate-${System.currentTimeMillis() % 100_000L}"
 
+    /**
+     * Значение деталей записи «4 х 10 (+ 5 кг)» — собирается из ресурсов
+     * (формат зависит от локали устройства).
+     */
+    private val entryValue: String
+        get() {
+            val separator = context.getString(R.string.entry_value_separator)
+            val weightSuffix =
+                " " + context.getString(R.string.entry_details_weight_suffix, "5")
+            return "4$separator" + "10" + weightSuffix
+        }
+
     @Test
-    fun card_when_activity_recreated_then_remains_open_with_same_data() {
+    fun entry_detail_when_activity_recreated_then_remains_on_same_entry_route() {
         val app = ApplicationProvider.getApplicationContext<MyWorkoutsApplication>()
         val repository = app.repository
 
@@ -100,51 +109,44 @@ class MainScreenDetailCardRecreateTest {
         }
         composeTestRule.onNodeWithText(entryName).assertIsDisplayed()
 
-        // When — тап по строке, карточка открыта
+        // When — тап по строке, открыт экран деталей
         composeTestRule
             .onNodeWithText(entryName)
             .performTouchInput { click() }
         composeTestRule.waitForIdle()
         composeTestRule
-            .onNodeWithContentDescription(context.getString(R.string.entry_confirm_close))
+            .onNodeWithText(context.getString(R.string.entry_detail_title))
             .assertIsDisplayed()
 
         // When — recreate Activity (имитация поворота / смены темы)
         composeTestRule.activityRule.scenario.recreate()
         composeTestRule.waitForIdle()
 
-        // Then — после recreate список виден (наша запись — кастомная,
-        // уникальная по имени)
+        // Then — после recreate остаёмся на детальном экране: заголовок
+        // «Детали записи» виден (маршрут `entry_detail/{entryId}`
+        // восстановлен NavController'ом; на главном экране его нет)
         composeTestRule.waitUntil(ENTRY_TEXT_TIMEOUT) {
-            composeTestRule.onAllNodesWithText(entryName).fetchSemanticsNodes().isNotEmpty()
+            composeTestRule
+                .onAllNodesWithText(context.getString(R.string.entry_detail_title))
+                .fetchSemanticsNodes()
+                .isNotEmpty()
         }
-
-        // Then — карточка осталась открытой (крестик виден — `rememberSaveable`
-        // для `detailsEntryId` сохранил состояние)
         composeTestRule
-            .onNodeWithContentDescription(context.getString(R.string.entry_confirm_close))
+            .onNodeWithText(context.getString(R.string.entry_detail_title))
             .assertIsDisplayed()
 
-        // Then — карточка показывает данные из БД (комментарий вставлен в
-        // БД; rememberSaveable сохраняет только `detailsEntryId`,
-        // содержимое карточки читается из `success.entries` уже после
-        // recreate). После открытия карточки текст есть и в строке списка,
-        // и в карточке (две ноды).
+        // Then — данные той же записи: имя, значение «4 х 10 (+ 5 кг)» и
+        // комментарий читаются из БД по восстановленному entryId (по одной
+        // ноде — контент экрана деталей, список главного не в композиции)
+        composeTestRule.onNodeWithText(entryName).assertIsDisplayed()
+        composeTestRule.onNodeWithText(entryValue).assertIsDisplayed()
         composeTestRule
             .onAllNodesWithText("с фиксированным весом")
-            .assertCountEquals(2)
-
-        // Then — выделение строки сохранилось (Selected=true ровно у одной
-        // ноды с именем записи — у строки списка; у самой карточки
-        // Selected не выставляется)
-        composeTestRule
-            .onAllNodesWithText(entryName)
-            .filter(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true))
             .assertCountEquals(1)
     }
 
     private companion object {
-        /** Таймаут ожидания появления строки в списке. */
+        /** Таймаут ожидания появления текста. */
         const val ENTRY_TEXT_TIMEOUT: Long = 5_000L
     }
 }

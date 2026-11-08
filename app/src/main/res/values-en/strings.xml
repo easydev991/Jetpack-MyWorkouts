@@ -102,6 +102,7 @@
 
     <!-- Entry list screen (workout entries list on the main screen) -->
     <string name="entry_value_separator">" x "</string>
+    <string name="entry_list_menu_view">Open</string>
     <string name="entry_list_menu_edit">Edit</string>
     <string name="entry_list_menu_delete">Delete</string>
     <!-- Accessibility: shared label of the "open context menu" action
@@ -118,6 +119,8 @@
     <string name="entry_section_today">Today</string>
     <string name="entry_section_yesterday">Yesterday</string>
     <string name="entry_details_weight_suffix">(+ %1$s kg)</string>
+    <string name="entry_detail_title">Entry details</string>
+    <string name="entry_detail_not_found">Entry not found</string>
 
     <!-- Exercise edit / delete (edit-mode title, menu, dialog, snackbars) -->
     <string name="exercise_edit_title">Edit exercise</string>

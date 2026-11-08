@@ -1,4 +1,4 @@
-package com.myworkouts.ui.screens.main
+package com.myworkouts.ui.util
 
 import java.time.Instant
 import java.time.ZoneId

@@ -66,12 +66,12 @@ import com.myworkouts.domain.usecase.ExerciseTotal
 import com.myworkouts.domain.usecase.StatsPeriod
 import com.myworkouts.domain.usecase.percentOf
 import com.myworkouts.ui.screens.main.SectionHeader
-import com.myworkouts.ui.screens.main.formatEntryValue
-import com.myworkouts.ui.screens.main.formatWeightKg
 import com.myworkouts.ui.state.StatsUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.util.categoryLabel
 import com.myworkouts.ui.util.formatDurationResource
+import com.myworkouts.ui.util.formatEntryValue
+import com.myworkouts.ui.util.formatWeightKg
 import com.myworkouts.ui.util.labelResId
 import com.myworkouts.ui.util.sectionDateLabelResource
 import java.time.LocalDate

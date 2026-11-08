@@ -61,6 +61,10 @@ import kotlin.time.Duration.Companion.seconds
  *   архивация и удаление последнего активного элемента отклоняются
  *   (`LastActiveExerciseException` / `LastActiveCategoryException`),
  *   restore и удаление архивного при единственном активном разрешены.
+ * - «Детали записи» (workout-entry-detail-screen, design Decision 2) —
+ *   `entryById` эмитит полную проекцию записи по id, для несуществующего
+ *   id — `null`; после `updateEntry` активная подписка получает
+ *   обновлённые данные без пере-подписки.
  */
 @RunWith(AndroidJUnit4::class)
 class RoomWorkoutDataRepositoryTest {
@@ -1266,6 +1270,171 @@ class RoomWorkoutDataRepositoryTest {
             assertEquals(4, items[1].sets)
             assertEquals(10, items[1].reps)
             assertEquals(null, items[1].durationSec)
+        }
+
+    // entryById (workout-entry-detail-screen, задачи 1.2/1.3, design
+    // Decision 2): реактивная строка записи по id в порту репозитория.
+
+    /**
+     * `entryById` существующего id → поток эмитит [EntryListItem] со всеми
+     * полями проекции: название и иконка упражнения из JOIN, подходы и
+     * повторы, вес, комментарий и дата записи (spec «Детали записи»).
+     */
+    @Test
+    fun entryById_withExistingId_emitsListItemWithAllFields() =
+        runBlocking {
+            // Given — упражнение с иконкой (задаётся через ExerciseEntity)
+            // и запись со всеми полями, созданная валидным addEntry
+            val exerciseId =
+                database.exerciseDao().insert(
+                    ExerciseEntity(
+                        name = "Отжимания",
+                        category = "PUSH",
+                        isCustom = false,
+                        createdAt = 0L,
+                        iconNumber = 13
+                    )
+                )
+            val entryId =
+                repository
+                    .addEntry(
+                        ExerciseEntry(
+                            id = 0L,
+                            exerciseId = exerciseId,
+                            workoutId = null,
+                            date = 1_700_000_000_000L,
+                            sets = 4,
+                            reps = 10,
+                            weightKg = 7.5,
+                            durationSec = null,
+                            comment = "широкий хват",
+                            createdAt = 1L,
+                            modifiedAt = 1L
+                        )
+                    ).getOrThrow()
+
+            // When
+            val item = repository.entryById(entryId).first()
+
+            // Then — все поля доезжают без искажений
+            assertNotNull(item)
+            assertEquals(entryId, item?.id)
+            assertEquals("Отжимания", item?.exerciseName)
+            assertEquals(13, item?.iconNumber)
+            assertEquals(4, item?.sets)
+            assertEquals(10, item?.reps)
+            assertEquals(null, item?.durationSec)
+            assertEquals(7.5, item?.weightKg)
+            assertEquals("широкий хват", item?.comment)
+            assertEquals(1_700_000_000_000L, item?.date)
+        }
+
+    /**
+     * `entryById` записи «на время» → в проекции длительность вместо
+     * повторов (значения TIME-записи доходят до читателя без искажений,
+     * spec «Сохранение планки»).
+     */
+    @Test
+    fun entryById_forTimeMeasuredEntry_emitsDurationAndNullReps() =
+        runBlocking {
+            // Given — запись «Планки» (id = 2 из setUp, measuredBy = TIME)
+            val entryId =
+                repository
+                    .addEntry(
+                        ExerciseEntry(
+                            id = 0L,
+                            exerciseId = 2L,
+                            workoutId = null,
+                            date = 1_700_000_000_000L,
+                            sets = 1,
+                            reps = null,
+                            weightKg = null,
+                            durationSec = 90,
+                            comment = null,
+                            createdAt = 1L,
+                            modifiedAt = 1L
+                        )
+                    ).getOrThrow()
+
+            // When
+            val item = repository.entryById(entryId).first()
+
+            // Then
+            assertNotNull(item)
+            assertEquals(90, item?.durationSec)
+            assertEquals(null, item?.reps)
+            assertEquals(1, item?.sets)
+        }
+
+    /**
+     * `entryById` несуществующего id → поток эмитит `null`: не failure и
+     * не пустой список — контракт design Decision 2 (VM экрана деталей
+     * различает «ошибку слоя данных» и «запись отсутствует» самим фактом
+     * null).
+     */
+    @Test
+    fun entryById_withNonExistingId_emitsNull() =
+        runBlocking {
+            // When
+            val item = repository.entryById(9_999L).first()
+
+            // Then
+            assertNull(item)
+        }
+
+    /**
+     * Живая invalidation построчного потока: активный коллектор
+     * [RoomWorkoutDataRepository.entryById] получает вторую эмиссию с
+     * обновлёнными данными после `updateEntry` — без пере-подписки
+     * (spec «Актуализация данных экрана деталей»; образец —
+     * [entriesFlow_emitsAfterInsert_whileSubscribed]).
+     */
+    @Test
+    fun entryById_emitsUpdatedDataAfterUpdate_whileSubscribed() =
+        runBlocking {
+            // Given — запись и активная подписка на её поток
+            val template =
+                ExerciseEntry(
+                    id = 0L,
+                    exerciseId = 1L,
+                    workoutId = null,
+                    date = 1_700_000_000_000L,
+                    sets = 4,
+                    reps = 10,
+                    weightKg = null,
+                    durationSec = null,
+                    comment = null,
+                    createdAt = 1L,
+                    modifiedAt = 1L
+                )
+            val entryId = repository.addEntry(template).getOrThrow()
+            val emissions = CopyOnWriteArrayList<EntryListItem?>()
+            val job =
+                launch(Dispatchers.Unconfined) {
+                    repository.entryById(entryId).collect { emissions.add(it) }
+                }
+            try {
+                withTimeout(5.seconds) {
+                    while (emissions.isEmpty()) delay(50.milliseconds)
+                }
+
+                // When — обновление при живой подписке
+                val updateResult =
+                    repository.updateEntry(template.copy(id = entryId, sets = 5, reps = 8))
+                assertTrue(updateResult.isSuccess)
+
+                // Then — вторая эмиссия содержит обновлённые подходы/повторы
+                withTimeout(5.seconds) {
+                    while (emissions.none { it?.sets == 5 }) {
+                        delay(50.milliseconds)
+                    }
+                }
+                val updated = emissions.last { it?.sets == 5 }
+                assertEquals(5, updated?.sets)
+                assertEquals(8, updated?.reps)
+            } finally {
+                job.cancel()
+            }
         }
 
     // Архивация (exercises-archive, tasks §2): setArchived, archivedExercises,

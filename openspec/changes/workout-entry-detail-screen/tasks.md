@@ -9,19 +9,19 @@
 
 ## 1. Строки и порт данных (TDD)
 
-- [ ] 1.1 Добавить строки ru/en в `values/strings.xml` и
+- [x] 1.1 Добавить строки ru/en в `values/strings.xml` и
   `values-en/strings.xml`: `entry_detail_title` («Детали записи» /
   "Entry details"), `entry_detail_not_found` («Запись не найдена» /
-  "Entry not found"), `entry_list_menu_view` («Просмотр» / "View").
+  "Entry not found"), `entry_list_menu_view` («Открыть» / "Open").
   Проверка: `make format && make lint && make test` — ресурсы компилируются
-- [ ] 1.2 Написать падающий тест `entryById` в
+- [x] 1.2 Написать падающий тест `entryById` в
   `RoomWorkoutDataRepositoryTest` (androidTest, Room in-memory):
   существующий id → поток эмитит `EntryListItem` с полями записи
   (название, иконка, значение, вес, комментарий, дата); несуществующий id →
   эмитит `null`; после `updateEntry` поток эмитит обновлённые данные
   (реактивность). Проверка: точечный прогон класса — red;
   `make format && make lint && make test` — JVM зелёные
-- [ ] 1.3 Реализовать `entryById(id: Long): Flow<EntryListItem?>`:
+- [x] 1.3 Реализовать `entryById(id: Long): Flow<EntryListItem?>`:
   DAO-запрос `observeEntryRowById` (JOIN-проекция `observeEntryRows` с
   `WHERE id = :id`), маппинг `toListItem()` в
   `RoomWorkoutDataRepository`, объявление в порту
@@ -37,7 +37,7 @@
 
 ## 2. EntryDetailViewModel (TDD, JVM)
 
-- [ ] 2.1 Написать падающие тесты `EntryDetailViewModelTest` (Fake-порт с
+- [x] 2.1 Написать падающие тесты `EntryDetailViewModelTest` (Fake-порт с
   hot-потоком записи): начальное состояние `Loading`; существующий id →
   `Success` с данными; несуществующий id → `Error` (не вечный Loading);
   изменение записи в потоке → `Success` с новыми данными;
@@ -46,7 +46,7 @@
   вызывает `onDeleted`; `confirmDelete` при ошибке репозитория логирует
   exception через crashReporter и НЕ вызывает `onDeleted`. Проверка:
   `make test` — новые тесты падают (red)
-- [ ] 2.2 Реализовать `EntryDetailViewModel` + `EntryDetailUiState`
+- [x] 2.2 Реализовать `EntryDetailViewModel` + `EntryDetailUiState`
   (`ui/state/`): sealed `Loading`/`Success(data)`/`Error` (data object);
   `uiState = entryById(entryId).map { … }.stateIn(viewModelScope,
   WhileSubscribed(5000), Loading)`; `pendingDelete: StateFlow<Boolean>`;
@@ -58,17 +58,17 @@
 
 ## 3. Экран деталей и общий алерт удаления
 
-- [ ] 3.1 Вынести `EntryDeleteDialog` из `MainScreen.kt` в
+- [x] 3.1 Вынести `EntryDeleteDialog` из `MainScreen.kt` в
   `ui/components/EntryDeleteDialog.kt` (internal; стиль и строки — без
   изменений, design Decision 5); `MainScreen` переключается на общий
   компонент. Проверка: `make format && make lint && make test` — зелёное
-- [ ] 3.2 Переработать черновик A2 в боевой экран
+- [x] 3.2 Переработать черновик A2 в боевой экран
   `ui/screens/entrydetail/EntryDetailScreen.kt`: `Scaffold` + `TopAppBar`
   («Детали записи», стрелка назад → `onBackClick`, actions
   «Изменить»/«Удалить» только в `Success` — design Decision 6); состояния —
   `Loading` (пустой контент), `Success` (контент по центру без Card:
   иконка, название, значение `headlineMedium` `primary`, дата/время,
-  комментарий в тональном блоке ≤200dp со скроллом), `Error` (заглушка
+  комментарий в тональном блоке со внутренним скроллом при переполнении), `Error` (заглушка
   `entry_detail_not_found`); `entryDetailsValueText`/`DetailComment`
   переезжают из `EntryDetailsCard.kt`; форматы —
   `formatEntryDetailsValue`/`formatDetailDateTime`; строки из ресурсов;
@@ -80,13 +80,13 @@
   Decision 4 — отдельный навигационный колбэк удаления не нужен). Никаких
   `!!`; deprecated API не используется. Проверка: `make format && make
   lint && make test` — зелёное
-- [ ] 3.3 Создать `EntryDetailPreview.kt` (`*Preview.kt` рядом с экраном):
+- [x] 3.3 Создать `EntryDetailPreview.kt` (`*Preview.kt` рядом с экраном):
   по одному состоянию на превью — Loading, Success (все поля), Success без
   комментария, Success (запись на время), Error; светлая + тёмная темы
   (`UI_MODE_NIGHT_YES`), `showBackground = true`, `locale = "ru"`,
   обёртка в `JetpackMyWorkoutsTheme`. Проверка: компиляция превью без
   ошибок
-- [ ] 3.4 Удалить `EntryDetailScreenDrafts.kt` целиком (подрезан до
+- [x] 3.4 Удалить `EntryDetailScreenDrafts.kt` целиком (подрезан до
   утверждённого A2 до реализации — коммиты «Удалил тест-рендер
   черновиков» и «Подрезал черновики экрана»); удалить
   `EntryDetailsCard.kt` и `EntryDetailsCardPreview.kt` (хелперы переехали в
@@ -95,12 +95,12 @@
 
 ## 4. Навигация и главный экран
 
-- [ ] 4.1 Написать падающий JVM-тест `Screen.EntryDetail`:
+- [x] 4.1 Написать падающий JVM-тест `Screen.EntryDetail`:
   `createRoute(7) == "entry_detail/7"`; `arguments` —
   `NavType.LongType` без `defaultValue`; `ARG_ENTRY_ID == "entryId"`;
   объект — экземпляр sealed `Screen` (только `route`). Проверка:
   `make test` — red
-- [ ] 4.2 Реализовать `Screen.EntryDetail` в `navigation/Screen.kt`
+- [x] 4.2 Реализовать `Screen.EntryDetail` в `navigation/Screen.kt`
   (design Decision 1); зарегистрировать дестинацию
   `EntryDetailNavDestination` в `AppNavHost` (паттерн
   `EntryCreateNavDestination`: entryId из `backStackEntry.arguments`,
@@ -109,7 +109,7 @@
   `UserAction EDIT`); добавить `AppScreen.EntryDetailScreen`,
   `UserActionType.OPEN_ENTRY_DETAIL`, маппинг `screenForRoute`
   (design Decision 9). Проверка: `make test` — тест 4.1 зелёный; сборка
-- [ ] 4.3 Главный экран: удалить `detailsEntryId` (`rememberSaveable`),
+- [x] 4.3 Главный экран: удалить `detailsEntryId` (`rememberSaveable`),
   `BackHandler`, `onCloseDetails`, `MainScreenState.detailsEntryId`,
   `DetailsOverlay`; `isSelected` — только `contextMenu?.item?.id == it.id`;
   тап по строке → лог `OPEN_ENTRY_DETAIL` +
@@ -118,7 +118,7 @@
   меню (design Decision 7). Проверка: `make format && make lint && make
   test` — JVM зелёные (androidTest попап-тесты переписываются в разделе 5 —
   до этого красные, ожидаемо)
-- [ ] 4.4 Контекстное меню: пункт «Просмотр» выше «Изменить»
+- [x] 4.4 Контекстное меню: пункт «Открыть» выше «Изменить»
   (`leadingIcon` с `contentDescription = null`, паттерн пунктов меню) →
   тот же канал открытия деталей; `EntryListItemRow` — a11y-действие
   «Показать детали» перецеливается на открытие экрана (решение владельца).
@@ -131,7 +131,7 @@
 > (не TDD), системный Back — канон
 > `ExerciseCreateScreenTest.edit_when_no_changes_and_system_back_then_closed_without_dialog`.
 
-- [ ] 5.1 Переписать `MainScreenDetailCardTest.kt` →
+- [x] 5.1 Переписать `MainScreenDetailCardTest.kt` →
   `MainScreenEntryNavigationTest.kt`, поимённая судьба 12 тестов:
   `card_when_row_tapped_…` → тап открывает экран деталей (без
   `Selected`-проверки — осознанно: выделение от деталей устранено на
@@ -149,28 +149,28 @@
   закрывает только меню; `menu_when_a11y_show_details_other_row_…` →
   a11y-действие закрывает меню и открывает экран. Проверка: точечный прогон
   класса — green
-- [ ] 5.2 Переписать `MainScreenDetailCardRecreateTest.kt`:
+- [x] 5.2 Переписать `MainScreenDetailCardRecreateTest.kt`:
   `card_when_activity_recreated_…` → пересоздание Activity/поворот на
   детальном экране — данные той же записи, маршрут
   `entry_detail/{entryId}` сохраняется. Проверка: точечный прогон класса —
   green
-- [ ] 5.3 Правки `MainScreenTest.kt`:
+- [x] 5.3 Правки `MainScreenTest.kt`:
   `content_long_press_then_menu_shows_edit_item_above_delete` → три пункта
-  («Просмотр» выше «Изменить» выше «Удалить»);
+  («Открыть» выше «Изменить» выше «Удалить»);
   `content_long_press_open_menu_then_delete_…` → адаптировать под
   трёхпунктовое меню (сценарий удаления с главного экрана — как раньше);
   `content_long_press_then_row_selected_semantic_is_true_…` и
   `row_when_a11y_action_invoked_…` → проверить актуальность
   (`Selected` — только от меню; «Открыть меню» — без изменений). Проверка:
   точечный прогон класса — green
-- [ ] 5.4 Новый `EntryDetailScreenTest.kt`: содержимое `Success` (значение с
+- [x] 5.4 Новый `EntryDetailScreenTest.kt`: содержимое `Success` (значение с
   подходами и весом, один подход без веса, длительность, дата/время,
   комментарий целиком, отсутствие блока без комментария — перенятые из 5.1);
   несуществующий id → заглушка «Запись не найдена», actions скрыты;
   нижняя навигация отсутствует в дереве композиции; insets — контент не
   заходит под статус-бар и панель навигации (позиционные ассерты).
   Проверка: точечный прогон класса — green
-- [ ] 5.5 Новые навигационные сценарии (`MainScreenEntryNavigationTest` /
+- [x] 5.5 Новые навигационные сценарии (`MainScreenEntryNavigationTest` /
   `EntryDetailScreenTest`): Detail → Edit («Изменить») → форма
   предзаполнена → сохранение → возврат на Detail с обновлёнными данными
   (parity-тест актуализации); Detail → Edit → отмена (стрелка) → Detail
@@ -182,11 +182,11 @@
 
 ## 6. Финальная проверка
 
-- [ ] 6.1 Прогнать `make format && make lint && make test` — всё зелёное,
+- [x] 6.1 Прогнать `make format && make lint && make test` — всё зелёное,
   новых detekt-предупреждений нет (лимит `maxIssues: 5` не поднимать)
-- [ ] 6.2 Прогнать `make android-test` на подключённом эмуляторе — один
+- [x] 6.2 Прогнать `make android-test` на подключённом эмуляторе — один
   прогон, отчёт `scripts/test_report.py` в выводе; все тесты зелёные
-- [ ] 6.3 Ручная проверка на устройстве/эмуляторе с жестовой навигацией и
+- [x] 6.3 Ручная проверка на устройстве/эмуляторе с жестовой навигацией и
   display cutout: контент детального экрана не заходит под системные
   панели; светлые/тёмные темы рендерятся по превью; скриншот-прогон не
   требуется (маркетплейс-сценарии не меняются)

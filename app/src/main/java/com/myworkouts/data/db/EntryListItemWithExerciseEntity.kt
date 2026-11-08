@@ -5,9 +5,11 @@ package com.myworkouts.data.db
  * списка плюс колонки каталога (`exercise_id`, категория, тип измерения,
  * комментарий упражнения), нужные расчётам вкладок (overview-screen,
  * design Decision 1). Это НЕ `@Entity` — Room создаёт строки из
- * SQL-запроса, схема БД не меняется. Единственный источник —
- * [ExerciseEntryDao.observeEntryRows]; сужение до доменных видов —
- * мапперами `toListItem()` / `toEntryWithExercise()`.
+ * SQL-запроса, схема БД не меняется. Источники — список-запрос
+ * [ExerciseEntryDao.observeEntryRows] и построчный
+ * [ExerciseEntryDao.observeEntryRowById] (workout-entry-detail-screen);
+ * сужение до доменных видов — мапперами `toListItem()` /
+ * `toEntryWithExercise()`.
  *
  * Категория и тип измерения приходят строками и переводятся в enum'ы
  * `valueOf`-ом в маппере (тот же контракт, что у [ExerciseEntity] —

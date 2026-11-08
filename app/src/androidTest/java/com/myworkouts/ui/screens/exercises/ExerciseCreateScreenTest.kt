@@ -47,6 +47,7 @@ import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.viewmodel.ExerciseCreateViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -419,6 +420,8 @@ class ExerciseCreateScreenTest {
         override fun exercises(query: String): Flow<List<Exercise>> = catalog
 
         override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(emptyList())
+
+        override fun entryById(id: Long): Flow<EntryListItem?> = flowOf(null)
 
         override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 

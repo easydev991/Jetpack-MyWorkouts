@@ -32,15 +32,24 @@ interface ExerciseEntryDao {
     suspend fun getById(id: Long): ExerciseEntryEntity?
 
     /**
-     * Единственный реактивный JOIN-запрос записей на каталог упражнений
+     * Базовый реактивный JOIN-запрос записей на каталог упражнений
      * (design Decision 1): широкая проекция
      * [EntryListItemWithExerciseEntity] — 9 колонок строки списка плюс
      * `exercise_id`, категория, тип измерения и комментарий упражнения
      * для расчётов обзора. Сортировка — по `date DESC` (новые первыми).
      * `created_at` в проекцию не включается. Сужение до нужного домену
      * вида — в репозитории: [EntryListItemWithExerciseEntity.toListItem]
-     * и [EntryListItemWithExerciseEntity.toEntryWithExercise], единая
-     * копия SQL не дрейфует при эволюции схемы.
+     * и [EntryListItemWithExerciseEntity.toEntryWithExercise]. Построчный
+     * поток деталей — [observeEntryRowById] (workout-entry-detail-screen,
+     * design Decision 2) с единой копией SQL, чтобы она не дрейфовала
+     * при эволюции схемы.
+     *
+     * Чеклист при смене схемы: проекция из 13 колонок (`id`,
+     * `exerciseId`, `exerciseName`, `iconNumber`, `category`,
+     * `measuredBy`, `exerciseComment`, `sets`, `reps`, `durationSec`,
+     * `weightKg`, `comment`, `date`) дублируется в
+     * [observeEntryRowById] — новые/переименованные колонки вносить
+     * синхронно в оба запроса.
      */
     @Query(
         "SELECT e.id AS id, " +
@@ -61,6 +70,37 @@ interface ExerciseEntryDao {
             "ORDER BY e.date DESC"
     )
     fun observeEntryRows(): Flow<List<EntryListItemWithExerciseEntity>>
+
+    /**
+     * Реактивная строка записи по идентификатору
+     * (workout-entry-detail-screen, design Decision 2): та же широкая
+     * JOIN-проекция, что в [observeEntryRows], SQL скопирован 1-в-1 с
+     * `WHERE e.id = :id` и без `ORDER BY` (одна строка — сортировка не
+     * нужна). Несуществующий id → пустой результат запроса, который
+     * репозиторий маппит в `null`-эмиссию.
+     *
+     * Чеклист при смене схемы: проекция из 13 колонок синхронна с
+     * [observeEntryRows] — изменения проекции вносить в оба запроса.
+     */
+    @Query(
+        "SELECT e.id AS id, " +
+            "e.exercise_id AS exerciseId, " +
+            "x.name AS exerciseName, " +
+            "x.icon_number AS iconNumber, " +
+            "x.category AS category, " +
+            "x.measured_by AS measuredBy, " +
+            "x.comment AS exerciseComment, " +
+            "e.sets AS sets, " +
+            "e.reps AS reps, " +
+            "e.duration_sec AS durationSec, " +
+            "e.weight_kg AS weightKg, " +
+            "e.comment AS comment, " +
+            "e.date AS date " +
+            "FROM exercise_entries e " +
+            "JOIN exercises x ON x.id = e.exercise_id " +
+            "WHERE e.id = :id"
+    )
+    fun observeEntryRowById(id: Long): Flow<EntryListItemWithExerciseEntity?>
 
     /** Удаляет запись по идентификатору. Отсутствующий id — успех без эффекта. */
     @Query("DELETE FROM exercise_entries WHERE id = :id")

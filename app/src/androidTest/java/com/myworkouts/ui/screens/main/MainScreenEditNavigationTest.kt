@@ -33,6 +33,7 @@ import com.myworkouts.ui.viewmodel.EntryCreateViewModel
 import com.myworkouts.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -94,6 +95,8 @@ class MainScreenEditNavigationTest {
             override fun exercises(query: String): Flow<List<Exercise>> = MutableStateFlow(listOf(repsExercise))
 
             override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(listOf(listItem))
+
+            override fun entryById(id: Long): Flow<EntryListItem?> = flowOf(null)
 
             override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 

@@ -51,6 +51,9 @@ internal fun MainNavDestination(
             navController.navigate(Screen.EntryCreate.createRoute(entryId))
         },
         onOverviewClick = { navController.navigate(Screen.Overview.route) },
+        onOpenEntryClick = { entryId ->
+            navController.navigate(Screen.EntryDetail.createRoute(entryId))
+        },
         analyticsProvider = analyticsProvider
     )
 }

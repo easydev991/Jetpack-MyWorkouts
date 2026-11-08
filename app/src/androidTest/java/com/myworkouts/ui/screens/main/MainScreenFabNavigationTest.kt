@@ -26,6 +26,7 @@ import com.myworkouts.navigation.Screen.EntryCreate
 import com.myworkouts.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -57,6 +58,8 @@ class MainScreenFabNavigationTest {
             override fun exercises(query: String): Flow<List<Exercise>> = MutableStateFlow(emptyList())
 
             override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(emptyList())
+
+            override fun entryById(id: Long): Flow<EntryListItem?> = flowOf(null)
 
             override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 

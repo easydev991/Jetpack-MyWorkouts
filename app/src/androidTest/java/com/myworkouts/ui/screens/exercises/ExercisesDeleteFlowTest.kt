@@ -29,6 +29,7 @@ import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.viewmodel.ExercisesViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -90,6 +91,8 @@ class ExercisesDeleteFlowTest {
         override fun exercises(query: String): Flow<List<Exercise>> = catalog
 
         override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(emptyList())
+
+        override fun entryById(id: Long): Flow<EntryListItem?> = flowOf(null)
 
         override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 
@@ -304,6 +307,8 @@ class ExercisesErrorSnackbarTest(
         override fun exercises(query: String): Flow<List<Exercise>> = catalog
 
         override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(emptyList())
+
+        override fun entryById(id: Long): Flow<EntryListItem?> = flowOf(null)
 
         override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 
@@ -543,6 +548,8 @@ class ExercisesPreCheckSnackbarTest {
         override fun exercises(query: String): Flow<List<Exercise>> = catalog
 
         override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(emptyList())
+
+        override fun entryById(id: Long): Flow<EntryListItem?> = flowOf(null)
 
         override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 

@@ -109,7 +109,8 @@ internal fun Category.toEntity(createdAt: Long): CategoryEntity =
  * (workout-entries-list, design Decision 2). Колонки каталога
  * (`exerciseId`, `category`, `measuredBy`, `exerciseComment`) списку
  * записей не нужны — сужение широкой проекции до домена происходит здесь,
- * SQL при этом один (design Decision 1).
+ * копии SQL живут рядом в [ExerciseEntryDao] и не дрейфуют (design
+ * Decision 1; построчный вариант — workout-entry-detail-screen, Decision 2).
  */
 internal fun EntryListItemWithExerciseEntity.toListItem(): EntryListItem =
     EntryListItem(

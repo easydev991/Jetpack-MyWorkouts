@@ -164,10 +164,12 @@ inset-схемы главного экрана (`safeDrawing.only(Horizontal)`) 
 Actions «Изменить»/«Удалить» рендерятся только в `Success` (паттерн
 JetpackDays `DetailAppBar`); стрелка назад — `popBackStack` из дестинации.
 BackHandler на экране нет (Non-Goal). Компоновка контента — перенос варианта
-A2 (`EntryDetailDraftCenterNoCard`): колонка `widthIn(max = 350.dp)` по центру
-`Box`, иконка/название `titleLarge`/значение `headlineMedium` `primary`/дата
-`bodySmall` `onSurfaceVariant`/комментарий в `surfaceVariant`-блоке (12dp,
-≤200dp со скроллом). Форматирование значения — `formatEntryDetailsValue`,
+A2 (`EntryDetailDraftCenterNoCard`) с правкой владельца после реализации:
+колонка `fillMaxWidth` с горизонтальным паддингом 24dp по центру `Box`
+(исходный cap 350dp снят владельцем вместе с капом высоты комментария),
+иконка/название `titleLarge`/значение `headlineMedium` `primary`/дата
+`bodySmall` `onSurfaceVariant`/комментарий в `surfaceVariant`-блоке (12dp, без фикс-капа:
+растёт по содержимому, при переполнении доступного места — внутренний скролл; правка владельца после реализации). Форматирование значения — `formatEntryDetailsValue`,
 даты — `formatDetailDateTime` (уже в `EntryValueFormatter.kt`);
 `entryDetailsValueText` и `DetailComment` переезжают из удаляемого
 `EntryDetailsCard.kt` в боевой экран.
@@ -179,13 +181,13 @@ A2 (`EntryDetailDraftCenterNoCard`): колонка `widthIn(max = 350.dp)` по
 в `EntryList`; `isSelected` — только `contextMenu?.item?.id == it.id`
 (выделение от деталей не имеет смысла: на детальном экране строка не видна —
 решение владельца по a11y-вопросу). Единый канал «открыть детали»:
-`onEntryTap` (тап), пункт меню «Просмотр» и a11y-действие
+`onEntryTap` (тап), пункт меню «Открыть» и a11y-действие
 «Показать детали» (`onEntryOpenDetails`) → лог `OPEN_ENTRY_DETAIL` +
 `onOpenEntryClick(item.id)` → `navigate(Screen.EntryDetail.createRoute(id))`
 из `NavDestinations.kt`. Сохраняется существующее различение тапа и a11y при
 открытом меню (workout-detail-view design): тап гасит только меню
 (Material3 DropdownMenu тап не поглощает), a11y идёт мимо popup и всегда
-открывает экран. Пункт «Просмотр» добавляется выше «Изменить» с ведущей
+открывает экран. Пункт «Открыть» добавляется выше «Изменить» с ведущей
 иконкой (`contentDescription = null`, паттерн пунктов меню; конкретная иконка
 — на этапе реализации).
 
@@ -233,7 +235,7 @@ A2 (`EntryDetailDraftCenterNoCard`): колонка `widthIn(max = 350.dp)` по
 
 Новые (ru/en): `entry_detail_title` («Детали записи» / "Entry details"),
 `entry_detail_not_found` («Запись не найдена» / "Entry not found"),
-`entry_list_menu_view` («Просмотр» / "View"). Реюз: `back` (стрелка),
+`entry_list_menu_view` («Открыть» / "Open"). Реюз: `back` (стрелка),
 `entry_list_menu_edit`, `entry_list_menu_delete`, `entry_list_delete_dialog_*`,
 `cancel`, `a11y_show_details`, `entry_details_weight_suffix`,
 `entry_value_separator`. Точные формулировки пунктов меню — финализируются на

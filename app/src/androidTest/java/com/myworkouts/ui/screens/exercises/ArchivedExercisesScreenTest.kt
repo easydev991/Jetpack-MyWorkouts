@@ -34,6 +34,7 @@ import com.myworkouts.ui.state.ArchivedTab
 import com.myworkouts.ui.viewmodel.ArchivedExercisesViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Rule
@@ -547,6 +548,8 @@ class ArchivedExercisesScreenTest {
         override suspend fun deleteExercise(id: Long): Result<Unit> = Result.success(Unit)
 
         override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(emptyList())
+
+        override fun entryById(id: Long): Flow<EntryListItem?> = flowOf(null)
 
         override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 

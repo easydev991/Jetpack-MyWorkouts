@@ -52,7 +52,8 @@ import kotlin.math.abs
  *   «1 час» (change update-entry-list-duration-format, spec «Формат
  *   значения записи»);
  * - пустое состояние при `entries = emptyList()` (5.1);
- * - long-press → меню «Удалить» → алерт подтверждения → отмена/подтверждение (5.3);
+ * - long-press → меню «Открыть»/«Изменить»/«Удалить» → алерт
+ *   подтверждения → отмена/подтверждение (5.3);
  * - комментарий в строке записи: показ текста / скрытие при null-blank
  *   (mainscreen-itemrow-comment);
  * - иконка упражнения в строке записи (exercise-icon-display): назначенный
@@ -342,7 +343,14 @@ class MainScreenTest {
             menuChanges
         )
 
-        // Then — меню «Удалить» появилось
+        // Then — трёхпунктовое меню появилось: «Открыть», «Изменить»,
+        // «Удалить» (workout-detail-view)
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_list_menu_view))
+            .assertExists()
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_list_menu_edit))
+            .assertExists()
         composeTestRule
             .onNodeWithText(context.getString(R.string.entry_list_menu_delete))
             .assertExists()
@@ -622,11 +630,12 @@ class MainScreenTest {
     }
 
     /**
-     * Spec «Длинное нажатие открывает меню с пунктом «Удалить»» (entry-edit-mode):
-     * меню содержит пункт «Изменить» выше пункта «Удалить».
+     * Спец «Длинное нажатие открывает контекстное меню» (entry-edit-mode,
+     * workout-detail-view): меню содержит три пункта — «Открыть» выше
+     * «Изменить» выше «Удалить».
      */
     @Test
-    fun content_long_press_then_menu_shows_edit_item_above_delete() {
+    fun content_long_press_then_menu_shows_view_edit_delete_items_in_order() {
         // Given — экран с одной записью и локальным состоянием меню
         composeTestRule.setContent {
             var menu by remember { mutableStateOf<ContextMenuState?>(null) }
@@ -650,7 +659,10 @@ class MainScreenTest {
             .performTouchInput { longClick() }
         composeTestRule.waitForIdle()
 
-        // Then — оба пункта в меню
+        // Then — все три пункта в меню
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_list_menu_view))
+            .assertExists()
         composeTestRule
             .onNodeWithText(context.getString(R.string.entry_list_menu_edit))
             .assertExists()
@@ -658,7 +670,11 @@ class MainScreenTest {
             .onNodeWithText(context.getString(R.string.entry_list_menu_delete))
             .assertExists()
 
-        // Then — «Изменить» выше «Удалить»
+        // Then — порядок сверху вниз: «Открыть», «Изменить», «Удалить»
+        assertDisplayedAbove(
+            higher = context.getString(R.string.entry_list_menu_view),
+            lower = context.getString(R.string.entry_list_menu_edit)
+        )
         assertDisplayedAbove(
             higher = context.getString(R.string.entry_list_menu_edit),
             lower = context.getString(R.string.entry_list_menu_delete)
@@ -669,7 +685,7 @@ class MainScreenTest {
      * Accessibility-канал long-press (accessibility-semantics-fixes):
      * строка предоставляет custom-действие с локализованным лейблом
      * `a11y_open_menu`; выполнение действия открывает то же
-     * контекстное меню «Изменить»/«Удалить», что long-press.
+     * контекстное меню «Открыть»/«Изменить»/«Удалить», что long-press.
      */
     @Test
     fun row_when_a11y_action_invoked_then_opens_context_menu() {
@@ -713,7 +729,10 @@ class MainScreenTest {
         checkNotNull(openMenuAction).action.invoke()
         composeTestRule.waitForIdle()
 
-        // Then — меню открыто: оба пункта на месте, колбэк вызван
+        // Then — меню открыто: все три пункта на месте, колбэк вызван
+        composeTestRule
+            .onNodeWithText(context.getString(R.string.entry_list_menu_view))
+            .assertExists()
         composeTestRule
             .onNodeWithText(context.getString(R.string.entry_list_menu_edit))
             .assertExists()

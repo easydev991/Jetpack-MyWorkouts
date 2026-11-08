@@ -134,6 +134,8 @@ private class ExercisesViewModelFakeRepository(
 
     override fun entries(): Flow<List<com.myworkouts.domain.model.EntryListItem>> = MutableStateFlow(emptyList())
 
+    override fun entryById(id: Long): Flow<com.myworkouts.domain.model.EntryListItem?> = flowOf(null)
+
     override fun entriesWithExercise(): Flow<List<com.myworkouts.domain.model.EntryWithExercise>> =
         MutableStateFlow(emptyList())
 

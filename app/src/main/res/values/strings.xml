@@ -104,6 +104,7 @@
 
     <!-- Entry list screen (список записей на главном экране) -->
     <string name="entry_value_separator">" х "</string>
+    <string name="entry_list_menu_view">Открыть</string>
     <string name="entry_list_menu_edit">Изменить</string>
     <string name="entry_list_menu_delete">Удалить</string>
     <!-- Accessibility: единый лейбл действия «открыть контекстное меню»
@@ -122,6 +123,8 @@
 
     <!-- Детали записи (черновик дизайна, выбор варианта) -->
     <string name="entry_details_weight_suffix">(+ %1$s кг)</string>
+    <string name="entry_detail_title">Детали записи</string>
+    <string name="entry_detail_not_found">Запись не найдена</string>
 
     <!-- Exercise edit / delete (заголовок edit-режима, меню, алерт, снекбары) -->
     <string name="exercise_edit_title">Изменить упражнение</string>

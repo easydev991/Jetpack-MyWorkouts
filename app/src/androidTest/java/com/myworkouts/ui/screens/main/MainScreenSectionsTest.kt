@@ -35,6 +35,7 @@ import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Assume
@@ -421,6 +422,8 @@ private class SectionsFakeRepository(
     override fun exercises(query: String): Flow<List<Exercise>> = MutableStateFlow(emptyList())
 
     override fun entries(): Flow<List<EntryListItem>> = entriesFlow
+
+    override fun entryById(id: Long): Flow<EntryListItem?> = flowOf(null)
 
     override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 

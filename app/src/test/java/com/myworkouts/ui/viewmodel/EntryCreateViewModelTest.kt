@@ -21,6 +21,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -89,6 +90,8 @@ private class FakeWorkoutDataRepository(
     override fun exercises(query: String): Flow<List<Exercise>> = catalog
 
     override fun entries(): Flow<List<EntryListItem>> = MutableStateFlow(emptyList())
+
+    override fun entryById(id: Long): Flow<EntryListItem?> = flowOf(null)
 
     override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 

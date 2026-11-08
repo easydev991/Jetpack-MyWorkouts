@@ -82,6 +82,8 @@ private class AppDataViewModelFakeRepository(
 
     override fun entries(): Flow<List<EntryListItem>> = entriesFlow
 
+    override fun entryById(id: Long): Flow<EntryListItem?> = flowOf(null)
+
     override fun entriesWithExercise(): Flow<List<EntryWithExercise>> = MutableStateFlow(emptyList())
 
     override suspend fun getAllExercises(): Result<List<Exercise>> = Result.success(catalogFlow.value)

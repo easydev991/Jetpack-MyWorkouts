@@ -228,6 +228,19 @@ class RoomWorkoutDataRepository(
             .map { rows -> rows.map { it.toListItem() } }
 
     /**
+     * Реактивная строка записи по id (workout-entry-detail-screen,
+     * design Decision 2): построчный запрос
+     * [ExerciseEntryDao.observeEntryRowById] с той же JOIN-проекцией,
+     * маппинг — extension `EntryListItemWithExerciseEntity.toListItem()`.
+     * Несуществующий id — DAO эмитит пустой результат запроса,
+     * `map { it?.toListItem() }` даёт `null`-эмиссию (контракт порта).
+     */
+    override fun entryById(id: Long): Flow<EntryListItem?> =
+        exerciseEntryDao
+            .observeEntryRowById(id)
+            .map { row -> row?.toListItem() }
+
+    /**
      * Реактивный список записей для расчётов обзора (overview-screen,
      * design Decision 1): тот же широкий JOIN-запрос
      * [ExerciseEntryDao.observeEntryRows], маппинг — extension
