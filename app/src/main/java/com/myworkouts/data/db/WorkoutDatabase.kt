@@ -46,6 +46,18 @@ abstract class WorkoutDatabase : RoomDatabase() {
         const val DATABASE_NAME: String = "workout_database"
 
         /**
+         * Версия БД до миграции v3 → v4 — последняя с колонкой
+         * `exercises.icon_number` (exercise-icon-mvp Decision 1).
+         */
+        private const val MIGRATION_3_4_FROM = 3
+
+        /**
+         * Версия БД после миграции v3 → v4 — добавлена таблица
+         * `categories` (custom-categories, design Decision 5).
+         */
+        private const val MIGRATION_3_4_TO = 4
+
+        /**
          * Миграция v3 → v4 (custom-categories, design Decision 5): таблица
          * `categories` (DDL — копия createSql из экспортированной схемы
          * `app/schemas/…/4.json`, включая DEFAULT 0 у флагов), unique-индекс
@@ -55,7 +67,7 @@ abstract class WorkoutDatabase : RoomDatabase() {
          * требуется INSERT данных стандартного набора.
          */
         val MIGRATION_3_4: Migration =
-            object : Migration(3, 4) {
+            object : Migration(MIGRATION_3_4_FROM, MIGRATION_3_4_TO) {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL(
                         "CREATE TABLE IF NOT EXISTS `categories` (" +

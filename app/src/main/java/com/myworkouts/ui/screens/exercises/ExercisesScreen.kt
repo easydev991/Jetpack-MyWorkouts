@@ -124,68 +124,131 @@ fun ExercisesScreen(
         onCategoryErrorShown = viewModel::onCategoryErrorShown
     )
 
+    // Сборка state раздроблена: база (упражнения) — [exercisesScreenState],
+    // колбэки категорий — [withCategoryHandlers]; оба шага вынесены ради
+    // detekt `LongMethod: 60` (паттерн дробления MainScreen.kt). Состояния
+    // контекстных меню живут здесь (`remember`), внутрь заходят сеттерами.
+    val state =
+        withCategoryHandlers(
+            base =
+                exercisesScreenState(
+                    viewModel = viewModel,
+                    uiState = uiState,
+                    contextMenu = contextMenu,
+                    categoryContextMenu = categoryContextMenu,
+                    analyticsProvider = analyticsProvider,
+                    onAddExerciseClick = onAddExerciseClick,
+                    onAddCategoryClick = onAddCategoryClick,
+                    onEditExercise = onEditExercise,
+                    onArchivedExercisesClick = onArchivedExercisesClick,
+                    setContextMenu = { contextMenu = it }
+                ),
+            viewModel = viewModel,
+            onEditCategory = onEditCategory,
+            setCategoryContextMenu = { categoryContextMenu = it }
+        )
+
     ExercisesScreenContent(
-        state =
-            ExercisesScreenState(
-                uiState = uiState,
-                contextMenu = contextMenu,
-                categoryContextMenu = categoryContextMenu,
-                // FAB-события в точке нажатия (design D10)
-                onAddExerciseClick = {
-                    analyticsProvider.log(
-                        AnalyticsEvent.UserAction(UserActionType.OPEN_EXERCISE_CREATE)
-                    )
-                    onAddExerciseClick()
-                },
-                onAddCategoryClick = {
-                    analyticsProvider.log(
-                        AnalyticsEvent.UserAction(UserActionType.OPEN_CATEGORY_CREATE)
-                    )
-                    onAddCategoryClick()
-                },
-                // Обёртки long-press меню: «закрыть меню и делегировать»
-                // (паттерн MainScreen.kt:90–95)
-                onTabSelect = viewModel::selectTab,
-                onContextMenuItemChange = { contextMenu = it },
-                onCategoryContextMenuItemChange = { categoryContextMenu = it },
-                onRequestEdit = {
-                    contextMenu = null
-                    onEditExercise(it.id)
-                },
-                onRequestArchive = {
-                    contextMenu = null
-                    viewModel.requestArchive(it)
-                },
-                onRequestDelete = {
-                    contextMenu = null
-                    viewModel.requestDelete(it)
-                },
-                onConfirmDelete = viewModel::confirmDelete,
-                onCancelDelete = viewModel::cancelDelete,
-                onConfirmArchive = viewModel::confirmArchive,
-                onCancelArchive = viewModel::cancelArchive,
-                onRequestCategoryEdit = {
-                    categoryContextMenu = null
-                    onEditCategory(it.id)
-                },
-                onRequestCategoryArchive = {
-                    categoryContextMenu = null
-                    viewModel.requestCategoryArchive(it.id)
-                },
-                onRequestCategoryDelete = {
-                    categoryContextMenu = null
-                    viewModel.requestCategoryDelete(it)
-                },
-                onConfirmCategoryDelete = viewModel::confirmCategoryDelete,
-                onCancelCategoryDelete = viewModel::cancelCategoryDelete,
-                onConfirmCategoryArchive = viewModel::confirmCategoryArchive,
-                onCancelCategoryArchive = viewModel::cancelCategoryArchive,
-                onArchivedExercisesClick = onArchivedExercisesClick
-            ),
+        state = state,
         snackbarHostState = snackbarHostState,
         modifier = modifier
     )
 }
+
+/**
+ * Базовая часть [ExercisesScreenState] — всё, что касается упражнений и
+ * общих действий: FAB с аналитикой в точке нажатия (design D10),
+ * long-press меню упражнений («закрыть меню и делегировать» — паттерн
+ * MainScreen.kt:90–95), подтверждения удаления/архивации. Колбэки
+ * категорий добавляет [withCategoryHandlers].
+ *
+ * Suppress `LongParameterList` — зеркало [ExercisesScreen]: набор
+ * параметров совпадает с параметрами экрана, у которого подавление
+ * уже принято.
+ */
+@Suppress("LongParameterList")
+private fun exercisesScreenState(
+    viewModel: ExercisesViewModel,
+    uiState: ExercisesUiState,
+    contextMenu: ExerciseContextMenuState?,
+    categoryContextMenu: CategoryContextMenuState?,
+    analyticsProvider: AnalyticsProvider,
+    onAddExerciseClick: () -> Unit,
+    onAddCategoryClick: () -> Unit,
+    onEditExercise: (Long) -> Unit,
+    onArchivedExercisesClick: () -> Unit,
+    setContextMenu: (ExerciseContextMenuState?) -> Unit
+): ExercisesScreenState =
+    ExercisesScreenState(
+        uiState = uiState,
+        contextMenu = contextMenu,
+        categoryContextMenu = categoryContextMenu,
+        // FAB-события в точке нажатия (design D10)
+        onAddExerciseClick = {
+            analyticsProvider.log(
+                AnalyticsEvent.UserAction(UserActionType.OPEN_EXERCISE_CREATE)
+            )
+            onAddExerciseClick()
+        },
+        onAddCategoryClick = {
+            analyticsProvider.log(
+                AnalyticsEvent.UserAction(UserActionType.OPEN_CATEGORY_CREATE)
+            )
+            onAddCategoryClick()
+        },
+        onTabSelect = viewModel::selectTab,
+        onContextMenuItemChange = setContextMenu,
+        onRequestEdit = {
+            setContextMenu(null)
+            onEditExercise(it.id)
+        },
+        onRequestArchive = {
+            setContextMenu(null)
+            viewModel.requestArchive(it)
+        },
+        onRequestDelete = {
+            setContextMenu(null)
+            viewModel.requestDelete(it)
+        },
+        onConfirmDelete = viewModel::confirmDelete,
+        onCancelDelete = viewModel::cancelDelete,
+        onConfirmArchive = viewModel::confirmArchive,
+        onCancelArchive = viewModel::cancelArchive,
+        onArchivedExercisesClick = onArchivedExercisesClick
+    )
+
+/**
+ * Категорийная половина [ExercisesScreenState]: канал меню категории
+ * (`onCategoryContextMenuItemChange`), long-press меню (custom-categories
+ * 5.4) и подтверждения удаления/архивации — добавляются `copy` поверх
+ * базы [exercisesScreenState], чтобы обе половины сборки уложились в
+ * detekt `LongMethod: 60`.
+ */
+private fun withCategoryHandlers(
+    base: ExercisesScreenState,
+    viewModel: ExercisesViewModel,
+    onEditCategory: (Long) -> Unit,
+    setCategoryContextMenu: (CategoryContextMenuState?) -> Unit
+): ExercisesScreenState =
+    base.copy(
+        onCategoryContextMenuItemChange = setCategoryContextMenu,
+        onRequestCategoryEdit = {
+            setCategoryContextMenu(null)
+            onEditCategory(it.id)
+        },
+        onRequestCategoryArchive = {
+            setCategoryContextMenu(null)
+            viewModel.requestCategoryArchive(it.id)
+        },
+        onRequestCategoryDelete = {
+            setCategoryContextMenu(null)
+            viewModel.requestCategoryDelete(it)
+        },
+        onConfirmCategoryDelete = viewModel::confirmCategoryDelete,
+        onCancelCategoryDelete = viewModel::cancelCategoryDelete,
+        onConfirmCategoryArchive = viewModel::confirmCategoryArchive,
+        onCancelCategoryArchive = viewModel::cancelCategoryArchive
+    )
 
 /**
  * One-shot снекбар ошибок каталога (design Decision 6;

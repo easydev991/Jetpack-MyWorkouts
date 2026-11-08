@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -115,28 +116,9 @@ internal fun CategoryCreateScreenContent(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
-                // Режим редактирования — «Изменить категорию», создание —
-                // «Новая категория»
-                title = {
-                    Text(
-                        stringResource(
-                            if (state.uiState.isEditMode) {
-                                R.string.category_edit_title
-                            } else {
-                                R.string.category_create_title
-                            }
-                        )
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = attemptClose) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back)
-                        )
-                    }
-                }
+            CategoryCreateTopAppBar(
+                isEditMode = state.uiState.isEditMode,
+                onBackClick = attemptClose
             )
         },
         bottomBar = {
@@ -150,37 +132,7 @@ internal fun CategoryCreateScreenContent(
             )
         }
     ) { paddingValues ->
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(paddingValues)
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            OutlinedTextField(
-                value = state.uiState.name.orEmpty(),
-                onValueChange = state.onNameChange,
-                label = { Text(stringResource(R.string.category_field_name)) },
-                singleLine = true,
-                // Дубликат — подсказка под полем (spec «Валидация
-                // уникальности имени категории»)
-                supportingText = {
-                    if (state.uiState.isDuplicateName) {
-                        Text(
-                            text = stringResource(R.string.category_error_duplicate),
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-            CategoryColorPicker(
-                colorArgb = state.uiState.colorArgb,
-                onRegenerateColorClick = state.onRegenerateColorClick
-            )
-        }
+        CategoryCreateForm(state = state, paddingValues = paddingValues)
     }
 
     if (showConfirmDialog) {
@@ -190,6 +142,86 @@ internal fun CategoryCreateScreenContent(
                 state.onBackClick()
             },
             onDismiss = { showConfirmDialog = false }
+        )
+    }
+}
+
+/**
+ * TopAppBar экрана категории — вынесен из [CategoryCreateScreenContent]
+ * ради detekt `LongMethod: 60` (паттерн дробления `EntryCreateScreen`).
+ * Заголовок зависит от режима (редактирование — «Изменить категорию»,
+ * создание — «Новая категория»), стрелка — единая точка закрытия
+ * [onBackClick] (в контенте это `attemptClose`).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CategoryCreateTopAppBar(
+    isEditMode: Boolean,
+    onBackClick: () -> Unit
+) {
+    TopAppBar(
+        title = {
+            Text(
+                stringResource(
+                    if (isEditMode) {
+                        R.string.category_edit_title
+                    } else {
+                        R.string.category_create_title
+                    }
+                )
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = onBackClick) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.back)
+                )
+            }
+        }
+    )
+}
+
+/**
+ * Форма категории: поле «Название» с подсказкой о дубликате и пикер
+ * цвета ([CategoryColorPicker]) — вынесена из
+ * [CategoryCreateScreenContent] ради detekt `LongMethod: 60`
+ * (паттерн `EntryCreateForm`).
+ */
+@Composable
+private fun CategoryCreateForm(
+    state: CategoryCreateScreenState,
+    paddingValues: PaddingValues
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        OutlinedTextField(
+            value = state.uiState.name.orEmpty(),
+            onValueChange = state.onNameChange,
+            label = { Text(stringResource(R.string.category_field_name)) },
+            singleLine = true,
+            // Дубликат — подсказка под полем (spec «Валидация
+            // уникальности имени категории»)
+            supportingText = {
+                if (state.uiState.isDuplicateName) {
+                    Text(
+                        text = stringResource(R.string.category_error_duplicate),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+        CategoryColorPicker(
+            colorArgb = state.uiState.colorArgb,
+            onRegenerateColorClick = state.onRegenerateColorClick
         )
     }
 }

@@ -49,7 +49,13 @@ private val LAST_OVERVIEW_TAB_KEY = stringPreferencesKey("last_overview_tab")
  * точечно по фичам, имя файла
  * appearance_prefs НЕ менять (миграция DataStore). Если появится 2-я
  * зависимость от DataStore — вынести в MyWorkoutsApplication.
+ *
+ * Suppress `TooManyFunctions` — осознанное подавление: фасад настроек
+ * намеренно плоский (один ключ/фича = пара «set + Flow») — тот же
+ * паттерн, что у исключённых из правила ViewModels и DAO; разбиение на
+ * несколько классов фрагментировало бы единое хранилище без выигрыша.
  */
+@Suppress("TooManyFunctions")
 class AppSettingsDataStore(
     private val dataStore: DataStore<Preferences>
 ) {
