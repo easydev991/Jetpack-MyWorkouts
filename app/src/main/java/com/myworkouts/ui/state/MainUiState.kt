@@ -15,9 +15,9 @@ import com.myworkouts.domain.model.EntryListItem
  *
  * @see com.myworkouts.ui.viewmodel.MainViewModel
  */
-sealed class MainUiState {
+sealed interface MainUiState {
     /** Начальное состояние до первой эмиссии репозитория. */
-    data object Loading : MainUiState()
+    data object Loading : MainUiState
 
     /**
      * Загруженное состояние: записи (может быть пустым) и опциональный
@@ -34,5 +34,5 @@ sealed class MainUiState {
     data class Success(
         val entries: List<EntryListItem>,
         val pendingDeleteId: Long? = null
-    ) : MainUiState()
+    ) : MainUiState
 }

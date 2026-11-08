@@ -30,9 +30,9 @@ enum class ExercisesTab {
  *
  * @see com.myworkouts.ui.viewmodel.ExercisesViewModel
  */
-sealed class ExercisesUiState {
+sealed interface ExercisesUiState {
     /** Начальное состояние до первой эмиссии репозитория. */
-    data object Loading : ExercisesUiState()
+    data object Loading : ExercisesUiState
 
     /**
      * Загруженное состояние: каталог упражнений + активные категории +
@@ -93,5 +93,5 @@ sealed class ExercisesUiState {
         val categoryArchiveError: Boolean = false,
         val pendingCategoryArchiveId: Long? = null,
         val hasArchived: Boolean = false
-    ) : ExercisesUiState()
+    ) : ExercisesUiState
 }

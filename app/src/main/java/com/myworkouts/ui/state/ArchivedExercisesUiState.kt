@@ -30,9 +30,9 @@ enum class ArchivedTab {
  *
  * @see com.myworkouts.ui.viewmodel.ArchivedExercisesViewModel
  */
-sealed class ArchivedExercisesUiState {
+sealed interface ArchivedExercisesUiState {
     /** Начальное состояние до первой эмиссии репозитория. */
-    data object Loading : ArchivedExercisesUiState()
+    data object Loading : ArchivedExercisesUiState
 
     /**
      * Загруженное состояние: архив упражнений + архив категорий +
@@ -51,5 +51,5 @@ sealed class ArchivedExercisesUiState {
         val exercises: List<Exercise>,
         val categories: List<Category> = emptyList(),
         val selectedTab: ArchivedTab = ArchivedTab.EXERCISES
-    ) : ArchivedExercisesUiState()
+    ) : ArchivedExercisesUiState
 }
