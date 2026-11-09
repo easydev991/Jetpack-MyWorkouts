@@ -1,9 +1,13 @@
 package com.myworkouts.ui.viewmodel
 
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore.Companion.REVIEW_COUNTERS_FAILURE_CONTEXT
+import com.myworkouts.domain.crash.FakeCrashReporter
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryField
@@ -13,17 +17,23 @@ import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.domain.repository.WorkoutDataRepository
+import com.myworkouts.domain.usecase.ReviewMilestoneDecider
+import com.myworkouts.ui.review.ReviewSessionHolder
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -38,6 +48,8 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -265,6 +277,30 @@ class EntryCreateViewModelTest {
     private val visibilityFlow = MutableStateFlow(EntryField.entries.associateWith { true })
     private val mockDataStore: AppSettingsDataStore = mockk(relaxed = true)
 
+    /**
+     * Temp-каталог для реального хранилища счётчиков ниже: свежий на каждый
+     * тест (lifecycle по умолчанию per-method) — singleton-per-file коллизий
+     * между тестами нет.
+     */
+    @TempDir
+    lateinit var tempDir: Path
+
+    /**
+     * Реальное хранилище счётчиков review-майлстоунов поверх temp-файла
+     * (прецедент `ReviewCountersDataStoreTest` — JVM без Robolectric).
+     * Хук 7.2 читает его после успешного создания записи; scope DataStore
+     * — дефолтный (вне виртуального времени теста), поэтому завершение
+     * хука в тестах ждётся через `CompletableDeferred`, а не одним
+     * `advanceUntilIdle`.
+     */
+    private val reviewCountersDataStore: ReviewCountersDataStore by lazy {
+        ReviewCountersDataStore(
+            PreferenceDataStoreFactory.create(
+                produceFile = { tempDir.resolve("review_counters.preferences_pb").toFile() }
+            )
+        )
+    }
+
     /** 2024-07-15T12:30 UTC — фиксированный «сейчас» для тестов. */
     private val fixedNowMillis = 1_721_046_600_000L
 
@@ -307,16 +343,26 @@ class EntryCreateViewModelTest {
 
     private val fakeAnalytics = FakeAnalyticsProvider()
 
+    private val fakeCrash = FakeCrashReporter()
+
     private fun createViewModel(
         entryId: Long = -1L,
-        nowProvider: () -> Long = { fixedNowMillis }
+        nowProvider: () -> Long = { fixedNowMillis },
+        isReviewEnabled: Boolean = false,
+        reviewSessionHolder: ReviewSessionHolder = ReviewSessionHolder(),
+        reviewCountersDataStore: ReviewCountersDataStore = this.reviewCountersDataStore
     ): EntryCreateViewModel =
         EntryCreateViewModel(
             repository = repository,
             nowProvider = nowProvider,
             entryId = entryId,
             dataStore = mockDataStore,
-            analyticsProvider = fakeAnalytics
+            analyticsProvider = fakeAnalytics,
+            isReviewEnabled = isReviewEnabled,
+            reviewCountersDataStore = reviewCountersDataStore,
+            reviewSessionHolder = reviewSessionHolder,
+            reviewMilestoneDecider = ReviewMilestoneDecider(),
+            crashReporter = fakeCrash
         )
 
     /**
@@ -373,6 +419,44 @@ class EntryCreateViewModelTest {
                 listOf(AnalyticsEvent.UserAction(UserActionType.CREATE)),
                 fakeAnalytics.events,
                 "save в режиме создания логирует UserAction(CREATE)"
+            )
+        }
+
+    /**
+     * Сбой записи счётчиков review при сохранении (IOException из хранилища
+     * счётчиков) не роняет корутину и не «теряет» сохранённую запись:
+     * запись добавлена, `onSaved` вызван (экран закрывается — повторный
+     * тап «Сохранить» не создаёт дубль), сбой — тихий лог через
+     * crash-репортер (симметрично с `MainViewModel.readCounters`).
+     */
+    @Test
+    fun save_when_counters_io_exception_then_entry_saved_and_on_saved_called_with_crash_log() =
+        runTest(testDispatcher) {
+            // Given — хранилище счётчиков падает IOException на чтении/записи
+            val countersFailure = java.io.IOException("Сбой файла счётчиков")
+            val failingStore = mockk<ReviewCountersDataStore>(relaxed = true)
+            coEvery { failingStore.incrementCreatedEntriesCount() } throws countersFailure
+            val viewModel =
+                createViewModel(isReviewEnabled = true, reviewCountersDataStore = failingStore)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onExerciseChange(repsExercise)
+            advanceUntilIdle()
+            viewModel.onRepsChange("10")
+            advanceUntilIdle()
+            var savedCallback = false
+
+            // When
+            viewModel.save { savedCallback = true }
+            advanceUntilIdle()
+
+            // Then — запись сохранена, экран закрыт, сбой — тихим логом
+            assertNotNull(repository.addedEntry, "Сбой счётчиков не отменяет сохранённую запись")
+            assertTrue(savedCallback, "onSaved вызывается даже при сбое счётчиков")
+            assertEquals(
+                listOf(FakeCrashReporter.Entry(countersFailure, REVIEW_COUNTERS_FAILURE_CONTEXT)),
+                fakeCrash.logged,
+                "Сбой фиксируется тихим логом через crash-репортер"
             )
         }
 
@@ -1708,5 +1792,160 @@ class EntryCreateViewModelTest {
                 viewModel.uiState.value.weightText,
                 "В режиме редактирования вес остаётся из записи, не подменяется историей"
             )
+        }
+
+    // ---------- add-rustore-in-app-review (задачи 7.1–7.2): хук счётчика review-флоу ----------
+
+    /**
+     * `isReviewEnabled = true`, успешное создание записи (design D5):
+     * счётчик инкрементируется, pending запланирован по решению decider'а
+     * (первая запись — milestone 1). Порядок проверяется внутри
+     * `onSaved`-колбэка: pending уже установлен в момент закрытия экрана.
+     *
+     * Хук читает реальный DataStore (default IO-scope, вне виртуального
+     * времени теста), поэтому завершение `save` ждётся через
+     * `CompletableDeferred`, а не одним `advanceUntilIdle`.
+     */
+    @Test
+    fun save_when_review_enabled_then_counter_increments_and_pending_planned_before_on_saved() =
+        runTest(testDispatcher) {
+            // Given — review включён, валидная REPS-запись в режиме создания
+            val viewModel = createViewModel(isReviewEnabled = true)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onExerciseChange(repsExercise)
+            advanceUntilIdle()
+            viewModel.onRepsChange("10")
+            advanceUntilIdle()
+            var pendingAtOnSaved: Int? = null
+            val saved = CompletableDeferred<Unit>()
+
+            // When
+            viewModel.save {
+                // Чтение счётчиков в момент закрытия экрана: pending уже стоит
+                pendingAtOnSaved =
+                    runBlocking { reviewCountersDataStore.counters.first().pendingMilestone }
+                saved.complete(Unit)
+            }
+            advanceUntilIdle()
+            saved.await() // подтверждение: onSaved был вызван после хука
+
+            // Then — порядок и результат хука
+            assertEquals(
+                1,
+                pendingAtOnSaved,
+                "Pending (milestone 1) установлен до вызова onSaved()"
+            )
+            val counters = reviewCountersDataStore.counters.first()
+            assertEquals(1, counters.createdEntriesCount, "Счётчик созданных записей инкрементирован")
+            assertEquals(
+                1,
+                counters.pendingMilestone,
+                "Pending запланирован по решению decider'а (первая запись — milestone 1)"
+            )
+            assertNotNull(repository.addedEntry, "Запись создана через addEntry")
+            assertFalse(viewModel.uiState.value.isSaveError, "Ошибки нет")
+        }
+
+    /**
+     * Гейт выключен (`isReviewEnabled = false`, github flavor): счётчик
+     * не трогается даже при успешном создании записи (design D5 —
+     * «на github-сборке счётчик не ведётся вовсе»).
+     */
+    @Test
+    fun save_when_review_disabled_then_counter_untouched_on_successful_create() =
+        runTest(testDispatcher) {
+            // Given — review выключен (дефолт createViewModel), валидная запись
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onExerciseChange(repsExercise)
+            advanceUntilIdle()
+            viewModel.onRepsChange("10")
+            advanceUntilIdle()
+            var onSavedCalled = false
+
+            // When — успешное сохранение без review
+            viewModel.save { onSavedCalled = true }
+            advanceUntilIdle()
+
+            // Then — запись создана, счётчики не тронуты
+            assertTrue(onSavedCalled, "onSaved вызван — сохранение успешно")
+            assertNotNull(repository.addedEntry, "addEntry выполнен")
+            val counters = reviewCountersDataStore.counters.first()
+            assertEquals(
+                0,
+                counters.createdEntriesCount,
+                "Гейт выключен — счётчик не инкрементируется"
+            )
+            assertNull(counters.pendingMilestone, "Гейт выключен — pending не планируется")
+        }
+
+    /**
+     * Редактирование (`originalEntry != null`) при включённом review:
+     * счётчик не растёт — хук только для ветки создания (design D5).
+     */
+    @Test
+    fun save_in_edit_mode_when_review_enabled_then_counter_not_incremented() =
+        runTest(testDispatcher) {
+            // Given — загруженная запись, review включён
+            repository.entryById = originalEntry
+            val viewModel = createViewModel(entryId = originalEntry.id, isReviewEnabled = true)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onRepsChange("12")
+            advanceUntilIdle()
+
+            // When — успешное сохранение правки
+            viewModel.save { }
+            advanceUntilIdle()
+
+            // Then — updateEntry, не addEntry; счётчики не тронуты
+            assertNotNull(repository.updatedEntry, "updateEntry выполнен (режим правки)")
+            assertNull(repository.addedEntry, "addEntry не вызывается в режиме редактирования")
+            val counters = reviewCountersDataStore.counters.first()
+            assertEquals(
+                0,
+                counters.createdEntriesCount,
+                "Редактирование счётчик не инкрементирует"
+            )
+            assertNull(counters.pendingMilestone, "Pending в режиме правки не планируется")
+        }
+
+    /**
+     * Авто-запрос в этой сессии уже выполнялся
+     * (`holder.hasAutoRequestRun = true`) до `save()`: планирования нет —
+     * счётчик инкрементируется, но pending НЕ устанавливается (decider
+     * вернёт `None`, design D2).
+     */
+    @Test
+    fun save_when_review_enabled_and_session_auto_request_ran_then_counter_grows_without_pending() =
+        runTest(testDispatcher) {
+            // Given — holder сообщает о выполненном авто-запросе сессии
+            val holder = ReviewSessionHolder()
+            holder.hasAutoRequestRun = true
+            val viewModel =
+                createViewModel(isReviewEnabled = true, reviewSessionHolder = holder)
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.onExerciseChange(repsExercise)
+            advanceUntilIdle()
+            viewModel.onRepsChange("10")
+            advanceUntilIdle()
+            val saved = CompletableDeferred<Unit>()
+
+            // When — успешное создание (хук ждёт реального IO DataStore)
+            viewModel.save { saved.complete(Unit) }
+            advanceUntilIdle()
+            saved.await() // подтверждение: onSaved был вызван после хука
+
+            // Then — счётчик вырос, планирования нет
+            val counters = reviewCountersDataStore.counters.first()
+            assertEquals(
+                1,
+                counters.createdEntriesCount,
+                "Счётчик инкрементируется независимо от флага сессии"
+            )
+            assertNull(counters.pendingMilestone, "Флаг сессии блокирует планирование pending")
         }
 }

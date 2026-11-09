@@ -132,6 +132,12 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.analytics)
     ksp(libs.androidx.room.compiler)
+    // SDK RuStore Review — только flavor rustore (design D7): github-вариант
+    // компилируется без SDK; артефакт идёт с flavor-репозитория из
+    // settings.gradle.kts (FAIL_ON_PROJECT_REPOS запрещает репозиторий здесь).
+    // add(...) вместо акцессора: AGP 9 не генерирует типизированный
+    // flavor-акцессор rustoreImplementation в Kotlin DSL (Unresolved reference).
+    add("rustoreImplementation", libs.rustore.review)
     testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlinx.coroutines.test)

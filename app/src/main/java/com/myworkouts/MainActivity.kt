@@ -66,6 +66,9 @@ class MainActivity : ComponentActivity() {
         val app = application as MyWorkoutsApplication
         val dataStore = app.dataStore
         val repository = app.repository
+        val reviewCountersDataStore = app.reviewCountersDataStore
+        val reviewFlowLauncher = app.reviewFlowLauncher
+        val reviewSessionHolder = app.reviewSessionHolder
 
         // Провайдер аналитики по типу сборки (design D4): Noop в debug —
         // телеметрия молчит, Firebase в release.
@@ -110,6 +113,9 @@ class MainActivity : ComponentActivity() {
                 RootScreen(
                     dataStore = dataStore,
                     repository = repository,
+                    reviewCountersDataStore = reviewCountersDataStore,
+                    reviewFlowLauncher = reviewFlowLauncher,
+                    reviewSessionHolder = reviewSessionHolder,
                     analyticsProvider = analyticsProvider,
                     crashReporter = crashReporter,
                     pendingAddWorkout = pendingAddWorkout

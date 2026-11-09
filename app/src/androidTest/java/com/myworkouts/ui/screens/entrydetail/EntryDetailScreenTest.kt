@@ -27,11 +27,14 @@ import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.crash.NoopCrashReporter
 import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore
 import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.domain.model.EntryListItem
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.review.ReviewFlowLauncherFactory
+import com.myworkouts.ui.review.ReviewSessionHolder
 import com.myworkouts.ui.screens.root.RootScreen
 import com.myworkouts.ui.state.EntryDetailUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
@@ -259,6 +262,9 @@ class EntryDetailScreenTest {
                 RootScreen(
                     dataStore = AppSettingsDataStore.create(context),
                     repository = repository,
+                    reviewCountersDataStore = ReviewCountersDataStore.create(context),
+                    reviewFlowLauncher = ReviewFlowLauncherFactory.create(context),
+                    reviewSessionHolder = ReviewSessionHolder(),
                     analyticsProvider = NoopAnalyticsProvider(),
                     crashReporter = NoopCrashReporter(),
                     pendingAddWorkout = pendingAddWorkout

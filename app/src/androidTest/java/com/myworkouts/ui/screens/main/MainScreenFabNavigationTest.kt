@@ -14,6 +14,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.crash.NoopCrashReporter
+import com.myworkouts.data.preferences.ReviewCountersDataStore
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
@@ -23,6 +24,8 @@ import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.navigation.Screen
 import com.myworkouts.navigation.Screen.EntryCreate
+import com.myworkouts.review.ReviewFlowLauncherFactory
+import com.myworkouts.ui.review.ReviewSessionHolder
 import com.myworkouts.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,7 +40,9 @@ import org.junit.runner.RunWith
  * `entry_create` (NavHost-обёртка по образцу `MoreScreenTest`).
  *
  * `MainScreen` теперь принимает [MainViewModel] — конструкция через
- * `MainViewModel.factory(repository, NoopAnalyticsProvider(), NoopCrashReporter())` с in-memory репозиторием
+ * `MainViewModel.factory` с in-memory репозиторием, review-параметры —
+ * `isReviewEnabled = false` + flavor-лаунчер/хранилище/holder (гейт выключен,
+ * поведение не меняется; add-rustore-in-app-review, 6.1)
  * (workout-entries-list, задача 5.5).
  */
 @RunWith(AndroidJUnit4::class)
@@ -155,7 +160,16 @@ class MainScreenFabNavigationTest {
                 MainScreen(
                     viewModel =
                         viewModel(
-                            factory = MainViewModel.factory(repository, NoopAnalyticsProvider(), NoopCrashReporter())
+                            factory =
+                                MainViewModel.factory(
+                                    repository,
+                                    NoopAnalyticsProvider(),
+                                    NoopCrashReporter(),
+                                    isReviewEnabled = false,
+                                    reviewCountersDataStore = ReviewCountersDataStore.create(context),
+                                    reviewFlowLauncher = ReviewFlowLauncherFactory.create(context),
+                                    reviewSessionHolder = ReviewSessionHolder()
+                                )
                         ),
                     onAddEntryClick = { navController.navigate(EntryCreate.createRoute()) },
                     analyticsProvider = NoopAnalyticsProvider()

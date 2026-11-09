@@ -4,7 +4,11 @@ import android.app.Application
 import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.data.db.standardExercises
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore
 import com.myworkouts.data.repository.RoomWorkoutDataRepository
+import com.myworkouts.domain.review.ReviewFlowLauncher
+import com.myworkouts.review.ReviewFlowLauncherFactory
+import com.myworkouts.ui.review.ReviewSessionHolder
 
 /**
  * Композиционный корень manual DI (fix-entry-list-live-update, design.md
@@ -28,6 +32,35 @@ class MyWorkoutsApplication : Application() {
      * инстансов на один файл (design.md Decision 1).
      */
     val dataStore: AppSettingsDataStore by lazy { AppSettingsDataStore.create(this) }
+
+    /**
+     * Хранилище счётчиков review-майлстоунов (add-rustore-in-app-review,
+     * design D3) — preferences DataStore на отдельном файле
+     * `review_counters`, не расширение [dataStore]: пользовательские
+     * настройки UI и служебные счётчики не смешиваются. Process-singleton
+     * по образцу [dataStore]/[repository]: сброс из флоу полного удаления
+     * данных (задача 3.3) и wiring review-флоу (этапы 6.x/7.x) обязаны
+     * попадать в один инстанс на файл (singleton-делегат `preferencesDataStore`).
+     */
+    val reviewCountersDataStore: ReviewCountersDataStore by lazy { ReviewCountersDataStore.create(this) }
+
+    /**
+     * Лаунчер review-флоу (add-rustore-in-app-review, design D1): flavor-фабрика
+     * `ReviewFlowLauncherFactory` — один и тот же публичный FQN в обоих flavor
+     * source set'ах (rustore — RuStore Review SDK, github — no-op), конкретная
+     * реализация подставляется компиляцией flavor'а, условной логики нет.
+     * Process-singleton по образцу [dataStore]/[repository].
+     */
+    val reviewFlowLauncher: ReviewFlowLauncher by lazy { ReviewFlowLauncherFactory.create(this) }
+
+    /**
+     * Holder сессии review-флоу (add-rustore-in-app-review, design D2): флаг
+     * «авто-запрос выполнялся в этой сессии». In-memory, не персистится —
+     * смерть процесса даёт новую сессию. Process-singleton: пишется и читается
+     * разными ViewModel (`MainViewModel`/`EntryCreateViewModel`), инстанс —
+     * один на процесс.
+     */
+    val reviewSessionHolder: ReviewSessionHolder by lazy { ReviewSessionHolder() }
 
     /** БД приложения с prepopulate стандартного набора. */
     private val database: WorkoutDatabase by lazy { WorkoutDatabase.create(this, standardList) }

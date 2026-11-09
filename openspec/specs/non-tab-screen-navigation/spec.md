@@ -8,7 +8,6 @@
 
 ## Requirements
 
-
 ### Requirement: Screen sealed class holds only route
 
 `Screen` SHALL be `sealed class Screen(val route: String)` and SHALL

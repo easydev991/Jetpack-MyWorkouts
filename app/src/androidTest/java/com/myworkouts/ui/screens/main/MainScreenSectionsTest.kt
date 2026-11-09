@@ -24,6 +24,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.crash.NoopCrashReporter
+import com.myworkouts.data.preferences.ReviewCountersDataStore
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
@@ -31,6 +32,8 @@ import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.repository.WorkoutDataRepository
+import com.myworkouts.review.ReviewFlowLauncherFactory
+import com.myworkouts.ui.review.ReviewSessionHolder
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.flow.Flow
@@ -93,7 +96,11 @@ class MainScreenSectionsTest {
             MainViewModel(
                 repository = repository,
                 analyticsProvider = NoopAnalyticsProvider(),
-                crashReporter = NoopCrashReporter()
+                crashReporter = NoopCrashReporter(),
+                isReviewEnabled = false,
+                reviewCountersDataStore = ReviewCountersDataStore.create(context),
+                reviewFlowLauncher = ReviewFlowLauncherFactory.create(context),
+                reviewSessionHolder = ReviewSessionHolder()
             )
     }
 
@@ -346,7 +353,11 @@ class MainScreenSectionsTest {
             MainViewModel(
                 repository = repository,
                 analyticsProvider = NoopAnalyticsProvider(),
-                crashReporter = NoopCrashReporter()
+                crashReporter = NoopCrashReporter(),
+                isReviewEnabled = false,
+                reviewCountersDataStore = ReviewCountersDataStore.create(context),
+                reviewFlowLauncher = ReviewFlowLauncherFactory.create(context),
+                reviewSessionHolder = ReviewSessionHolder()
             )
         setContentInLocale("ru")
         composeTestRule.waitForIdle()
@@ -399,7 +410,11 @@ class MainScreenSectionsTest {
             MainViewModel(
                 repository = repository,
                 analyticsProvider = NoopAnalyticsProvider(),
-                crashReporter = NoopCrashReporter()
+                crashReporter = NoopCrashReporter(),
+                isReviewEnabled = false,
+                reviewCountersDataStore = ReviewCountersDataStore.create(context),
+                reviewFlowLauncher = ReviewFlowLauncherFactory.create(context),
+                reviewSessionHolder = ReviewSessionHolder()
             )
         setContentInLocale(locale.language)
         composeTestRule.waitForIdle()

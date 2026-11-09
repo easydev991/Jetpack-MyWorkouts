@@ -27,6 +27,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -66,7 +67,9 @@ import java.time.format.DateTimeFormatter
  *
  * VM-обёртка: подписка на [MainViewModel.uiState] и локальное состояние
  * long-press меню (диалог удаления живёт в `MainUiState.pendingDeleteId`).
- * Вся верстка — в [MainScreenContent].
+ * Вся верстка — в [MainScreenContent]. При каждом входе на экран
+ * [MainViewModel.onMainScreenShown] показывает отложенный pending
+ * review-майлстоуна (add-rustore-in-app-review, design D5).
  *
  * @param viewModel ViewModel с реактивным списком записей и pending-удалением
  * @param onAddEntryClick Тап по FAB: открыть экран создания записи.
@@ -98,6 +101,13 @@ fun MainScreen(
     // Само меню рисуется на уровне списка (design Decision 5), но
     // управляется корневым Composable — иначе его не видно из Content.
     var contextMenu by remember { mutableStateOf<ContextMenuState?>(null) }
+    // Авто-запрос оценки приложения при каждом входе на экран
+    // (add-rustore-in-app-review, задача 7.4, design D5): pending,
+    // запланированный в той же сессии, показывается при возврате на
+    // список; повтор с init сериализуется мьютексом в ViewModel.
+    LaunchedEffect(Unit) {
+        viewModel.onMainScreenShown()
+    }
     // Единый канал открытия деталей: лог события в точке действия +
     // навигационный колбэк (workout-entry-detail-screen, design Decisions 7/9)
     val openEntryDetails: (Long) -> Unit = { id ->

@@ -1,5 +1,7 @@
 package com.myworkouts.analytics
 
+import com.myworkouts.domain.review.ReviewErrorType
+
 /**
  * Экраны приложения для событий screen_view. Имена enum-констант —
  * wire-значения (стабильные строки в PascalCase по маршрутам
@@ -79,8 +81,20 @@ enum class AppErrorOperation {
 }
 
 /**
- * События аналитики (спека «Событийная модель аналитики»): ровно три
- * типа — просмотр экрана, пользовательское действие, ошибка приложения.
+ * Исходы авто-запроса review-флоу для событий review_auto_request.
+ * Имена enum-констант — wire-значения (стабильные строки UPPER_SNAKE_CASE,
+ * канон — `UserActionType`/`AppErrorOperation`), отдельное строковое поле
+ * не вводится.
+ */
+enum class ReviewAutoRequestOutcome {
+    SHOWN,
+    ERROR
+}
+
+/**
+ * События аналитики (спека «Событийная модель аналитики»): ровно четыре
+ * типа — просмотр экрана, пользовательское действие, ошибка приложения,
+ * авто-запрос review-флоу.
  */
 sealed interface AnalyticsEvent {
     /**
@@ -113,5 +127,20 @@ sealed interface AnalyticsEvent {
     data class AppError(
         val operation: AppErrorOperation,
         val throwable: Throwable
+    ) : AnalyticsEvent
+
+    /**
+     * Авто-запрос review-флоу (design D9): исход показа нативной формы
+     * оценки. Номер milestone в событие не входит — wire-состав стабилен
+     * и не зависит от внутренних счётчиков.
+     *
+     * @param outcome исход авто-запроса
+     * @param errorType тип ошибки запуска SDK-флоу ([ReviewErrorType]
+     * переиспользуется из `domain/review` — одна классификация ошибок на
+     * домен и аналитику); заполнен только у исхода ERROR
+     */
+    data class ReviewAutoRequest(
+        val outcome: ReviewAutoRequestOutcome,
+        val errorType: ReviewErrorType? = null
     ) : AnalyticsEvent
 }

@@ -27,16 +27,20 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
+import com.myworkouts.crash.NoopCrashReporter
 import com.myworkouts.data.db.WorkoutDatabase
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore
 import com.myworkouts.data.repository.RoomWorkoutDataRepository
 import com.myworkouts.domain.model.EntryField
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.domain.usecase.ReviewMilestoneDecider
 import com.myworkouts.navigation.Screen
 import com.myworkouts.ui.icons.EXERCISE_ICON_TEST_TAG
 import com.myworkouts.ui.icons.ExerciseIcons
+import com.myworkouts.ui.review.ReviewSessionHolder
 import com.myworkouts.ui.state.EntryCreateUiState
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.viewmodel.EntryCreateViewModel
@@ -1154,7 +1158,12 @@ class EntryCreateScreenTest {
                 nowProvider = { System.currentTimeMillis() },
                 entryId = Screen.EntryCreate.NO_ENTRY_ID,
                 dataStore = dataStore,
-                analyticsProvider = NoopAnalyticsProvider()
+                analyticsProvider = NoopAnalyticsProvider(),
+                isReviewEnabled = false,
+                reviewCountersDataStore = ReviewCountersDataStore.create(context),
+                reviewSessionHolder = ReviewSessionHolder(),
+                reviewMilestoneDecider = ReviewMilestoneDecider(),
+                crashReporter = NoopCrashReporter()
             )
         composeTestRule.setContent {
             JetpackMyWorkoutsTheme {

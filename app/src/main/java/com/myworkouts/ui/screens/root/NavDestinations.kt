@@ -5,11 +5,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import com.myworkouts.BuildConfig
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore
 import com.myworkouts.domain.crash.CrashReporter
 import com.myworkouts.domain.repository.WorkoutDataRepository
+import com.myworkouts.domain.review.ReviewFlowLauncher
 import com.myworkouts.navigation.Screen
+import com.myworkouts.ui.review.ReviewSessionHolder
 import com.myworkouts.ui.screens.appdata.AppDataScreen
 import com.myworkouts.ui.screens.appearance.AppearanceScreen
 import com.myworkouts.ui.screens.main.MainScreen
@@ -33,10 +37,18 @@ import kotlinx.coroutines.launch
  * `composable(Screen.Main.route)` — список тренировок. Настройку тоггла
  * MoreScreen получает параметром (единая подписка в [RootScreen]); её
  * запись (`scope.launch`) остаётся рядом с NavHost.
+ *
+ * Review-параметры (add-rustore-in-app-review, 6.1 — только wiring,
+ * отложенный показ — 7.4): гейт `BuildConfig.RUSTORE_FEATURES` вычисляется
+ * ЗДЕСЬ, на вызове фабрики (не параметр dest-функции).
  */
+@Suppress("LongParameterList")
 @Composable
 internal fun MainNavDestination(
     repository: WorkoutDataRepository,
+    reviewCountersDataStore: ReviewCountersDataStore,
+    reviewFlowLauncher: ReviewFlowLauncher,
+    reviewSessionHolder: ReviewSessionHolder,
     analyticsProvider: AnalyticsProvider,
     crashReporter: CrashReporter,
     navController: NavHostController
@@ -44,7 +56,16 @@ internal fun MainNavDestination(
     MainScreen(
         viewModel =
             viewModel(
-                factory = MainViewModel.factory(repository, analyticsProvider, crashReporter)
+                factory =
+                    MainViewModel.factory(
+                        repository,
+                        analyticsProvider,
+                        crashReporter,
+                        isReviewEnabled = BuildConfig.RUSTORE_FEATURES,
+                        reviewCountersDataStore = reviewCountersDataStore,
+                        reviewFlowLauncher = reviewFlowLauncher,
+                        reviewSessionHolder = reviewSessionHolder
+                    )
             ),
         onAddEntryClick = { navController.navigate(Screen.EntryCreate.createRoute()) },
         onEditEntryClick = { entryId ->
@@ -90,11 +111,16 @@ internal fun AppearanceNavDestination(
     )
 }
 
-/** `composable(Screen.AppData.route)` — экспорт, восстановление, удаление данных. */
+/**
+ * `composable(Screen.AppData.route)` — экспорт, восстановление, удаление
+ * данных. При успешном полном удалении сбрасываются счётчики
+ * review-майлстоунов ([ReviewCountersDataStore.reset], задача 3.3).
+ */
 @Composable
 internal fun AppDataNavDestination(
     repository: WorkoutDataRepository,
     dataStore: AppSettingsDataStore,
+    reviewCountersDataStore: ReviewCountersDataStore,
     analyticsProvider: AnalyticsProvider,
     crashReporter: CrashReporter,
     navController: NavHostController
@@ -104,7 +130,14 @@ internal fun AppDataNavDestination(
         viewModel =
             viewModel(
                 factory =
-                    AppDataViewModel.factory(repository, dataStore, context, analyticsProvider, crashReporter)
+                    AppDataViewModel.factory(
+                        repository,
+                        dataStore,
+                        reviewCountersDataStore,
+                        context,
+                        analyticsProvider,
+                        crashReporter
+                    )
             ),
         onBackClick = { navController.popBackStack() }
     )

@@ -13,6 +13,8 @@ import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.AppErrorOperation
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore.Companion.REVIEW_COUNTERS_FAILURE_CONTEXT
 import com.myworkouts.domain.crash.CrashReporter
 import com.myworkouts.domain.model.BackupSettings
 import com.myworkouts.domain.repository.WorkoutDataRepository
@@ -60,6 +62,10 @@ private const val LOG_TAG = "AppDataViewModel"
  *   вызов, без use-case: единственная строка без собственной логики)
  * @property dataStore хранилище настроек: настройки вкладок обзора
  *   входят в резервную копию (overview-screen, design D8)
+ * @property reviewCountersDataStore хранилище счётчиков review-майлстоунов
+ *   (add-rustore-in-app-review, design D3): сбрасывается в ветке успеха
+ *   полного удаления данных — служебные счётчики живут в том же
+ *   жизненном цикле, что и пользовательские данные
  * @property context контекст приложения для SAF-потоков (замыкается
  *   `applicationContext` — Activity-контекст в ViewModel нельзя)
  * @property exportUseCase экспорт резервной копии
@@ -77,6 +83,7 @@ private const val LOG_TAG = "AppDataViewModel"
 class AppDataViewModel(
     private val repository: WorkoutDataRepository,
     private val dataStore: AppSettingsDataStore,
+    private val reviewCountersDataStore: ReviewCountersDataStore,
     private val context: Context,
     private val exportUseCase: ExportBackupUseCase,
     private val importUseCase: ImportBackupUseCase,
@@ -93,6 +100,9 @@ class AppDataViewModel(
          * @param repository репозиторий данных тренировок
          * @param dataStore хранилище настроек: настройки вкладок обзора
          *   входят в резервную копию (overview-screen, design D8)
+         * @param reviewCountersDataStore хранилище счётчиков
+         *   review-майлстоунов (process-singleton из
+         *   `MyWorkoutsApplication`, add-rustore-in-app-review)
          * @param context контекст для SAF-потоков (замыкается
          *   `applicationContext` — Activity-контекст в ViewModel нельзя)
          * @param analyticsProvider провайдер аналитики
@@ -103,6 +113,7 @@ class AppDataViewModel(
         fun factory(
             repository: WorkoutDataRepository,
             dataStore: AppSettingsDataStore,
+            reviewCountersDataStore: ReviewCountersDataStore,
             context: Context,
             analyticsProvider: AnalyticsProvider,
             crashReporter: CrashReporter
@@ -113,6 +124,7 @@ class AppDataViewModel(
                     AppDataViewModel(
                         repository,
                         dataStore,
+                        reviewCountersDataStore,
                         appContext,
                         ExportBackupUseCase(repository, crashReporter),
                         ImportBackupUseCase(repository, crashReporter),
@@ -249,12 +261,25 @@ class AppDataViewModel(
      * Удаление всех данных с восстановлением стандартного набора.
      * Действие логируется независимо от исхода; сбой — в Crashlytics
      * и `AppError` (design D8, D10).
+     *
+     * В ветке успеха дополнительно сбрасываются счётчики
+     * review-майлстоунов ([ReviewCountersDataStore.reset], design D3).
+     * Сбой сброса счётчиков успех удаления не «перечёркивает»: он тихо
+     * логируется через [crashReporter], результат остаётся `DELETED`
+     * (успех удаления не должен зависеть от служебных счётчиков).
      */
     fun deleteAllData() {
         analyticsProvider.log(AnalyticsEvent.UserAction(UserActionType.DELETE_ALL_DATA))
         launchOperation(fallback = AppDataResult.ERROR_DELETE) {
             repository.deleteAllData().fold(
-                onSuccess = { AppDataResult.DELETED },
+                onSuccess = {
+                    try {
+                        reviewCountersDataStore.reset()
+                    } catch (e: IOException) {
+                        crashReporter.logException(e, REVIEW_COUNTERS_FAILURE_CONTEXT)
+                    }
+                    AppDataResult.DELETED
+                },
                 onFailure = {
                     crashReporter.logException(it, "Удаление всех данных")
                     analyticsProvider.log(

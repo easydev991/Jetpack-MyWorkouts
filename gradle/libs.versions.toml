@@ -32,6 +32,8 @@ uiautomator = "2.4.1"
 androidxTestRunner = "1.7.0"
 # debug/androidTest-only, в release не попадает
 leakcanary = "2.14"
+# SDK RuStore Review — flavor-зависимость только rustore, github без неё (design D7)
+rustoreReview = "10.5.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -73,6 +75,7 @@ firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashly
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
 leakcanary-android = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }
 leakcanary-android-instrumentation = { group = "com.squareup.leakcanary", name = "leakcanary-android-instrumentation", version.ref = "leakcanary" }
+rustore-review = { group = "ru.rustore.sdk", name = "review", version.ref = "rustoreReview" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

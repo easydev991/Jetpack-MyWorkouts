@@ -25,6 +25,7 @@ class FirebaseAnalyticsProvider(
                 is AnalyticsEvent.ScreenView -> logScreenView(event)
                 is AnalyticsEvent.UserAction -> logUserAction(event)
                 is AnalyticsEvent.AppError -> logAppError(event)
+                is AnalyticsEvent.ReviewAutoRequest -> logReviewAutoRequest(event)
             }
         } catch (e: Exception) {
             // Телеметрия не должна прерывать пользовательский сценарий
@@ -56,5 +57,14 @@ class FirebaseAnalyticsProvider(
                 putString("error_domain", event.throwable.javaClass.name)
             }
         firebaseAnalytics.logEvent("app_error", params)
+    }
+
+    private fun logReviewAutoRequest(event: AnalyticsEvent.ReviewAutoRequest) {
+        val params =
+            Bundle().apply {
+                putString("outcome", event.outcome.name)
+                event.errorType?.let { putString("error_type", it.name) }
+            }
+        firebaseAnalytics.logEvent("review_auto_request", params)
     }
 }

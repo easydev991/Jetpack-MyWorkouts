@@ -9,21 +9,29 @@ import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore.Companion.REVIEW_COUNTERS_FAILURE_CONTEXT
+import com.myworkouts.domain.crash.CrashReporter
 import com.myworkouts.domain.model.EntryField
 import com.myworkouts.domain.model.Exercise
 import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.domain.repository.WorkoutDataRepository
+import com.myworkouts.domain.usecase.ReviewMilestoneDecider
+import com.myworkouts.domain.usecase.ReviewMilestoneDecision
 import com.myworkouts.navigation.Screen
+import com.myworkouts.ui.review.ReviewSessionHolder
 import com.myworkouts.ui.screens.entry.entryDateMillis
 import com.myworkouts.ui.state.EntryCreateUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.IOException
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -48,13 +56,33 @@ private const val MINUTES_PER_HOUR: Int = 60
  * @property dataStore DataStore настроек (видимость опциональных полей,
  *   entry-settings-screen)
  * @property analyticsProvider Провайдер аналитики
+ *
+ * Review-параметры (add-rustore-in-app-review): хук счётчика реализован
+ * в [save] ([planReviewMilestone], задача 7.2, design D5) — после
+ * успешного создания записи инкрементит счётчик и планирует pending по
+ * решению [ReviewMilestoneDecider] с флагом сессии из
+ * [ReviewSessionHolder]. [ReviewMilestoneDecider] stateless —
+ * инстанцируется внутри фабрики, не создаётся в композиционном корне
+ * (прецедент [com.myworkouts.domain.usecase.ExportBackupUseCase]).
+ *
+ * @property isReviewEnabled Гейт review-функциональности (`BuildConfig.RUSTORE_FEATURES`)
+ * @property reviewCountersDataStore Хранилище счётчиков review-майлстоунов (process-singleton)
+ * @property reviewSessionHolder Флаг сессии «авто-запрос выполнялся»
+ * @property reviewMilestoneDecider Решение по планированию авто-запроса
+ * @property crashReporter Репортер сбоев: тихий лог сбоя планирования review-майлстоуна
  */
+@Suppress("LongParameterList")
 class EntryCreateViewModel(
     private val repository: WorkoutDataRepository,
     private val nowProvider: () -> Long,
     private val entryId: Long = Screen.EntryCreate.NO_ENTRY_ID,
     private val dataStore: AppSettingsDataStore,
-    private val analyticsProvider: AnalyticsProvider
+    private val analyticsProvider: AnalyticsProvider,
+    private val isReviewEnabled: Boolean,
+    private val reviewCountersDataStore: ReviewCountersDataStore,
+    private val reviewSessionHolder: ReviewSessionHolder,
+    private val reviewMilestoneDecider: ReviewMilestoneDecider,
+    private val crashReporter: CrashReporter
 ) : ViewModel() {
     /**
      * Загруженная запись режима редактирования: `null` — режим создания
@@ -218,7 +246,9 @@ class EntryCreateViewModel(
      * (`modifiedAt` ставит репозиторий), в режиме создания —
      * [WorkoutDataRepository.addEntry] с «сейчас» из [nowProvider].
      * Успех → [onSaved] (навигация назад), провал →
-     * [EntryCreateUiState.isSaveError], экран открыт.
+     * [EntryCreateUiState.isSaveError], экран открыт. В режиме создания
+     * при включённом review перед [onSaved] планируется pending
+     * review-майлстоуна ([planReviewMilestone], design D5).
      */
     fun save(onSaved: () -> Unit) {
         val state = uiState.value
@@ -234,8 +264,39 @@ class EntryCreateViewModel(
             val result =
                 if (original != null) repository.updateEntry(entry) else repository.addEntry(entry)
             result
-                .onSuccess { onSaved() }
-                .onFailure { mutableUiState.update { it.copy(isSaveError = true) } }
+                .onSuccess {
+                    if (isReviewEnabled && original == null) {
+                        try {
+                            planReviewMilestone()
+                        } catch (e: IOException) {
+                            // Сбой служебных счётчиков не отменяет сохранённую
+                            // запись: тихий лог, экран закрывается как обычно
+                            // (повторный тап «Сохранить» не создаёт дубль).
+                            crashReporter.logException(e, REVIEW_COUNTERS_FAILURE_CONTEXT)
+                        }
+                    }
+                    onSaved()
+                }.onFailure { mutableUiState.update { it.copy(isSaveError = true) } }
+        }
+    }
+
+    /**
+     * Планирует pending review-майлстоуна после успешного создания записи
+     * (add-rustore-in-app-review, задача 7.2, design D5): инкремент
+     * счётчика → одноразовый снимок счётчиков → решение
+     * [ReviewMilestoneDecider.decide] с флагом сессии из
+     * [ReviewSessionHolder] → при `Plan(n)` установка pending. Вызывается
+     * из ветки успеха [save] в режиме создания до [onSaved] — pending
+     * гарантированно установлен к моменту закрытия экрана; всё — в той же
+     * корутине [save].
+     */
+    private suspend fun planReviewMilestone() {
+        reviewCountersDataStore.incrementCreatedEntriesCount()
+        val counters = reviewCountersDataStore.counters.first()
+        val decision =
+            reviewMilestoneDecider.decide(counters, reviewSessionHolder.hasAutoRequestRun)
+        if (decision is ReviewMilestoneDecision.Plan) {
+            reviewCountersDataStore.setPendingMilestone(decision.milestone)
         }
     }
 
@@ -406,18 +467,29 @@ class EntryCreateViewModel(
     companion object {
         /**
          * Factory для создания [EntryCreateViewModel]. Ручной DI вместо Hilt.
+         * [ReviewMilestoneDecider] stateless — инстанцируется здесь
+         * (прецедент `ExportBackupUseCase` в `AppDataViewModel.factory`).
          *
          * @param repository Репозиторий данных тренировок
          * @param entryId Id редактируемой записи; дефолт — режим создания
          * @param dataStore DataStore настроек (видимость опциональных полей)
          * @param analyticsProvider Провайдер аналитики
+         * @param isReviewEnabled Гейт review-функциональности (add-rustore-in-app-review)
+         * @param reviewCountersDataStore Хранилище счётчиков review-майлстоунов
+         * @param reviewSessionHolder Флаг сессии «авто-запрос выполнялся»
+         * @param crashReporter Репортер сбоев (тихий лог сбоя планирования review)
          * @return Factory для создания ViewModel
          */
+        @Suppress("LongParameterList")
         fun factory(
             repository: WorkoutDataRepository,
             entryId: Long = Screen.EntryCreate.NO_ENTRY_ID,
             dataStore: AppSettingsDataStore,
-            analyticsProvider: AnalyticsProvider
+            analyticsProvider: AnalyticsProvider,
+            isReviewEnabled: Boolean,
+            reviewCountersDataStore: ReviewCountersDataStore,
+            reviewSessionHolder: ReviewSessionHolder,
+            crashReporter: CrashReporter
         ): ViewModelProvider.Factory =
             viewModelFactory {
                 initializer {
@@ -426,7 +498,12 @@ class EntryCreateViewModel(
                         { System.currentTimeMillis() },
                         entryId,
                         dataStore,
-                        analyticsProvider
+                        analyticsProvider,
+                        isReviewEnabled,
+                        reviewCountersDataStore,
+                        reviewSessionHolder,
+                        ReviewMilestoneDecider(),
+                        crashReporter
                     )
                 }
             }

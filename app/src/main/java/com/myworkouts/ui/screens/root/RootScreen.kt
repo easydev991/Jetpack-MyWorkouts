@@ -22,16 +22,20 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.myworkouts.BuildConfig
 import com.myworkouts.analytics.AnalyticsEvent
 import com.myworkouts.analytics.AnalyticsProvider
 import com.myworkouts.analytics.AppScreen
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore
 import com.myworkouts.domain.crash.CrashReporter
 import com.myworkouts.domain.repository.WorkoutDataRepository
+import com.myworkouts.domain.review.ReviewFlowLauncher
 import com.myworkouts.navigation.BottomTab
 import com.myworkouts.navigation.Screen
 import com.myworkouts.navigation.visibleTabs
+import com.myworkouts.ui.review.ReviewSessionHolder
 import com.myworkouts.ui.screens.entry.EntryCreateScreen
 import com.myworkouts.ui.screens.entry.EntrySettingsScreen
 import com.myworkouts.ui.screens.entrydetail.EntryDetailScreen
@@ -57,6 +61,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
  *
  * @param dataStore единый экземпляр [AppSettingsDataStore] для всего приложения
  * @param repository репозиторий данных тренировок (создан в `MyWorkoutsApplication`)
+ * @param reviewCountersDataStore единый экземпляр [ReviewCountersDataStore]
+ * (создан в `MyWorkoutsApplication`, add-rustore-in-app-review): сброс
+ * счётчиков при полном удалении данных — тот же process-singleton, что
+ * используется review-флоу
+ * @param reviewFlowLauncher лаунчер review-флоу (process-singleton из
+ * `MyWorkoutsApplication`, add-rustore-in-app-review 6.1): flavor-реализация,
+ * используется `MainViewModel` (задача 7.4); здесь только прокидка
+ * @param reviewSessionHolder holder сессии review-флоу (process-singleton,
+ * add-rustore-in-app-review 6.1); здесь только прокидка
  * @param crashReporter репортер сбоев (выбран в `MainActivity` по типу сборки)
  * @param pendingAddWorkout одноразовый запрос шортката «Добавить тренировку»
  * из `MainActivity` (add-workout-quick-action); сбрасывается здесь после обработки
@@ -67,6 +80,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 fun RootScreen(
     dataStore: AppSettingsDataStore,
     repository: WorkoutDataRepository,
+    reviewCountersDataStore: ReviewCountersDataStore,
+    reviewFlowLauncher: ReviewFlowLauncher,
+    reviewSessionHolder: ReviewSessionHolder,
     analyticsProvider: AnalyticsProvider,
     crashReporter: CrashReporter,
     pendingAddWorkout: MutableStateFlow<Boolean>,
@@ -137,6 +153,9 @@ fun RootScreen(
             dataStore = dataStore,
             showExercisesTab = showExercisesTab,
             repository = repository,
+            reviewCountersDataStore = reviewCountersDataStore,
+            reviewFlowLauncher = reviewFlowLauncher,
+            reviewSessionHolder = reviewSessionHolder,
             analyticsProvider = analyticsProvider,
             crashReporter = crashReporter,
             modifier = Modifier.padding(paddingValues)
@@ -160,6 +179,9 @@ private fun AppNavHost(
     dataStore: AppSettingsDataStore,
     showExercisesTab: Boolean,
     repository: WorkoutDataRepository,
+    reviewCountersDataStore: ReviewCountersDataStore,
+    reviewFlowLauncher: ReviewFlowLauncher,
+    reviewSessionHolder: ReviewSessionHolder,
     analyticsProvider: AnalyticsProvider,
     crashReporter: CrashReporter,
     modifier: Modifier = Modifier
@@ -170,7 +192,15 @@ private fun AppNavHost(
         modifier = modifier
     ) {
         composable(Screen.Main.route) {
-            MainNavDestination(repository, analyticsProvider, crashReporter, navController)
+            MainNavDestination(
+                repository,
+                reviewCountersDataStore,
+                reviewFlowLauncher,
+                reviewSessionHolder,
+                analyticsProvider,
+                crashReporter,
+                navController
+            )
         }
         composable(Screen.Exercises.route) {
             ExercisesNavDestination(repository, dataStore, analyticsProvider, crashReporter, navController)
@@ -182,7 +212,14 @@ private fun AppNavHost(
             AppearanceNavDestination(dataStore, analyticsProvider, navController)
         }
         composable(Screen.AppData.route) {
-            AppDataNavDestination(repository, dataStore, analyticsProvider, crashReporter, navController)
+            AppDataNavDestination(
+                repository,
+                dataStore,
+                reviewCountersDataStore,
+                analyticsProvider,
+                crashReporter,
+                navController
+            )
         }
         composable(Screen.Overview.route) {
             OverviewNavDestination(repository, dataStore, analyticsProvider, navController)
@@ -194,7 +231,16 @@ private fun AppNavHost(
             EntrySettingsNavDestination(navController, dataStore, analyticsProvider)
         }
         composable(Screen.EntryCreate.route, arguments = Screen.EntryCreate.arguments) { backStackEntry ->
-            EntryCreateNavDestination(backStackEntry, repository, dataStore, analyticsProvider, navController)
+            EntryCreateNavDestination(
+                backStackEntry,
+                repository,
+                dataStore,
+                reviewCountersDataStore,
+                reviewSessionHolder,
+                analyticsProvider,
+                crashReporter,
+                navController
+            )
         }
         composable(Screen.EntryDetail.route, arguments = Screen.EntryDetail.arguments) { backStackEntry ->
             EntryDetailNavDestination(backStackEntry, repository, analyticsProvider, crashReporter, navController)
@@ -270,13 +316,22 @@ private fun EntrySettingsNavDestination(
  * `composable(Screen.EntryCreate.route) { ... }` — вынесено из
  * `AppNavHost` ради соблюдения detekt `LongMethod`. Аргумент entryId
  * выбирает режим create/edit (edit-entry): `NO_ENTRY_ID` — создание.
+ *
+ * Review-параметры (add-rustore-in-app-review, 6.1 — только wiring,
+ * логика хука — 7.2): гейт `BuildConfig.RUSTORE_FEATURES` вычисляется
+ * ЗДЕСЬ, на вызове фабрики (не параметр dest-функции) — flavor-флаг не
+ * протекает в сигнатуры навигационного слоя.
  */
+@Suppress("LongParameterList")
 @Composable
 private fun EntryCreateNavDestination(
     backStackEntry: NavBackStackEntry,
     repository: WorkoutDataRepository,
     dataStore: AppSettingsDataStore,
+    reviewCountersDataStore: ReviewCountersDataStore,
+    reviewSessionHolder: ReviewSessionHolder,
     analyticsProvider: AnalyticsProvider,
+    crashReporter: CrashReporter,
     navController: NavHostController
 ) {
     val entryId =
@@ -286,7 +341,16 @@ private fun EntryCreateNavDestination(
         viewModel =
             viewModel(
                 factory =
-                    EntryCreateViewModel.factory(repository, entryId, dataStore, analyticsProvider)
+                    EntryCreateViewModel.factory(
+                        repository,
+                        entryId,
+                        dataStore,
+                        analyticsProvider,
+                        isReviewEnabled = BuildConfig.RUSTORE_FEATURES,
+                        reviewCountersDataStore = reviewCountersDataStore,
+                        reviewSessionHolder = reviewSessionHolder,
+                        crashReporter = crashReporter
+                    )
             ),
         onBackClick = { navController.popBackStack() },
         onOpenSettings = { navController.navigate(Screen.EntrySettings.route) }

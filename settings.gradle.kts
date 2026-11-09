@@ -19,6 +19,18 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // SDK RuStore (design D7): exclusiveContent + includeGroup не даёт
+        // стороннему репозиторию стать источником остальных артефактов.
+        // Только здесь: FAIL_ON_PROJECT_REPOS не позволяет объявить
+        // репозиторий в app/build.gradle.kts.
+        exclusiveContent {
+            forRepository {
+                maven("https://nexus-external.rustore.ru/repository/maven-rustore-exposed")
+            }
+            filter {
+                includeGroup("ru.rustore.sdk")
+            }
+        }
     }
 }
 

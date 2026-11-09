@@ -9,6 +9,8 @@ import com.myworkouts.analytics.AppErrorOperation
 import com.myworkouts.analytics.FakeAnalyticsProvider
 import com.myworkouts.analytics.UserActionType
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore.Companion.REVIEW_COUNTERS_FAILURE_CONTEXT
 import com.myworkouts.domain.crash.FakeCrashReporter
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.BackupSettings
@@ -178,6 +180,7 @@ class AppDataViewModelTest {
     private lateinit var testDispatcher: TestDispatcher
     private lateinit var uri: Uri
     private lateinit var dataStore: AppSettingsDataStore
+    private lateinit var reviewCountersDataStore: ReviewCountersDataStore
     private lateinit var context: Context
     private lateinit var contentResolver: ContentResolver
     private lateinit var exportUseCase: ExportBackupUseCase
@@ -232,6 +235,9 @@ class AppDataViewModelTest {
         every { Log.e(any(), any<String>()) } returns 0
         uri = mockk()
         dataStore = mockk(relaxed = true)
+        // Хранилище review-счётчиков: тот же паттерн relaxed-мока финального
+        // класса, что у dataStore; проверяем только факт вызова reset()
+        reviewCountersDataStore = mockk(relaxed = true)
         every { dataStore.overviewTabVisibility } returns
             flowOf(OverviewTab.entries.associateWith { true })
         every { dataStore.lastOverviewTab } returns flowOf(OverviewTab.STATS)
@@ -259,6 +265,7 @@ class AppDataViewModelTest {
         AppDataViewModel(
             repository,
             dataStore,
+            reviewCountersDataStore,
             context,
             exportUseCase,
             importUseCase,
@@ -751,6 +758,76 @@ class AppDataViewModelTest {
                 "Сбой массового удаления — событие AppError(DELETE_ALL_DATA)"
             )
             assertSame(failure, appError.throwable, "В событии — итоговое исключение")
+        }
+
+    // ---------- Сброс review-счётчиков (add-rustore-in-app-review, задача 3.3) ----------
+
+    @Test
+    fun deleteAllData_whenSuccess_resetsReviewCounters() =
+        runTest(testDispatcher) {
+            // Given — массовый сброс БД проходит
+            val repository = AppDataViewModelFakeRepository()
+            val viewModel = viewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // When
+            viewModel.deleteAllData()
+            advanceUntilIdle()
+
+            // Then — результат DELETED, счётчики review сброшены ровно один раз
+            assertEquals(AppDataResult.DELETED, viewModel.uiState.value.result)
+            assertFalse(viewModel.uiState.value.isBusy)
+            coVerify(exactly = 1) { reviewCountersDataStore.reset() }
+        }
+
+    /**
+     * Сбой reset() счётчиков review после успешного deleteAllData(): успех
+     * удаления не должен зависеть от служебных счётчиков — результат
+     * остаётся DELETED, сбой фиксируется тихим логом через crash-репортер.
+     */
+    @Test
+    fun deleteAllData_whenResetCountersFails_stillReportsDeletedWithCrashLog() =
+        runTest(testDispatcher) {
+            // Given — БД очищается, но reset() счётчиков падает IOException
+            val repository = AppDataViewModelFakeRepository()
+            val resetFailure = java.io.IOException("Сбой файла счётчиков")
+            coEvery { reviewCountersDataStore.reset() } throws resetFailure
+            val viewModel = viewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // When
+            viewModel.deleteAllData()
+            advanceUntilIdle()
+
+            // Then — удаление сообщено как успешное, сбой — тихим логом
+            assertEquals(AppDataResult.DELETED, viewModel.uiState.value.result)
+            assertFalse(viewModel.uiState.value.isBusy)
+            assertEquals(
+                listOf(FakeCrashReporter.Entry(resetFailure, REVIEW_COUNTERS_FAILURE_CONTEXT)),
+                crashReporter.logged,
+                "Сбой reset() фиксируется тихим логом через crash-репортер"
+            )
+        }
+
+    @Test
+    fun deleteAllData_whenRepositoryFails_reviewCountersNotTouched() =
+        runTest(testDispatcher) {
+            // Given — репозиторий не смог выполнить массовый сброс
+            val repository = AppDataViewModelFakeRepository()
+            repository.deleteAllDataResult = Result.failure(IllegalStateException("БД недоступна"))
+            val viewModel = viewModel(repository)
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            advanceUntilIdle()
+
+            // When
+            viewModel.deleteAllData()
+            advanceUntilIdle()
+
+            // Then — при провале удаления счётчики review не трогаются
+            assertEquals(AppDataResult.ERROR_DELETE, viewModel.uiState.value.result)
+            coVerify(exactly = 0) { reviewCountersDataStore.reset() }
         }
 
     @Test

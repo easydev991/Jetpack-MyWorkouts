@@ -19,6 +19,7 @@ import com.myworkouts.R
 import com.myworkouts.analytics.NoopAnalyticsProvider
 import com.myworkouts.crash.NoopCrashReporter
 import com.myworkouts.data.preferences.AppSettingsDataStore
+import com.myworkouts.data.preferences.ReviewCountersDataStore
 import com.myworkouts.domain.model.BackupEntry
 import com.myworkouts.domain.model.Category
 import com.myworkouts.domain.model.EntryListItem
@@ -28,6 +29,8 @@ import com.myworkouts.domain.model.ExerciseEntry
 import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.navigation.Screen
+import com.myworkouts.review.ReviewFlowLauncherFactory
+import com.myworkouts.ui.review.ReviewSessionHolder
 import com.myworkouts.ui.screens.entry.EntryCreateScreen
 import com.myworkouts.ui.viewmodel.EntryCreateViewModel
 import com.myworkouts.ui.viewmodel.MainViewModel
@@ -192,7 +195,16 @@ class MainScreenEditNavigationTest {
                 MainScreen(
                     viewModel =
                         viewModel(
-                            factory = MainViewModel.factory(repository, NoopAnalyticsProvider(), NoopCrashReporter())
+                            factory =
+                                MainViewModel.factory(
+                                    repository,
+                                    NoopAnalyticsProvider(),
+                                    NoopCrashReporter(),
+                                    isReviewEnabled = false,
+                                    reviewCountersDataStore = ReviewCountersDataStore.create(context),
+                                    reviewFlowLauncher = ReviewFlowLauncherFactory.create(context),
+                                    reviewSessionHolder = ReviewSessionHolder()
+                                )
                         ),
                     onAddEntryClick = {},
                     onEditEntryClick = { entryId ->
@@ -213,7 +225,11 @@ class MainScreenEditNavigationTest {
                                     repository,
                                     entryId,
                                     AppSettingsDataStore.create(context),
-                                    NoopAnalyticsProvider()
+                                    NoopAnalyticsProvider(),
+                                    isReviewEnabled = false,
+                                    reviewCountersDataStore = ReviewCountersDataStore.create(context),
+                                    reviewSessionHolder = ReviewSessionHolder(),
+                                    crashReporter = NoopCrashReporter()
                                 )
                         ),
                     onBackClick = {},

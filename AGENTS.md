@@ -107,6 +107,11 @@ detekt-предупреждения исправляются до заверше
   провайдер выбирается в `MainActivity` по `BuildConfig.DEBUG`
   (Noop в debug, Firebase в release), пакеты `analytics/` и `crash/`
   живут рядом с `data/` и `domain/` и не считаются фича-сетью.
+  RuStore Review SDK (in-app review) — второе разрешённое исключение:
+  сеть живёт внутри приложения RuStore (нативная форма оценки), свой
+  сетевой стек в приложение не добавляется; SDK подключается только
+  в rustore flavor (`rustoreImplementation`), github-вариант его
+  не содержит.
 - **Чистота домена**: `domain/` не импортирует `android.*`/`androidx.*`/
   `data`/`crash`/`analytics`/`ui`/`navigation`/`di`/`R`/`BuildConfig` —
   ловит guard-тест `DomainPurityTest`; при регрессии падение — карта
