@@ -1,11 +1,16 @@
 package com.myworkouts.ui.screens.main
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.res.Configuration
+import android.graphics.Rect
+import android.view.accessibility.AccessibilityNodeInfo
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalConfiguration
@@ -24,8 +29,10 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.myworkouts.R
@@ -61,9 +68,13 @@ import kotlin.math.abs
  *   нет без падения, тёмная тема — тёмный вариант ресурса (эталонный
  *   экран по design Decision 6).
  *
- * Позиция DropdownMenu относительно точки касания покрывается ручной
- * проверкой на эмуляторе (задача 5.5): `offset` меню не имеет семантики
- * точной привязки в Compose UI Test.
+ * Позиция DropdownMenu (регрессии «меню улетает под TopAppBar» и
+ * «двойной учёт смещения списка») покрыта автоматическими тестами
+ * `content_long_press_first_row_then_menu_at_press_point` и
+ * `content_long_press_last_visible_row_then_menu_near_row_not_at_top` —
+ * абсолютные координаты снимаются из accessibility-дерева через
+ * UiAutomation, потому что семантика popup-контента живёт в
+ * координатах popup-окна (задача 5.5 «ручная проверка» закрыта).
  */
 @RunWith(AndroidJUnit4::class)
 class MainScreenTest {
@@ -436,6 +447,249 @@ class MainScreenTest {
         assertTrue(
             "onRequestDelete должен быть вызван дважды (отмена + подтверждение)",
             pendingDeletes.size == 2
+        )
+    }
+
+    /**
+     * Позиция меню у нижней границы списка (workout-entries-list:
+     * «меню у точки нажатия» — та же формула offset, что и на экране
+     * упражнений). Регрессия: первый кандидат
+     * `DropdownMenuPositionProvider` не проходит проверку влезания у
+     * нижней строки, лестница M3 уходит в фолбэки, трактующие
+     * отрицательный offset относительно верха якоря, — меню улетает к
+     * TopAppBar. У главного экрана трёхпунктовое меню и фолбэки
+     * отсекаются margin-проверкой, но латентная полоса (нижние
+     * десятки px списка) существует — тест фиксирует её закрытие.
+     *
+     * Ассерт: верх меню в нижней половине окна (привязка к bounds
+     * строки была бы хрупкой — у обрезанной строки они = видимой части;
+     * регрессия даёт разрыв в тысячи px).
+     */
+    @Test
+    fun content_long_press_last_visible_row_then_menu_near_row_not_at_top() {
+        // Given — 15 записей по одной в день: вьюпорт переполнен,
+        // локальный стейт меню — как в реальном MainScreen
+        val items =
+            (1..15).map { i ->
+                EntryListItem(
+                    id = i.toLong(),
+                    exerciseName = "Запись %02d".format(i),
+                    sets = 1,
+                    reps = 10,
+                    durationSec = null,
+                    date = 1_721_000_000_000L + i * 86_400_000L
+                )
+            }
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ContextMenuState?>(null) }
+            MainScreenContent(
+                state =
+                    MainScreenState(
+                        uiState = success(items),
+                        contextMenu = menu,
+                        onAddEntryClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestDelete = {},
+                        onConfirmDelete = {},
+                        onCancelDelete = {}
+                    ),
+                // Хостинг-отступы — имитация RootScreen продакшена:
+                // верхний хром делает полосу регрессии (`anchorTop −
+                // 300px`) ненулевой, нижний (NavigationBar) даёт первому
+                // кандидату размещения место для «меню в точке нажатия»
+                modifier = Modifier.padding(top = 72.dp, bottom = 104.dp)
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // Нижняя полностью видимая строка списка. Фильтр отсекает
+        // lookahead-узлы LazyColumn: скомпонованные за вьюпортом строки
+        // имеют нулевые bounds и top за нижней границей окна.
+        val windowHeight =
+            composeTestRule
+                .onRoot()
+                .fetchSemanticsNode()
+                .boundsInWindow.height
+        val lastRow =
+            items
+                .map { it.exerciseName }
+                .mapNotNull { name ->
+                    composeTestRule
+                        .onAllNodesWithText(name)
+                        .fetchSemanticsNodes()
+                        .firstOrNull()
+                        ?.let { name to it }
+                }.filter { (_, node) ->
+                    val bounds = node.boundsInWindow
+                    bounds.height > 0 &&
+                        bounds.top >= 0 &&
+                        bounds.bottom <= windowHeight
+                }.maxByOrNull { (_, node) -> node.positionInWindow.y }
+        checkNotNull(lastRow) { "Ни одной полностью видимой строки списка не найдено" }
+        val lastName = lastRow.first
+        val rowNode = lastRow.second
+
+        // When — long-press по нижней строке, у её нижнего края (90%
+        // высоты): центр строки попадает на границу «лестничного» band'а
+        // DropdownMenuPositionProvider и тест нестабилен, край строки —
+        // глубоко в полосе бага
+        composeTestRule
+            .onNodeWithText(lastName)
+            .performTouchInput { longClick(percentOffset(0.5f, 0.9f)) }
+        composeTestRule.waitForIdle()
+
+        // Then — меню открыто
+        val deleteText = context.getString(R.string.entry_list_menu_delete)
+        composeTestRule
+            .onNodeWithText(deleteText)
+            .assertExists()
+
+        // Then — меню у нажатой строки, а не у верхней границы экрана:
+        // верх пункта меню в нижней половине окна. Абсолютную позицию
+        // снимаем из accessibility-дерева через UiAutomation (семантика
+        // popup-контента живёт в координатах popup-окна и экранную
+        // позицию не отражает). Граница «нижняя половина» устойчива к
+        // вёрстке, а регрессия «меню у TopAppBar» даёт разрыв в тысячи px
+        // и надёжно валит ассерт
+        val menuTop = findTextBoundsInScreen(deleteText).top
+        val rowTop = rowNode.positionInWindow.y
+        assertTrue(
+            "Меню (top=$menuTop) должно открываться в нижней половине окна " +
+                "(высота $windowHeight) у нажатой строки (top=$rowTop), " +
+                "а не у верхней границы экрана",
+            menuTop >= windowHeight / 2
+        )
+    }
+
+    /**
+     * Ищет узел с текстом [text] во всех окнах (popup меню — отдельное
+     * окно) и возвращает его bounds в экранных координатах.
+     */
+    private fun findTextBoundsInScreen(text: String): Rect {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        // Флаг интерактивных окон: без него automation.windows отдаёт не
+        // все окна, а popup меню — отдельное окно
+        automation.serviceInfo =
+            automation.serviceInfo.apply {
+                flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+            }
+        // Popup-окно прикрепляется к accessibility-дереву с лагом в
+        // кадр-два после compose-композиции — опрашиваем с таймаутом
+        val deadline = System.currentTimeMillis() + 3000
+        while (System.currentTimeMillis() < deadline) {
+            val roots =
+                buildList {
+                    automation.rootInActiveWindow?.let(::add)
+                    automation.windows.forEach { window -> window.root?.let(::add) }
+                }
+
+            // Обход дерева вручную: findAccessibilityNodeInfosByText на
+            // этом дереве стабильно не находит текст
+            fun walk(node: AccessibilityNodeInfo): Rect? {
+                if (node.text?.toString() == text) {
+                    val bounds = Rect()
+                    node.getBoundsInScreen(bounds)
+                    if (!bounds.isEmpty) return bounds
+                }
+                for (i in 0 until node.childCount) {
+                    node.getChild(i)?.let { child -> walk(child) }?.let { return it }
+                }
+                return null
+            }
+            roots.firstNotNullOfOrNull(::walk)?.let { return it }
+            Thread.sleep(100)
+        }
+        error("Узел с текстом \"$text\" не найден в accessibility-дереве")
+    }
+
+    /**
+     * Меню у точки нажатия на ВЕРХНЕЙ строке списка: верх первого пункта
+     * меню совпадает с точкой long-press в пределах двух высот строки.
+     * Регрессия «двойной учёт смещения»: place якоря в координатах корня
+     * внутри узла списка смещает меню вниз ровно на смещение списка в
+     * окне (сотни px) — ассерт её ловит. Верхняя строка обязательна: у
+     * средних/нижних смещённый вниз якорь не влезает вниз экрана,
+     * лестница флипает меню низом к точке нажатия и сдвиг МАСКИРУЕТСЯ.
+     */
+    @Test
+    fun content_long_press_first_row_then_menu_at_press_point() {
+        // Given — 15 записей по одной в день: вьюпорт переполнен,
+        // локальный стейт меню — как в реальном MainScreen
+        val items =
+            (1..15).map { i ->
+                EntryListItem(
+                    id = i.toLong(),
+                    exerciseName = "Запись %02d".format(i),
+                    sets = 1,
+                    reps = 10,
+                    durationSec = null,
+                    date = 1_721_000_000_000L + i * 86_400_000L
+                )
+            }
+        composeTestRule.setContent {
+            var menu by remember { mutableStateOf<ContextMenuState?>(null) }
+            MainScreenContent(
+                state =
+                    MainScreenState(
+                        uiState = success(items),
+                        contextMenu = menu,
+                        onAddEntryClick = {},
+                        onContextMenuItemChange = { menu = it },
+                        onRequestDelete = {},
+                        onConfirmDelete = {},
+                        onCancelDelete = {}
+                    ),
+                modifier = Modifier.padding(top = 72.dp, bottom = 104.dp)
+            )
+        }
+        composeTestRule.waitForIdle()
+
+        // ПЕРВАЯ полностью видимая строка (верх списка)
+        val windowHeight =
+            composeTestRule
+                .onRoot()
+                .fetchSemanticsNode()
+                .boundsInWindow.height
+        val visibleRows =
+            items.map { it.exerciseName }.mapNotNull { name ->
+                composeTestRule
+                    .onAllNodesWithText(name)
+                    .fetchSemanticsNodes()
+                    .firstOrNull { node ->
+                        val bounds = node.boundsInWindow
+                        bounds.height > 0 && bounds.top >= 0 && bounds.bottom <= windowHeight
+                    }?.let { name to it }
+            }
+        check(visibleRows.isNotEmpty()) { "Ни одной полностью видимой строки списка" }
+        // Верхняя по Y (не по порядку items): LazyListState — rememberSaveable
+        // и переживает пересоздание Activity между тестами класса
+        val (firstName, firstRow) = visibleRows.minBy { it.second.positionInWindow.y }
+        val pressY = firstRow.positionInWindow.y + firstRow.boundsInWindow.height * 0.9f
+
+        // When — long-press по верхней строке
+        composeTestRule
+            .onNodeWithText(firstName)
+            .performTouchInput { longClick(percentOffset(0.5f, 0.9f)) }
+        composeTestRule.waitForIdle()
+
+        // Then — меню открыто. Верх меню меряем по ПЕРВОМУ пункту
+        // «Открыть» (не по «Удалить» — он третий, его текст на 2 пункта
+        // ниже верха окна меню; у exercises-теста пункт один, там
+        // разница незаметна)
+        val viewText = context.getString(R.string.entry_list_menu_view)
+        composeTestRule
+            .onNodeWithText(viewText)
+            .assertExists()
+        composeTestRule.waitForIdle()
+
+        // Then — верх первого пункта меню у точки нажатия
+        val menuTop = findTextBoundsInScreen(viewText).top
+        val rowHeight = firstRow.boundsInWindow.height
+        assertTrue(
+            "Верх меню (пункт «Открыть», top=$menuTop) должен совпадать с " +
+                "точкой нажатия (pressY=$pressY, строка $firstName) " +
+                "в пределах двух высот строки",
+            abs(menuTop - pressY) <= 2 * rowHeight
         )
     }
 

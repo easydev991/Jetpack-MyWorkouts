@@ -246,10 +246,9 @@ private fun ArchivedExercisesList(
                 modifier = modifier
             )
         },
-        menu = { offset ->
+        menu = {
             state.contextMenu?.let { menu ->
                 UnarchiveContextMenu(
-                    offset = offset,
                     onMenuDismiss = { state.onContextMenuItemChange(null) },
                     onUnarchiveClick = { state.onUnarchiveExercise(menu.item.id) }
                 )
@@ -284,10 +283,9 @@ private fun ArchivedCategoriesList(
                 modifier = modifier
             )
         },
-        menu = { offset ->
+        menu = {
             state.categoryContextMenu?.let { menu ->
                 UnarchiveContextMenu(
-                    offset = offset,
                     onMenuDismiss = { state.onCategoryContextMenuItemChange(null) },
                     onUnarchiveClick = { state.onUnarchiveCategory(menu.item.id) }
                 )

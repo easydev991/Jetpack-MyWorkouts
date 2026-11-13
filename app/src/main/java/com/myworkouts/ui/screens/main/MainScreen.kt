@@ -30,7 +30,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -38,11 +37,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -56,6 +54,7 @@ import com.myworkouts.ui.state.MainUiState
 import com.myworkouts.ui.viewmodel.MainViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 // Публичный composable с опциональными навигационными колбэками —
 // параметр на переход (паттерн ExercisesScreen)
@@ -358,47 +357,64 @@ private fun EntryList(
     contextMenu: ContextMenuState?,
     callbacks: EntryListCallbacks
 ) {
-    var anchorOrigin by remember { mutableStateOf(IntOffset.Zero) }
-    var anchorHeight by remember { mutableIntStateOf(0) }
-    Box(
+    var listOrigin by remember { mutableStateOf(IntOffset.Zero) }
+    Layout(
         modifier =
             Modifier
                 .fillMaxSize()
                 .onGloballyPositioned { coords ->
                     val pos = coords.positionInRoot()
-                    anchorOrigin = IntOffset(pos.x.toInt(), pos.y.toInt())
-                    anchorHeight = coords.size.height
-                }
-    ) {
-        EntryListItems(
-            sections = sections,
-            separator = separator,
-            // Строка выделена, если для неё открыто контекстное меню
-            isSelected = { contextMenu?.item?.id == it.id },
-            callbacks = callbacks
-        )
-        if (contextMenu != null) {
-            val density = LocalDensity.current
-            val menuOffset =
-                DpOffset(
-                    x =
-                        with(density) {
-                            (contextMenu.offsetInRoot.x - anchorOrigin.x).toDp()
-                        },
-                    y =
-                        with(density) {
-                            (contextMenu.offsetInRoot.y - anchorOrigin.y - anchorHeight)
-                                .toDp()
-                        }
-                )
-            EntryContextMenu(
-                item = contextMenu.item,
-                offset = menuOffset,
-                onMenuDismiss = callbacks.onMenuDismiss,
-                onRequestView = callbacks.onRequestView,
-                onRequestEdit = callbacks.onRequestEdit,
-                onRequestDelete = callbacks.onRequestDelete
+                    listOrigin = IntOffset(pos.x.roundToInt(), pos.y.roundToInt())
+                },
+        content = {
+            EntryListItems(
+                sections = sections,
+                separator = separator,
+                // Строка выделена, если для неё открыто контекстное меню
+                isSelected = { contextMenu?.item?.id == it.id },
+                callbacks = callbacks
             )
+            // Меню рендерится в отдельном узле-Box (0x0), который
+            // корневой custom `Layout` размещает в точку long-press
+            // (паттерн ContextMenuList экрана упражнений): с якорем в
+            // точке нажатия лестница DropdownMenuPositionProvider при
+            // любом раскладе остаётся локальной у пальца — «верхом в
+            // точку нажатия», а у нижних строк переворачивается низом к
+            // точке нажатия. ВАЖНО: якорь обязан быть ОТДЕЛЬНЫМ layout-
+            // узлом, размещённым родителем — смещение через
+            // `Modifier.layout` даёт ДВОЙНОЙ учёт смещения списка —
+            // popup-родитель (`parentLayoutCoordinates`) включает
+            // placement, сделанный внутри layout-модификатора якоря,
+            // т.е. offsetInRoot прибавляется к позиции узла ещё раз. Смещение offset'ом от границ большого
+            // контейнера (первоначальная схема) уводило фолбэк-кандидаты
+            // лестницы к верху якоря — меню улетало под TopAppBar.
+            contextMenu?.let { menu ->
+                Box {
+                    EntryContextMenu(
+                        item = menu.item,
+                        onMenuDismiss = callbacks.onMenuDismiss,
+                        onRequestView = callbacks.onRequestView,
+                        onRequestEdit = callbacks.onRequestEdit,
+                        onRequestDelete = callbacks.onRequestDelete
+                    )
+                }
+            }
+        }
+    ) { measurables, constraints ->
+        // Guard: content обязан содержать ровно список + опциональный
+        // якорь; третий ребёнок был бы молча отброшен
+        check(measurables.size <= 2) { "EntryList: лишний ребёнок content" }
+        val listPlaceable = measurables[0].measure(constraints)
+        val anchorPlaceable =
+            measurables.getOrNull(1)?.measure(constraints.copy(minWidth = 0, minHeight = 0))
+        val menu = contextMenu
+        val offsetX = (menu?.offsetInRoot?.x ?: 0f) - listOrigin.x
+        val offsetY = (menu?.offsetInRoot?.y ?: 0f) - listOrigin.y
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            listPlaceable.placeRelative(IntOffset.Zero)
+            // place (не placeRelative): координата — абсолютная точка
+            // нажатия, зеркалить в RTL её нельзя
+            anchorPlaceable?.place(offsetX.roundToInt(), offsetY.roundToInt())
         }
     }
 }
@@ -491,11 +507,12 @@ private fun EntryListItems(
  * доступности (entry-edit-mode design Decision 6,
  * workout-entry-detail-screen design Decision 7). Вынесено из
  * [EntryList], чтобы уложиться в лимит detekt `LongMethod: 60`.
+ * Позиционирование — нулевым Box-якорем в точке нажатия (см.
+ * [EntryList]).
  */
 @Composable
 private fun EntryContextMenu(
     item: EntryListItem,
-    offset: DpOffset,
     onMenuDismiss: () -> Unit,
     onRequestView: (EntryListItem) -> Unit,
     onRequestEdit: (EntryListItem) -> Unit,
@@ -503,8 +520,7 @@ private fun EntryContextMenu(
 ) {
     DropdownMenu(
         expanded = true,
-        onDismissRequest = onMenuDismiss,
-        offset = offset
+        onDismissRequest = onMenuDismiss
     ) {
         DropdownMenuItem(
             text = { Text(stringResource(R.string.entry_list_menu_view)) },

@@ -26,7 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
 import com.myworkouts.domain.model.Exercise
@@ -165,7 +164,6 @@ internal fun ExerciseContextMenuPreview() {
                 Box {
                     Text(text = previewBench.name)
                     ActiveContextMenu(
-                        offset = DpOffset.Zero,
                         isCustom = true,
                         onMenuDismiss = {},
                         onEditClick = {},
@@ -177,7 +175,6 @@ internal fun ExerciseContextMenuPreview() {
                 Box {
                     Text(text = previewRunning.name)
                     ActiveContextMenu(
-                        offset = DpOffset.Zero,
                         isCustom = false,
                         onMenuDismiss = {},
                         onEditClick = {},
@@ -207,7 +204,6 @@ internal fun ExerciseLastActiveContextMenuPreview() {
                 Box {
                     Text(text = previewBench.name)
                     ActiveContextMenu(
-                        offset = DpOffset.Zero,
                         isCustom = true,
                         showArchive = false,
                         showDelete = false,

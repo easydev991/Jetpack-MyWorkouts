@@ -55,7 +55,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.myworkouts.R
 import com.myworkouts.analytics.AnalyticsEvent
@@ -661,12 +660,11 @@ private fun ExercisesList(
                 modifier = modifier
             )
         },
-        menu = { offset ->
+        menu = {
             state.contextMenu?.let { menu ->
                 val lastActive =
                     isLastActive(menu.item, success.exercises) { it.id }
                 ActiveContextMenu(
-                    offset = offset,
                     isCustom = menu.item.isCustom,
                     showArchive = !lastActive,
                     showDelete = !lastActive,
@@ -787,12 +785,11 @@ private fun CategoriesList(
                 modifier = modifier
             )
         },
-        menu = { offset ->
+        menu = {
             state.categoryContextMenu?.let { menu ->
                 val lastActive =
                     isLastActive(menu.item, success.categories) { it.id }
                 ActiveContextMenu(
-                    offset = offset,
                     isCustom = menu.item.isCustom,
                     showArchive = !lastActive,
                     showDelete = !lastActive,
@@ -821,6 +818,10 @@ private fun CategoriesList(
  * доступности (entry-edit-mode, design Decision 6; образец —
  * `MainScreen.EntryContextMenu`).
  *
+ * Позиция: `DropdownMenu` рендерится внутри нулевого Box-якоря в точке
+ * long-press (см. [ContextMenuList]), дефолтный нулевой offset не
+ * трогаем — размещение целиком на якоре.
+ *
  * Видимость «Архивировать»/«Удалить» выключается call-сайтами для
  * последнего активного элемента каталога (prevent-from-archiving-all,
  * design Decision 7); пустое меню при этом не открывается —
@@ -833,7 +834,6 @@ private fun CategoriesList(
 @Suppress("LongParameterList")
 @Composable
 internal fun ActiveContextMenu(
-    offset: DpOffset,
     isCustom: Boolean,
     showArchive: Boolean = true,
     showDelete: Boolean = true,
@@ -847,8 +847,7 @@ internal fun ActiveContextMenu(
 ) {
     DropdownMenu(
         expanded = true,
-        onDismissRequest = onMenuDismiss,
-        offset = offset
+        onDismissRequest = onMenuDismiss
     ) {
         if (isCustom) {
             DropdownMenuItem(
@@ -884,18 +883,17 @@ internal fun ActiveContextMenu(
  * Меню `DropdownMenu` архивной строки — единственный пункт «Вернуть»
  * (exercises-archive spec «Long-press меню «Вернуть» для архивных
  * строк»); общее для упражнений и категорий архива. `leadingIcon` —
- * как в [ActiveContextMenu].
+ * как в [ActiveContextMenu]; позиционирование — нулевым Box-якорем в
+ * точке нажатия (см. [ContextMenuList]).
  */
 @Composable
 internal fun UnarchiveContextMenu(
-    offset: DpOffset,
     onMenuDismiss: () -> Unit,
     onUnarchiveClick: () -> Unit = {}
 ) {
     DropdownMenu(
         expanded = true,
-        onDismissRequest = onMenuDismiss,
-        offset = offset
+        onDismissRequest = onMenuDismiss
     ) {
         DropdownMenuItem(
             text = { Text(stringResource(R.string.exercise_list_menu_unarchive)) },
