@@ -2,7 +2,6 @@ package com.myworkouts.ui.icons
 
 import android.content.res.Configuration
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,10 +13,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.myworkouts.ui.theme.DARK_THEME_LUMINANCE_THRESHOLD
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 
 /** Тег узла иконки упражнения в Compose UI-тестах. */
@@ -27,8 +28,9 @@ internal const val EXERCISE_ICON_TEST_TAG = "exercise_icon"
  * Единый рендер иконки упражнения по номеру
  * (exercise-icon-display, design Decision 4).
  *
- * [ExerciseIcons.resolve] + выбор варианта по теме системы: тёмный —
- * при тёмной теме, светлый — при светлой. Размер 24dp, tint отсутствует.
+ * [ExerciseIcons.resolve] + выбор варианта по эффективной теме
+ * приложения: тёмный — при тёмной схеме, светлый — при светлой.
+ * Размер 24dp, tint отсутствует.
  * `contentDescription = null` — название упражнения озвучивается рядом
  * стоящим текстом строки. `null` или номер вне таблицы — ничего не
  * рисует (тихий fallback, без плейсхолдера и без резерва места).
@@ -44,7 +46,8 @@ internal fun ExerciseIcon(
     modifier: Modifier = Modifier
 ) {
     val ref = ExerciseIcons.resolve(iconNumber) ?: return
-    val resId = if (isSystemInDarkTheme()) ref.dark else ref.light
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < DARK_THEME_LUMINANCE_THRESHOLD
+    val resId = if (isDark) ref.dark else ref.light
     Image(
         painter = painterResource(resId),
         contentDescription = null,

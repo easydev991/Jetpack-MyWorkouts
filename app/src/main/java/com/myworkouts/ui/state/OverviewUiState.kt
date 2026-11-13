@@ -2,43 +2,51 @@ package com.myworkouts.ui.state
 
 import com.myworkouts.domain.model.OverviewTab
 import com.myworkouts.domain.usecase.ActivityPeriod
-import com.myworkouts.domain.usecase.CategoryTotal
-import com.myworkouts.domain.usecase.DrillDateGroup
+import com.myworkouts.domain.usecase.CategoryStatsResult
 import com.myworkouts.domain.usecase.ExerciseRecordData
-import com.myworkouts.domain.usecase.ExerciseTotal
 import com.myworkouts.domain.usecase.HeatmapDayData
 import com.myworkouts.domain.usecase.RecordsMode
 import com.myworkouts.domain.usecase.StatsPeriod
+import com.myworkouts.domain.usecase.StatsWindow
+import com.myworkouts.domain.usecase.window
+import java.time.LocalDate
 
 /**
  * UiState вкладки «Статистика» экрана обзора (overview-screen, design
- * D9; custom-categories design Decision 10). Доменные типы расчётов
- * ([CategoryTotal], [ExerciseTotal], [DrillDateGroup]) переиспользуются
- * как есть — в них уже есть нужные для LazyColumn-ключей идентификаторы;
- * `selected` — имя категории (стандартный ключ или кастомное имя).
+ * D9; custom-categories design Decision 10; add-stats-period-pager,
+ * design D5). Единственный источник агрегатов — карта [statsByOffset]:
+ * страница читается записью карты по [windowOffset] с дефолтом —
+ * пустая страница для отсутствующего ключа (чтение без `!!`/`getValue`);
+ * пустота страницы — производная от её `drillGroups`. Доменные типы
+ * расчётов ([CategoryStatsResult]) переиспользуются как есть — в них уже
+ * есть нужные для LazyColumn-ключей идентификаторы; `selected` — имя
+ * категории (стандартный ключ или кастомное имя).
  *
  * @property period Календарный период доната и легенды
  * @property visiblePeriods Видимые периоды пикера по дате самой ранней
  *  тренировки (overview-periods-and-shares, design D3); дефолт — все
  *  периоды, боевые значения приходят из [com.myworkouts.ui.viewmodel.OverviewViewModel]
+ * @property windowOffset Смещение текущего окна назад (0 — актуальное
+ *  окно); прижимается к глубине истории — `min(offset, maxOffset)`
+ *  (add-stats-period-pager, design D5)
+ * @property window Границы текущего окна (`windowOffset`), обе включительно
  * @property selected Имя выбранной категории drill-down; `null` — обзор по категориям
- * @property categoryTotals Категории с суммой подходов > 0, убывание
- * @property exerciseTotals Суммы упражнений по категориям (drill-down легенда)
- * @property drillGroups Записи категорий по датам (drill-down списки)
+ * @property statsByOffset Агрегаты по окнам периода: ключи — все смещения
+ *  `0..maxOffset` без дыр, окно без записей — пустой результат
+ *  (add-stats-period-pager, design D2); пустая карта (дефолт) — пустая
+ *  страница
  * @property categoryColors Имя категории → `colorArgb` из модели (активные
  *  и архивные — архивная остаётся в статистике, Decision 10); отсутствующее
  *  имя — UI берёт нейтральный цвет темы
- * @property isEmpty Нет записей за период ни одного типа измерения — пустое состояние
  */
 data class StatsUiState(
     val period: StatsPeriod = StatsPeriod.WEEK,
     val visiblePeriods: List<StatsPeriod> = StatsPeriod.entries.toList(),
+    val windowOffset: Int = 0,
+    val window: StatsWindow = StatsPeriod.WEEK.window(LocalDate.now()),
     val selected: String? = null,
-    val categoryTotals: List<CategoryTotal> = emptyList(),
-    val exerciseTotals: Map<String, List<ExerciseTotal>> = emptyMap(),
-    val drillGroups: Map<String, List<DrillDateGroup>> = emptyMap(),
-    val categoryColors: Map<String, Int> = emptyMap(),
-    val isEmpty: Boolean = true
+    val statsByOffset: Map<Int, CategoryStatsResult> = emptyMap(),
+    val categoryColors: Map<String, Int> = emptyMap()
 )
 
 /**

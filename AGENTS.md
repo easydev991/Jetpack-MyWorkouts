@@ -199,9 +199,9 @@ detekt-предупреждения исправляются до заверше
 - `ui/state/` — UiState-класс, по одному на экран
 - `ui/theme/{Color,Theme,Type}.kt` ← `Type`, не `Typography`
 - `ui/util/` — `DurationFormatter.kt` (main + entry),
-  `SectionDateFormatter.kt`, `StandardCategoryLabels.kt` и
-  `DomainEnumLabels.kt` (мапперы доменных сущностей в строковые
-  ресурсы)
+  `SectionDateFormatter.kt`, `StatsWindowFormatter.kt` (подпись дат окна
+  статистики), `StandardCategoryLabels.kt` и `DomainEnumLabels.kt`
+  (мапперы доменных сущностей в строковые ресурсы)
 - `ui/viewmodel/` — ViewModel, по одной на экран
 
 `di/` и `util/` намеренно не создаются — manual DI без Hilt; `MainActivity`

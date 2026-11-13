@@ -3,7 +3,6 @@ package com.myworkouts.ui.screens.exercises
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -49,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -62,6 +62,7 @@ import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.ui.components.SaveBottomBar
 import com.myworkouts.ui.icons.ExerciseIcons
 import com.myworkouts.ui.state.ExerciseCreateUiState
+import com.myworkouts.ui.theme.DARK_THEME_LUMINANCE_THRESHOLD
 import com.myworkouts.ui.util.categoryLabel
 import com.myworkouts.ui.viewmodel.ExerciseCreateViewModel
 
@@ -427,7 +428,10 @@ internal fun ExerciseIconPickerSection(
                         testTagSuffix = number.toString()
                     ) {
                         // Вариант ресурса по теме — как в [ExerciseIcon]
-                        val resId = if (isSystemInDarkTheme()) ref.dark else ref.light
+                        val isDark =
+                            MaterialTheme.colorScheme.surface.luminance() <
+                                DARK_THEME_LUMINANCE_THRESHOLD
+                        val resId = if (isDark) ref.dark else ref.light
                         Image(
                             painter = painterResource(resId),
                             contentDescription = null,

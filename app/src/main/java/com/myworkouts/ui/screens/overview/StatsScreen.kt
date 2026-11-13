@@ -21,6 +21,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -39,16 +42,25 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,13 +72,16 @@ import com.myworkouts.R
 import com.myworkouts.data.db.standardCategories
 import com.myworkouts.domain.model.EntryWithExercise
 import com.myworkouts.domain.model.ExerciseMeasuredBy
+import com.myworkouts.domain.usecase.CategoryStatsResult
 import com.myworkouts.domain.usecase.CategoryTotal
 import com.myworkouts.domain.usecase.DrillDateGroup
 import com.myworkouts.domain.usecase.ExerciseTotal
 import com.myworkouts.domain.usecase.StatsPeriod
 import com.myworkouts.domain.usecase.percentOf
+import com.myworkouts.domain.usecase.window
 import com.myworkouts.ui.screens.main.SectionHeader
 import com.myworkouts.ui.state.StatsUiState
+import com.myworkouts.ui.theme.DARK_THEME_LUMINANCE_THRESHOLD
 import com.myworkouts.ui.theme.JetpackMyWorkoutsTheme
 import com.myworkouts.ui.util.categoryLabel
 import com.myworkouts.ui.util.formatDurationResource
@@ -74,14 +89,16 @@ import com.myworkouts.ui.util.formatEntryValue
 import com.myworkouts.ui.util.formatWeightKg
 import com.myworkouts.ui.util.labelResId
 import com.myworkouts.ui.util.sectionDateLabelResource
+import com.myworkouts.ui.util.statsWindowLabelResource
 import java.time.LocalDate
 
 /*
  * Вкладка «Статистика» экрана обзора (overview-screen, макеты
  * `progress-drafts/iter4_v1.html` — портрет и `iter5_v1.html` —
- * ландшафт): пикер периода, донат по категориям, легенда с drill-down
- * в упражнения и список записей категории. В ландшафте — строка
- * [донат | легенда | записи], у легенды и записей свои скроллы.
+ * ландшафт): фиксированный блок «пикер периода + подпись дат окна»,
+ * пагер окон периода; страница окна — донат по категориям, легенда с
+ * drill-down в упражнения и список записей категории. В ландшафте —
+ * строка [донат | легенда | записи], у легенды и записей свои скроллы.
  */
 
 /** Толщина кольца доната, dp (макет). */
@@ -106,13 +123,42 @@ private const val SHALE_DELTA_DIVISOR = 100f
 private const val HSL_COMPONENTS = 3
 
 /**
- * Вкладка «Статистика»: пикер периода, донат, легенда и (в drill-down)
- * список записей категории. Пустой период — подсказка «Нет тренировок
- * за выбранный период».
+ * Предельное смещение листалки (add-stats-period-pager, design D2/D3) —
+ * максимум ключей карты агрегатов: ключи `0..maxOffset` без дыр; пустая
+ * карта (дефолтное состояние) даёт 0 — единственное актуальное окно.
+ */
+private fun maxStatsOffset(state: StatsUiState): Int = state.statsByOffset.keys.maxOrNull() ?: 0
+
+/**
+ * Агрегаты окна [offset] из карты (add-stats-period-pager, design D5):
+ * чтение с дефолтом — отсутствующий ключ и пустая карта трактуется как
+ * пустая страница (чтение без `!!`/`getValue`).
+ */
+private fun statsOf(
+    state: StatsUiState,
+    offset: Int
+): CategoryStatsResult =
+    state.statsByOffset[offset]
+        ?: CategoryStatsResult(emptyList(), emptyMap(), emptyMap())
+
+/**
+ * Вкладка «Статистика»: фиксированный блок «пикер периода + подпись дат
+ * окна» сверху, под ним [HorizontalPager] окон периода — страница
+ * рендерит донат, легенду и (в drill-down) список записей категории
+ * своего окна (add-stats-period-pager, design D7). Пустое окно —
+ * серый донат и подсказка «Нет тренировок за выбранный период».
+ *
+ * Порядок страниц обратный смещению (D4): актуальное окно — последняя
+ * (правая) страница, `pageOf(offset) = maxOffset - offset`; свайп
+ * содержимого вправо открывает более раннее окно, влево от актуального
+ * упирается в последнюю страницу.
  *
  * @param state Состояние вкладки ([StatsUiState])
- * @param onPeriodChange Смена периода (drill-down сбрасывается в VM)
+ * @param onPeriodChange Смена периода (смещение и drill-down сбрасываются в VM)
  * @param onCategoryClick Тап по категории легенды; `null` — выход из drill-down
+ * @param onWindowChange Смена окна периода (смещение назад, свайп пагера;
+ *  drill-down сбрасывается в VM). Без значения по умолчанию: непроведённая
+ *  проводка не должна проходить компиляцию молча (add-stats-period-pager, D5)
  * @param modifier Модификатор корневого контейнера
  */
 @Composable
@@ -120,11 +166,62 @@ internal fun StatsScreen(
     state: StatsUiState,
     onPeriodChange: (StatsPeriod) -> Unit,
     onCategoryClick: (String?) -> Unit,
+    onWindowChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val maxOffset = maxStatsOffset(state)
+    // Начальная страница — страница текущего смещения (D7): первый «settle»
+    // совпадает со смещением, ложного события аналитики не возникает
+    val pagerState =
+        rememberPagerState(
+            initialPage = maxOffset - state.windowOffset,
+            pageCount = { maxOffset + 1 }
+        )
+    // Флаг программной синхронизации: scrollToPage выполняется под флагом,
+    // снимаемым после следующего «settle» — сменой окна считается только
+    // пользовательский свайп (D7)
+    var pendingSync by remember { mutableStateOf(false) }
+    // Свежие значения для корутин: замыкания LaunchedEffect устаревают
+    val currentWindowOffset by rememberUpdatedState(state.windowOffset)
+    val currentMaxOffset by rememberUpdatedState(maxOffset)
+    val currentOnWindowChange by rememberUpdatedState(onWindowChange)
+
+    // Принудительная синхронизация страницы со смещением: смена типа
+    // периода, изменение глубины истории (в том числе прижим смещения к
+    // новой границе, D5) и сброс смещения без смены периода (повторный тап
+    // выбранного сегмента — onClick срабатывает и для выбранного; design D7:
+    // источник истины — смещение в состоянии, пагер его отображает).
+    // Пользовательский свайп меняет смещение, совпадающее со страницей
+    // settle: цель равна currentPage, эффект остаётся no-op и страницу
+    // не трогает (D7)
+    LaunchedEffect(state.period, maxOffset, state.windowOffset) {
+        val target = currentMaxOffset - currentWindowOffset
+        if (pagerState.currentPage != target) {
+            pendingSync = true
+            pagerState.scrollToPage(target)
+        }
+    }
+
+    // Смена окна — по «страница остановилась» (settledPage): страница,
+    // не совпавшая со страницей текущего смещения, означает пользовательский
+    // свайп (D7/D8)
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.collect { settled ->
+            if (pendingSync) {
+                pendingSync = false
+            } else {
+                val offset = currentMaxOffset - settled
+                if (offset != currentWindowOffset) {
+                    currentOnWindowChange(offset)
+                }
+            }
+        }
+    }
+
     if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) {
         StatsScreenLandscapeBody(
             state = state,
+            pagerState = pagerState,
             onPeriodChange = onPeriodChange,
             onCategoryClick = onCategoryClick,
             modifier = modifier
@@ -132,6 +229,7 @@ internal fun StatsScreen(
     } else {
         StatsScreenPortraitBody(
             state = state,
+            pagerState = pagerState,
             onPeriodChange = onPeriodChange,
             onCategoryClick = onCategoryClick,
             modifier = modifier
@@ -140,21 +238,64 @@ internal fun StatsScreen(
 }
 
 /**
- * Портретная раскладка: LazyColumn как корневой скролл страницы —
- * шапка (пикер, донат, легенда) одним элементом, записи drill-down —
- * ленивыми элементами (список может быть в сотни записей).
+ * Портретная раскладка (add-stats-period-pager, design D7): фиксированный
+ * блок «пикер + подпись дат» сверху (вынесен из скролла), ниже
+ * [HorizontalPager] — страница окна рендерит [StatsPortraitPage] со своим
+ * вертикальным скроллом.
+ *
+ * Смещение листалки берётся из состояния ([maxStatsOffset]) — то же
+ * значение, на котором [StatsScreen] строит `pageCount` пагера (D2/D3).
  */
 @Composable
 private fun StatsScreenPortraitBody(
     state: StatsUiState,
+    pagerState: PagerState,
     onPeriodChange: (StatsPeriod) -> Unit,
     onCategoryClick: (String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val showDrill = !state.isEmpty && state.selected != null
+    val maxOffset = maxStatsOffset(state)
+    Column(modifier = modifier.fillMaxSize()) {
+        StatsWindowHeader(
+            state = state,
+            onPeriodChange = onPeriodChange,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth().weight(1f)
+        ) { page ->
+            StatsPortraitPage(
+                state = state,
+                pageOffset = maxOffset - page,
+                onCategoryClick = onCategoryClick
+            )
+        }
+    }
+}
+
+/**
+ * Страница окна пагера в портрете: LazyColumn как корневой скролл —
+ * шапка (донат, легенда или подсказка пустого окна) одним элементом,
+ * записи drill-down — ленивыми элементами (список может быть в сотни
+ * записей). Drill-down применяется только на странице текущего окна:
+ * во время свайпа соседняя страница показывает обзор, drill-down
+ * сбрасывается при settle (add-stats-period-pager, design D5/D7).
+ *
+ * @param pageOffset Смещение окна этой страницы (D4): `maxOffset - page`
+ */
+@Composable
+private fun StatsPortraitPage(
+    state: StatsUiState,
+    pageOffset: Int,
+    onCategoryClick: (String?) -> Unit
+) {
+    val page = statsOf(state, pageOffset)
+    val selected = if (pageOffset == state.windowOffset) state.selected else null
+    val showDrill = page.drillGroups.isNotEmpty() && selected != null
     val today = remember { LocalDate.now() }
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -168,59 +309,165 @@ private fun StatsScreenPortraitBody(
                         Modifier
                     }
             ) {
-                if (state.visiblePeriods.size >= 2) {
-                    StatsPeriodPicker(
-                        selected = state.period,
-                        onPeriodChange = onPeriodChange,
-                        visiblePeriods = state.visiblePeriods
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-                if (state.isEmpty) {
-                    EmptyPeriodHint()
-                } else {
-                    val slices = donutSlices(state)
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        DonutChart(slices = slices)
+                // Донат и блок под ним общие для пустого и непустого окна:
+                // пустое окно — серый донат и подсказка без рамки вместо легенды
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (page.drillGroups.isEmpty()) {
+                        EmptyWindowDonut(contentDescriptionText = stringResource(R.string.overview_stats_empty))
+                    } else {
+                        DonutChart(slices = donutSlices(page, selected, state.categoryColors))
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                if (page.drillGroups.isEmpty()) {
+                    EmptyPeriodHint(modifier = Modifier.fillMaxWidth())
+                } else {
                     LegendSection(
-                        items = legendItems(state),
+                        items = legendItems(page, selected, state.categoryColors),
                         onCategoryClick = onCategoryClick
                     )
                 }
             }
         }
         if (showDrill) {
-            drillItems(groups = state.drillGroups[state.selected].orEmpty(), today = today)
+            drillItems(groups = page.drillGroups[selected].orEmpty(), today = today)
         }
     }
 }
 
 /**
- * Ландшафтная раскладка (макет `iter5_v1.html`): период сверху, ниже
- * строка [донат | легенда | записи] с гэпом 12. Донат — квадрат до 160dp,
- * вписанный в высоту строки (минимум с ней гарантирует круг на низких
- * экранах), по центру вертикали; легенда (в обзоре — сетка в две колонки,
- * в drill-down — одна колонка) и список записей делят остаток ширины
- * поровну и скроллятся независимо. Без drill-down список записей скрыт,
- * как `display: none` макета.
+ * Ландшафтная раскладка (макет `iter5_v1.html`, add-stats-period-pager
+ * design D7): фиксированный блок «пикер + подпись дат» сверху, ниже
+ * [HorizontalPager] со страницей окна ([StatsLandscapePage]).
+ *
+ * Смещение листалки берётся из состояния ([maxStatsOffset]) — то же
+ * значение, на котором [StatsScreen] строит `pageCount` пагера (D2/D3).
  */
 @Composable
 private fun StatsScreenLandscapeBody(
     state: StatsUiState,
+    pagerState: PagerState,
     onPeriodChange: (StatsPeriod) -> Unit,
     onCategoryClick: (String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val maxOffset = maxStatsOffset(state)
     Column(
         modifier =
             modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
+    ) {
+        StatsWindowHeader(state = state, onPeriodChange = onPeriodChange)
+        Spacer(modifier = Modifier.height(12.dp))
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth().weight(1f)
+        ) { page ->
+            StatsLandscapePage(
+                state = state,
+                pageOffset = maxOffset - page,
+                onCategoryClick = onCategoryClick
+            )
+        }
+    }
+}
+
+/**
+ * Страница окна пагера в ландшафте (макет `iter5_v1.html`): строка
+ * [донат | легенда | записи] с гэпом 12. Донат — квадрат до 160dp,
+ * вписанный в высоту строки (минимум с ней гарантирует круг на низких
+ * экранах), по центру вертикали; легенда (в обзоре — сетка в две колонки,
+ * в drill-down — одна колонка) и список записей делят остаток ширины
+ * поровну и скроллятся независимо. Без drill-down список записей скрыт,
+ * как `display: none` макета. Drill-down применяется только на странице
+ * текущего окна (design D5/D7 — см. [StatsPortraitPage]).
+ *
+ * @param pageOffset Смещение окна этой страницы (D4): `maxOffset - page`
+ */
+@Composable
+private fun StatsLandscapePage(
+    state: StatsUiState,
+    pageOffset: Int,
+    onCategoryClick: (String?) -> Unit
+) {
+    val page = statsOf(state, pageOffset)
+    val selected = if (pageOffset == state.windowOffset) state.selected else null
+    if (page.drillGroups.isEmpty()) {
+        // Пустое окно: серый донат на месте обычного (вписан в высоту
+        // строки), подсказка — справа, в колонке легенды, без рамки
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BoxWithConstraints {
+                EmptyWindowDonut(
+                    size = minOf(maxHeight, 160.dp),
+                    contentDescriptionText = stringResource(R.string.overview_stats_empty)
+                )
+            }
+            EmptyPeriodHint(modifier = Modifier.weight(1f))
+        }
+    } else {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BoxWithConstraints {
+                // Донат — квадрат, вписанный в высоту строки: фиксированные
+                // 160dp на низких экранах (S25 и уже) сплющивались Canvas-ом
+                // в эллипс и наезжали на колонку легенды справа
+                DonutChart(
+                    slices = donutSlices(page, selected, state.categoryColors),
+                    size = minOf(maxHeight, 160.dp)
+                )
+            }
+            if (selected == null) {
+                OverviewLegendGrid(
+                    items = legendItems(page, selected, state.categoryColors),
+                    onCategoryClick = onCategoryClick,
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                LegendSection(
+                    items = legendItems(page, selected, state.categoryColors),
+                    onCategoryClick = onCategoryClick,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                )
+                DrillEntriesLazyList(
+                    groups = page.drillGroups[selected].orEmpty(),
+                    today = remember { LocalDate.now() },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Фиксированный блок над пагером (add-stats-period-pager, design D7):
+ * пикер периода — сегмент-контрол на всю ширину (при двух и более видимых
+ * периодах) и подпись дат окна под ним. Подпись остаётся и при скрытом
+ * пикере (меньше двух видимых периодов) и обновляется вместе с окном
+ * пагера — [statsWindowLabelResource] читает границы окна состояния.
+ */
+@Composable
+private fun StatsWindowHeader(
+    state: StatsUiState,
+    onPeriodChange: (StatsPeriod) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (state.visiblePeriods.size >= 2) {
             StatsPeriodPicker(
@@ -228,71 +475,26 @@ private fun StatsScreenLandscapeBody(
                 onPeriodChange = onPeriodChange,
                 visiblePeriods = state.visiblePeriods
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(6.dp))
         }
-        if (state.isEmpty) {
-            Box(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                EmptyPeriodHint()
-            }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BoxWithConstraints {
-                    // Донат — квадрат, вписанный в высоту строки: фиксированные
-                    // 160dp на низких экранах (S25 и уже) сплющивались Canvas-ом
-                    // в эллипс и наезжали на колонку легенды справа
-                    DonutChart(
-                        slices = donutSlices(state),
-                        size = minOf(maxHeight, 160.dp)
-                    )
-                }
-                if (state.selected == null) {
-                    OverviewLegendGrid(
-                        items = legendItems(state),
-                        onCategoryClick = onCategoryClick,
-                        modifier = Modifier.weight(1f)
-                    )
-                } else {
-                    LegendSection(
-                        items = legendItems(state),
-                        onCategoryClick = onCategoryClick,
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .verticalScroll(rememberScrollState())
-                    )
-                    DrillEntriesLazyList(
-                        groups = state.drillGroups[state.selected].orEmpty(),
-                        today = remember { LocalDate.now() },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
+        Text(
+            text = statsWindowLabelResource(window = state.window, period = state.period),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
 /** Подсказка пустого периода. */
 @Composable
 private fun EmptyPeriodHint(modifier: Modifier = Modifier) {
-    Card(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.overview_stats_empty),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-        )
-    }
+    Text(
+        text = stringResource(R.string.overview_stats_empty),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = modifier
+    )
 }
 
 /**
@@ -311,19 +513,21 @@ private fun categoryColor(
  * Доля — по сумме подходов (overview-stats-time-support Decision 1).
  */
 @Composable
-private fun donutSlices(state: StatsUiState): List<Pair<Color, Int>> {
-    val selected = state.selected
-    return if (selected == null) {
-        state.categoryTotals.map { total ->
-            categoryColor(total.category, state.categoryColors) to total.totalSets
+private fun donutSlices(
+    page: CategoryStatsResult,
+    selected: String?,
+    colors: Map<String, Int>
+): List<Pair<Color, Int>> =
+    if (selected == null) {
+        page.categoryTotals.map { total ->
+            categoryColor(total.category, colors) to total.totalSets
         }
     } else {
-        val base = categoryColor(selected, state.categoryColors)
-        state.exerciseTotals[selected].orEmpty().mapIndexed { index, total ->
+        val base = categoryColor(selected, colors)
+        page.exerciseTotals[selected].orEmpty().mapIndexed { index, total ->
             shade(base, shadeDelta(index)) to total.totalSets
         }
     }
-}
 
 /**
  * Строки легенды: категории (кликабельны) или упражнения drill-down.
@@ -333,22 +537,25 @@ private fun donutSlices(state: StatsUiState): List<Pair<Color, Int>> {
  * формат — ресурсом по локали (ru «N %», en «N%»).
  */
 @Composable
-private fun legendItems(state: StatsUiState): List<StatsLegendRow> {
-    val selected = state.selected
-    return if (selected == null) {
-        val base = state.categoryTotals.sumOf { it.totalSets }
-        state.categoryTotals.map { total ->
+private fun legendItems(
+    page: CategoryStatsResult,
+    selected: String?,
+    colors: Map<String, Int>
+): List<StatsLegendRow> =
+    if (selected == null) {
+        val base = page.categoryTotals.sumOf { it.totalSets }
+        page.categoryTotals.map { total ->
             StatsLegendRow(
                 label = categoryLabel(total.category),
                 valueText = stringResource(R.string.overview_legend_percent, percentOf(total.totalSets, base)),
-                color = categoryColor(total.category, state.categoryColors),
+                color = categoryColor(total.category, colors),
                 category = total.category
             )
         }
     } else {
-        val totals = state.exerciseTotals[selected].orEmpty()
+        val totals = page.exerciseTotals[selected].orEmpty()
         val base = totals.sumOf { it.totalSets }
-        val drillBaseColor = categoryColor(selected, state.categoryColors)
+        val drillBaseColor = categoryColor(selected, colors)
         totals.mapIndexed { index, total ->
             StatsLegendRow(
                 label = total.exerciseName,
@@ -358,7 +565,6 @@ private fun legendItems(state: StatsUiState): List<StatsLegendRow> {
             )
         }
     }
-}
 
 /** Строка легенды: значение уже готовым текстом (собирается в [legendItems]). */
 private data class StatsLegendRow(
@@ -465,8 +671,8 @@ private fun OverviewLegendGrid(
 /**
  * Пикер периода: День / Неделя / Месяц / Год — сегменты только из
  * видимых периодов (overview-periods-and-shares). Показ решает
- * вызывающий ([StatsScreenPortraitBody]/[StatsScreenLandscapeBody]
- * рендерят его только при двух и более видимых периодах).
+ * вызывающий ([StatsWindowHeader] рендерит его только при двух и более
+ * видимых периодах).
  */
 @Composable
 private fun StatsPeriodPicker(
@@ -495,9 +701,10 @@ private fun StatsPeriodPicker(
 @Composable
 private fun DonutChart(
     slices: List<Pair<Color, Int>>,
-    size: Dp = 200.dp
+    size: Dp = 200.dp,
+    modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = Modifier.size(size)) {
+    Canvas(modifier = modifier.size(size)) {
         val total = slices.sumOf { it.second }.coerceAtLeast(1)
         val stroke = Stroke(width = DONUT_STROKE_DP.dp.toPx())
         // Stroke центрируется на дуге: без инсета внешняя половина штриха
@@ -523,6 +730,33 @@ private fun DonutChart(
             startAngle += sweep
         }
     }
+}
+
+/**
+ * Донат пустого окна: один нейтральный сектор (в светлой теме — `outline`,
+ * в тёмной — `onSurfaceVariant`) — виден в светлой и тёмной темах;
+ * размеры и расположение — как у доната непустого окна. Семантика
+ * [contentDescriptionText] даёт Canvas-у доступность для скрин-ридера и
+ * точку поиска в UI-тестах.
+ */
+@Composable
+private fun EmptyWindowDonut(
+    contentDescriptionText: String,
+    size: Dp = 200.dp
+) {
+    // Тема — эффективная схема приложения (учитывает настройку «Внешний вид»),
+    // а не системная: определяем по яркости фона.
+    val emptyColor =
+        if (MaterialTheme.colorScheme.surface.luminance() < DARK_THEME_LUMINANCE_THRESHOLD) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.outline
+        }
+    DonutChart(
+        slices = listOf(emptyColor to 1),
+        size = size,
+        modifier = Modifier.semantics { contentDescription = contentDescriptionText }
+    )
 }
 
 /** Содержимое строки легенды: образец цвета, название, жирное значение справа. */
@@ -889,24 +1123,37 @@ private fun previewEntry(
  * Демо-состояние «Статистики» для превью (StatsScreen и каркас
  * OverviewScreen): доли категорий по подходам, суммы упражнений и записи
  * drill-down — донат, легенда и списки рендерятся как в рантайме;
- * TIME-категория (CARDIO) и смешанная (CORE) видны в легенде.
- * [selected] открывает drill-down выбранной категории.
+ * TIME-категория (CARDIO) и смешанная (CORE) видны в легенде. Агрегаты
+ * кладутся в карту окна [windowOffset]; ключи `0..windowOffset` без дыр
+ * (контракт D2) — окна без данных дают пустой результат; дефолтное
+ * смещение 0 (актуальное окно) сохраняет прежнее поведение
+ * (add-stats-period-pager, design D5). [selected] открывает drill-down
+ * выбранной категории.
  */
 internal fun demoStatsState(
     period: StatsPeriod,
     selected: String? = null,
-    visiblePeriods: List<StatsPeriod> = StatsPeriod.entries.toList()
-): StatsUiState =
-    StatsUiState(
+    visiblePeriods: List<StatsPeriod> = StatsPeriod.entries.toList(),
+    windowOffset: Int = 0
+): StatsUiState {
+    val today = LocalDate.now()
+    return StatsUiState(
         period = period,
+        visiblePeriods = visiblePeriods,
+        windowOffset = windowOffset,
+        window = period.window(today, windowOffset),
         selected = selected,
-        categoryTotals = demoCategoryTotals,
-        exerciseTotals = demoExerciseTotals,
-        drillGroups = demoDrillGroups,
-        categoryColors = demoCategoryColors,
-        isEmpty = false,
-        visiblePeriods = visiblePeriods
+        statsByOffset =
+            (0..windowOffset).associateWith { offset ->
+                if (offset == windowOffset) {
+                    CategoryStatsResult(demoCategoryTotals, demoExerciseTotals, demoDrillGroups)
+                } else {
+                    CategoryStatsResult(emptyList(), emptyMap(), emptyMap())
+                }
+            },
+        categoryColors = demoCategoryColors
     )
+}
 
 // ===== Превью (обе темы, showBackground, locale = "ru") =====
 
@@ -939,6 +1186,14 @@ internal fun StatsPeriodHiddenPreview() {
     StatsScreenPreview(period = StatsPeriod.MONTH, visiblePeriods = listOf(StatsPeriod.MONTH))
 }
 
+/** Прошлое окно недели (смещение назад на 1): подпись дат сдвинулась за окном. */
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun StatsWeekPastWindowPreview() {
+    StatsScreenPreview(period = StatsPeriod.WEEK, windowOffset = 1)
+}
+
 // Ландшафт (макет iter5_v1.html): размер превью шире высоты —
 // LocalConfiguration даёт ORIENTATION_LANDSCAPE.
 
@@ -956,6 +1211,14 @@ internal fun StatsLandscapeDrillDownPreview() {
     StatsScreenPreview(period = StatsPeriod.WEEK, selected = "PUSH")
 }
 
+/** Ландшафт: пустое окно — серый донат, подсказка справа без рамки. */
+@Preview(widthDp = 891, heightDp = 411, showBackground = true, locale = "ru")
+@Preview(widthDp = 891, heightDp = 411, uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun StatsLandscapeEmptyPreview() {
+    StatsScreenPreview(period = StatsPeriod.WEEK, isEmpty = true)
+}
+
 /** Ландшафт: пикер скрыт при одном видимом периоде. */
 @Preview(widthDp = 891, heightDp = 411, showBackground = true, locale = "ru")
 @Preview(widthDp = 891, heightDp = 411, uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
@@ -969,7 +1232,8 @@ private fun StatsScreenPreview(
     period: StatsPeriod,
     selected: String? = null,
     isEmpty: Boolean = false,
-    visiblePeriods: List<StatsPeriod> = StatsPeriod.entries.toList()
+    visiblePeriods: List<StatsPeriod> = StatsPeriod.entries.toList(),
+    windowOffset: Int = 0
 ) {
     JetpackMyWorkoutsTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
@@ -978,10 +1242,16 @@ private fun StatsScreenPreview(
                     if (isEmpty) {
                         StatsUiState(period = period, visiblePeriods = visiblePeriods)
                     } else {
-                        demoStatsState(period = period, selected = selected, visiblePeriods = visiblePeriods)
+                        demoStatsState(
+                            period = period,
+                            selected = selected,
+                            visiblePeriods = visiblePeriods,
+                            windowOffset = windowOffset
+                        )
                     },
                 onPeriodChange = {},
-                onCategoryClick = {}
+                onCategoryClick = {},
+                onWindowChange = {}
             )
         }
     }

@@ -14,13 +14,14 @@ import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.domain.usecase.ActivityPeriod
 import com.myworkouts.domain.usecase.RecordsMode
 import com.myworkouts.domain.usecase.StatsPeriod
-import com.myworkouts.domain.usecase.computeCategoryStats
+import com.myworkouts.domain.usecase.computeCategoryStatsWindows
 import com.myworkouts.domain.usecase.computeExerciseRecords
 import com.myworkouts.domain.usecase.computeHeatmapLevels
 import com.myworkouts.domain.usecase.computeStreaks
 import com.myworkouts.domain.usecase.entryDay
 import com.myworkouts.domain.usecase.visibleActivityPeriods
 import com.myworkouts.domain.usecase.visibleStatsPeriods
+import com.myworkouts.domain.usecase.window
 import com.myworkouts.ui.state.ActivityUiState
 import com.myworkouts.ui.state.OverviewUiState
 import com.myworkouts.ui.state.RecordsUiState
@@ -38,18 +39,23 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * Пользовательские состояния вкладок обзора (overview-screen, design D9):
- * группировка четырёх `MutableStateFlow` в один data class — transform
- * внешнего `combine` остаётся четырёхпараметричным (обход detekt
- * `LongParameterList`). Не персистятся — переживают поворот через VM.
+ * Пользовательские состояния вкладок обзора (overview-screen, design D9;
+ * add-stats-period-pager, design D5): группировка четырёх
+ * `MutableStateFlow` в один data class — transform внешнего `combine`
+ * остаётся четырёхпараметричным (обход detekt `LongParameterList`).
+ * Не персистятся — переживают поворот через VM.
  *
  * @property statsPeriod Период доната/легенды «Статистики»
+ * @property statsWindowOffset Выбор свайпа окна «Статистики» — сырой,
+ *  без прижима: `maxOffset` считается в [uiState] при построении
+ *  состояния от текущих записей (прижим туда не пишет — цикл)
  * @property selectedCategory Имя категории drill-down; `null` — обзор
  * @property recordsMode Режим значения рекордов
  * @property activityPeriod Окно хитмапа
  */
 private data class OverviewUserState(
     val statsPeriod: StatsPeriod = StatsPeriod.WEEK,
+    val statsWindowOffset: Int = 0,
     val selectedCategory: String? = null,
     val recordsMode: RecordsMode = RecordsMode.PER_SET,
     val activityPeriod: ActivityPeriod = ActivityPeriod.MONTH
@@ -139,7 +145,14 @@ class OverviewViewModel(
                 clampPeriod(user.statsPeriod, visibleStats, earliest != null)
             val activityPeriod =
                 clampPeriod(user.activityPeriod, visibleActivity, earliest != null)
-            val stats = computeCategoryStats(entries, statsPeriod, today)
+            // Агрегаты всех окон периода за один проход (add-stats-period-pager,
+            // design D2); ключ 0 есть всегда — даже без записей ≤ today.
+            // maxOffset в UI отдельно не считается (D3) — источник: ключи карты.
+            // Прижим смещения к глубине истории (D5): userState хранит сырой
+            // выбор свайпа, кламп пишется только в состояние, не в userState.
+            val windows = computeCategoryStatsWindows(entries, statsPeriod, today)
+            val windowOffset = minOf(user.statsWindowOffset, windows.keys.max())
+            val window = statsPeriod.window(today, windowOffset)
             val streaks = computeStreaks(entries, today)
             OverviewUiState(
                 selectedTab = selectedTab,
@@ -148,12 +161,11 @@ class OverviewViewModel(
                     StatsUiState(
                         period = statsPeriod,
                         visiblePeriods = visibleStats,
+                        windowOffset = windowOffset,
+                        window = window,
                         selected = user.selectedCategory,
-                        categoryTotals = stats.categoryTotals,
-                        exerciseTotals = stats.exerciseTotals,
-                        drillGroups = stats.drillGroups,
-                        categoryColors = colors,
-                        isEmpty = stats.drillGroups.isEmpty()
+                        statsByOffset = windows,
+                        categoryColors = colors
                     ),
                 records =
                     RecordsUiState(
@@ -194,14 +206,32 @@ class OverviewViewModel(
     }
 
     /**
-     * Меняет период «Статистики»: drill-down сбрасывается (spec), аналитика
-     * (`day|week|month|year`, design D11).
+     * Меняет период «Статистики»: drill-down и смещение окна сбрасываются
+     * в актуальное окно (spec; add-stats-period-pager, design D5),
+     * аналитика (`day|week|month|year`, design D11).
      */
     fun selectStatsPeriod(period: StatsPeriod) {
         analyticsProvider.log(
             AnalyticsEvent.UserAction(UserActionType.SELECT_STATS_PERIOD, period.name.lowercase())
         )
-        userState.update { it.copy(statsPeriod = period, selectedCategory = null) }
+        userState.update {
+            it.copy(statsPeriod = period, statsWindowOffset = 0, selectedCategory = null)
+        }
+    }
+
+    /**
+     * Листает окно периода «Статистики» назад (свайп пагера;
+     * add-stats-period-pager, design D5): drill-down сбрасывается
+     * (сценарий «Свайп по окнам сбрасывает drill-down»), аналитика —
+     * смещение строкой (`1`, `2`, …; design D8). Сырой выбор свайпа
+     * хранится как есть — прижим к глубине истории выполняется при
+     * построении состояния ([uiState]).
+     */
+    fun selectStatsWindow(offset: Int) {
+        analyticsProvider.log(
+            AnalyticsEvent.UserAction(UserActionType.SELECT_STATS_WINDOW, offset.toString())
+        )
+        userState.update { it.copy(statsWindowOffset = offset, selectedCategory = null) }
     }
 
     /**

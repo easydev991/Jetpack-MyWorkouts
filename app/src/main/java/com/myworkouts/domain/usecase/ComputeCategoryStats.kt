@@ -4,6 +4,7 @@ import com.myworkouts.domain.model.EntryWithExercise
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 
 /** Доля категории в донате: сумма подходов её записей за период. */
@@ -43,16 +44,6 @@ data class CategoryStatsResult(
 )
 
 /**
- * Старт скользящего окна периода статистики включительно (overview-screen,
- * design Decision 3): окно фиксированной длины [StatsPeriod.days] от сегодня
- * назад, заканчивается сегодня. Системная зона.
- */
-internal fun statsPeriodStart(
-    period: StatsPeriod,
-    today: LocalDate
-): LocalDate = today.minusDays((period.days - 1).toLong())
-
-/**
  * Календарный день записи (epoch millis → LocalDate), паттерн
  * `groupEntriesByDate` главного экрана.
  */
@@ -79,24 +70,63 @@ internal fun percentOf(
  * Рассчитывает вкладку «Статистика» (overview-screen, design Decision 4
  * + overview-stats-time-support Decision 1): чистая функция, `today` —
  * параметром. Доли доната и сортировка — по сумме подходов, TIME- и
- * REPS-записи наравне. Окно периода — `[statsPeriodStart, today]`
- * включительно; будущие записи с кривой датой не рвут логику.
+ * REPS-записи наравне. Актуальное окно периода — смещение 0
+ * (add-stats-period-pager, design D2): делегирует [computeCategoryStatsWindows].
  */
 internal fun computeCategoryStats(
     entries: List<EntryWithExercise>,
     period: StatsPeriod,
     today: LocalDate
-): CategoryStatsResult {
-    val zone = ZoneId.systemDefault()
-    val start = statsPeriodStart(period, today)
-    val inPeriod =
-        entries.filter { entry ->
-            val day = entryDay(entry, zone)
-            !day.isBefore(start) && !day.isAfter(today)
-        }
+): CategoryStatsResult = computeCategoryStatsWindows(entries, period, today).getValue(0)
 
+/**
+ * Агрегаты вкладки «Статистика» по окнам периода одним проходом
+ * (add-stats-period-pager, design D2): окна — непересекающаяся разбивка
+ * прошлого, поэтому запись с отставанием `k` календарных дней от сегодня
+ * принадлежит ровно одному окну — смещению `k / [StatsPeriod.days]`
+ * (целочисленное деление). Записи с датой позже сегодня отбрасываются до
+ * раскладки — как фильтр `!day.isAfter(today)`: иначе отрицательное
+ * отставание («завтра») при делении дало бы смещение 0 и попало бы в
+ * актуальное окно. Ключи карты — все смещения `0..maxOffset` включительно
+ * (`maxOffset` — максимальное смещение среди записей ≤ today): окно без
+ * записей даёт пустой [CategoryStatsResult], а не отсутствующий ключ; если
+ * записей с датой ≤ today нет — карта содержит единственный ключ `0` с
+ * пустым результатом, чтобы делегирование актуального окна всегда находило
+ * запись карты. Внутри корзины доли и сортировки — как в
+ * [computeCategoryStats] до делегирования (общий хелпер
+ * [aggregateCategoryStats]).
+ */
+internal fun computeCategoryStatsWindows(
+    entries: List<EntryWithExercise>,
+    period: StatsPeriod,
+    today: LocalDate
+): Map<Int, CategoryStatsResult> {
+    val zone = ZoneId.systemDefault()
+    val buckets = mutableMapOf<Int, MutableList<EntryWithExercise>>()
+    for (entry in entries) {
+        val day = entryDay(entry, zone)
+        if (day.isAfter(today)) continue
+        val offset = ChronoUnit.DAYS.between(day, today).toInt() / period.days
+        buckets.getOrPut(offset) { mutableListOf() }.add(entry)
+    }
+    val maxOffset = buckets.keys.maxOrNull() ?: 0
+    return (0..maxOffset).associateWith { offset ->
+        aggregateCategoryStats(buckets[offset].orEmpty(), zone)
+    }
+}
+
+/**
+ * Агрегация одной корзины (одного окна) — общий хелпер
+ * [computeCategoryStatsWindows], тело прежнего [computeCategoryStats]:
+ * доли категорий, суммы упражнений по категориям и записи каждой категории
+ * по датам. Доли и сортировки не менялись.
+ */
+private fun aggregateCategoryStats(
+    entries: List<EntryWithExercise>,
+    zone: ZoneId
+): CategoryStatsResult {
     val categoryTotals =
-        inPeriod
+        entries
             .groupBy { it.category }
             .map { (category, list) ->
                 CategoryTotal(
@@ -106,7 +136,7 @@ internal fun computeCategoryStats(
             }.filter { it.totalSets > 0 }
             .sortedWith(compareByDescending<CategoryTotal> { it.totalSets }.thenBy { it.category })
     val exerciseTotals =
-        inPeriod
+        entries
             .groupBy { it.category }
             .mapValues { (_, list) ->
                 list
@@ -123,7 +153,7 @@ internal fun computeCategoryStats(
                     )
             }
     val drillGroups =
-        inPeriod
+        entries
             .groupBy { it.category }
             .mapValues { (_, categoryEntries) ->
                 categoryEntries

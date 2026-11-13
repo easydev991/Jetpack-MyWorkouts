@@ -10,8 +10,11 @@ import com.myworkouts.domain.model.ExerciseMeasuredBy
 import com.myworkouts.domain.model.OverviewTab
 import com.myworkouts.domain.repository.WorkoutDataRepository
 import com.myworkouts.domain.usecase.ActivityPeriod
+import com.myworkouts.domain.usecase.CategoryStatsResult
 import com.myworkouts.domain.usecase.RecordsMode
 import com.myworkouts.domain.usecase.StatsPeriod
+import com.myworkouts.domain.usecase.window
+import com.myworkouts.ui.state.StatsUiState
 import com.myworkouts.ui.state.StreakCardState
 import io.mockk.coVerify
 import io.mockk.every
@@ -301,13 +304,13 @@ class OverviewViewModelTest {
 
             // Then — все три вкладки пересчитаны
             val state = viewModel.uiState.value
-            val stats = state.stats
+            val page = pageOf(state.stats)
             assertEquals(
                 listOf("PULL" to 3),
-                stats.categoryTotals.map { it.category to it.totalSets },
+                page.categoryTotals.map { it.category to it.totalSets },
                 "Донат: подтягивания, 3 подхода"
             )
-            assertEquals(false, stats.isEmpty, "Есть данные — пустое состояние снято")
+            assertEquals(false, page.drillGroups.isEmpty(), "Есть данные — пустое состояние снято")
             assertEquals(
                 1,
                 state.records.records.size,
@@ -340,11 +343,11 @@ class OverviewViewModelTest {
             advanceUntilIdle()
 
             // Then — пустое состояние снято, категория в донате по подходам
-            val stats = viewModel.uiState.value.stats
-            assertEquals(false, stats.isEmpty, "TIME-записи за период — не пустое состояние")
+            val page = pageOf(viewModel.uiState.value.stats)
+            assertEquals(false, page.drillGroups.isEmpty(), "TIME-записи за период — не пустое состояние")
             assertEquals(
                 listOf("CORE" to 3),
-                stats.categoryTotals.map { it.category to it.totalSets },
+                page.categoryTotals.map { it.category to it.totalSets },
                 "TIME-категория в донате, доля по подходам"
             )
         }
@@ -361,7 +364,7 @@ class OverviewViewModelTest {
             // Then
             assertEquals(
                 true,
-                viewModel.uiState.value.stats.isEmpty,
+                pageOf(viewModel.uiState.value.stats).drillGroups.isEmpty(),
                 "Нет записей ни с повторами, ни со временем — пустой период"
             )
         }
@@ -380,11 +383,11 @@ class OverviewViewModelTest {
             advanceUntilIdle()
 
             // Then — окно «День» не содержит вчерашнюю запись
-            val stats = viewModel.uiState.value.stats
-            assertEquals(true, stats.isEmpty, "Вчерашняя запись вне периода «День»")
+            val page = pageOf(viewModel.uiState.value.stats)
+            assertEquals(true, page.drillGroups.isEmpty(), "Вчерашняя запись вне периода «День»")
             assertEquals(
                 emptyList<String>(),
-                stats.categoryTotals.map { it.category },
+                page.categoryTotals.map { it.category },
                 "Донат пуст за сегодня"
             )
         }
@@ -666,6 +669,230 @@ class OverviewViewModelTest {
                 "Подмена не отправляет SELECT_ACTIVITY_PERIOD"
             )
         }
+
+    @Test
+    fun selectStatsWindow_then_shows_window_offset_page() =
+        runTest(testDispatcher) {
+            // Given — записи сегодня и «минус 10»: неделя даёт окна {0, 1}
+            entriesFlow.value =
+                listOf(
+                    workoutEntry(id = 61L, daysAgo = 0),
+                    workoutEntry(id = 62L, daysAgo = 10, name = "Отжимания", category = "PUSH")
+                )
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — свайп на предыдущее окно недели
+            viewModel.selectStatsWindow(1)
+            advanceUntilIdle()
+
+            // Then — смещение, границы окна и агрегаты страницы окна 1
+            val stats = viewModel.uiState.value.stats
+            assertEquals(1, stats.windowOffset, "Смещение окна применено к состоянию")
+            assertEquals(
+                StatsPeriod.WEEK.window(LocalDate.now(), 1),
+                stats.window,
+                "Границы окна — окно недели со смещением 1"
+            )
+            assertEquals(
+                listOf("PUSH" to 3),
+                pageOf(stats).categoryTotals.map { it.category to it.totalSets },
+                "Страница окна 1 — отжимания «минус 10», не сегодняшние подтягивания"
+            )
+        }
+
+    @Test
+    fun selectStatsPeriod_after_window_offset_then_resets_offset_to_zero() =
+        runTest(testDispatcher) {
+            // Given — окно 1 выбрано (запись «минус 10» — окно недели 1)
+            entriesFlow.value = listOf(workoutEntry(id = 63L, daysAgo = 10))
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.selectStatsWindow(1)
+            advanceUntilIdle()
+            assertEquals(
+                1,
+                viewModel.uiState.value.stats.windowOffset,
+                "Смещение применено до смены периода"
+            )
+
+            // When
+            viewModel.selectStatsPeriod(StatsPeriod.MONTH)
+            advanceUntilIdle()
+
+            // Then — смена типа периода возвращает в актуальное окно
+            val stats = viewModel.uiState.value.stats
+            assertEquals(StatsPeriod.MONTH, stats.period, "Период сменён")
+            assertEquals(0, stats.windowOffset, "Смена периода сбрасывает смещение в 0")
+        }
+
+    @Test
+    fun selectStatsWindow_then_resets_drilldown() =
+        runTest(testDispatcher) {
+            // Given — открыт drill-down категории
+            entriesFlow.value = listOf(workoutEntry(id = 64L, daysAgo = 10))
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.selectStatsCategory("PULL")
+            advanceUntilIdle()
+            assertEquals(
+                "PULL",
+                viewModel.uiState.value.stats.selected,
+                "Drill-down открыт до смены окна"
+            )
+
+            // When
+            viewModel.selectStatsWindow(1)
+            advanceUntilIdle()
+
+            // Then — свайп по окнам сбрасывает drill-down к обзору категорий
+            assertEquals(
+                null,
+                viewModel.uiState.value.stats.selected,
+                "Смена окна сбрасывает drill-down"
+            )
+        }
+
+    @Test
+    fun selectStatsWindow_when_offset_beyond_history_then_clamped_to_max_offset() =
+        runTest(testDispatcher) {
+            // Given — история «минус 10»: карта окон недели {0, 1}
+            entriesFlow.value = listOf(workoutEntry(id = 65L, daysAgo = 10))
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When — свайп дальше глубины истории
+            viewModel.selectStatsWindow(5)
+            advanceUntilIdle()
+
+            // Then — прижим к границе maxOffset = windows.keys.max() = 1
+            val stats = viewModel.uiState.value.stats
+            assertEquals(setOf(0, 1), stats.statsByOffset.keys, "Глубина листалки — два окна недели")
+            assertEquals(1, stats.windowOffset, "Смещение прижато к maxOffset")
+        }
+
+    @Test
+    fun selectStatsWindow_when_no_entries_then_offset_zero_and_page_empty() =
+        runTest(testDispatcher) {
+            // Given — нет записей ни одного типа
+            entriesFlow.value = emptyList()
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.selectStatsWindow(3)
+            advanceUntilIdle()
+
+            // Then — листалки нет: единственное окно 0, страница пустая
+            val stats = viewModel.uiState.value.stats
+            assertEquals(setOf(0), stats.statsByOffset.keys, "Без записей — единственное окно 0")
+            assertEquals(0, stats.windowOffset, "Без записей смещение всегда 0")
+            assertEquals(
+                true,
+                pageOf(stats).drillGroups.isEmpty(),
+                "Страница без записей — пустая"
+            )
+        }
+
+    @Test
+    fun selectStatsWindow_when_all_entries_in_future_then_offset_zero_and_page_empty() =
+        runTest(testDispatcher) {
+            // Given — все записи в будущем (в глубину листалки не входят)
+            entriesFlow.value = listOf(workoutEntry(id = 66L, daysAgo = -3))
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.selectStatsWindow(2)
+            advanceUntilIdle()
+
+            // Then — записи позже сегодня отброшены: окно 0, страница пустая
+            val stats = viewModel.uiState.value.stats
+            assertEquals(setOf(0), stats.statsByOffset.keys, "Будущие записи не создают окон")
+            assertEquals(0, stats.windowOffset, "Смещение прижато к 0")
+            assertEquals(
+                true,
+                pageOf(stats).drillGroups.isEmpty(),
+                "Страница без записей — пустая"
+            )
+        }
+
+    @Test
+    fun selectStatsWindow_when_history_shrinks_then_offset_clamped_to_new_max() =
+        runTest(testDispatcher) {
+            // Given — история «минус 40»: окна недели {0..5}, выбрано последнее
+            entriesFlow.value = listOf(workoutEntry(id = 71L, daysAgo = 40))
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+            viewModel.selectStatsWindow(5)
+            advanceUntilIdle()
+            assertEquals(
+                5,
+                viewModel.uiState.value.stats.windowOffset,
+                "Смещение 5 применено"
+            )
+
+            // When — удаление ранних записей: осталась «минус 15» (окна {0..2})
+            entriesFlow.value = listOf(workoutEntry(id = 72L, daysAgo = 15))
+            advanceUntilIdle()
+
+            // Then — прижим к новой границе (offset = min(offset, maxOffset))
+            assertEquals(
+                2,
+                viewModel.uiState.value.stats.windowOffset,
+                "Смещение прижато к новому maxOffset"
+            )
+        }
+
+    @Test
+    fun selectStatsWindow_then_logs_offset_as_string() =
+        runTest(testDispatcher) {
+            // Given — глубина истории ≥ двух окон недели (keys {0, 1})
+            entriesFlow.value =
+                listOf(
+                    workoutEntry(id = 81L, daysAgo = 0),
+                    workoutEntry(id = 82L, daysAgo = 10)
+                )
+            val viewModel = createViewModel()
+            backgroundScope.launch { viewModel.uiState.collect { } }
+            advanceUntilIdle()
+
+            // When
+            viewModel.selectStatsWindow(1)
+            advanceUntilIdle()
+
+            // Then — значение события равно смещению строкой
+            assertEquals(
+                listOf(AnalyticsEvent.UserAction(UserActionType.SELECT_STATS_WINDOW, "1")),
+                fakeAnalytics.events,
+                "Смена окна логирует UserAction(SELECT_STATS_WINDOW, «1»)"
+            )
+
+            // When — следующее листание
+            viewModel.selectStatsWindow(2)
+            advanceUntilIdle()
+
+            // Then — каждый свайп логирует своё смещение
+            assertEquals(
+                listOf(
+                    AnalyticsEvent.UserAction(UserActionType.SELECT_STATS_WINDOW, "1"),
+                    AnalyticsEvent.UserAction(UserActionType.SELECT_STATS_WINDOW, "2")
+                ),
+                fakeAnalytics.events,
+                "Смена окна логирует UserAction(SELECT_STATS_WINDOW, «2»)"
+            )
+        }
+
+    /** Страница текущего смещения: запись карты с дефолтом (D5), без `!!`. */
+    private fun pageOf(stats: StatsUiState): CategoryStatsResult =
+        stats.statsByOffset[stats.windowOffset] ?: CategoryStatsResult(emptyList(), emptyMap(), emptyMap())
 
     /** Запись подтягиваний (PULL, REPS, 3x10) `daysAgo` дней назад в 18:30. */
     private fun workoutEntry(

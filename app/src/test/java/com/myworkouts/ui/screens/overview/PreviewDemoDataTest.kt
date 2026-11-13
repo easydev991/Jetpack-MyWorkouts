@@ -15,18 +15,20 @@ class PreviewDemoDataTest {
     fun demo_stats_state_when_full_then_has_totals_and_drill_entries() {
         // When
         val state = demoStatsState(period = StatsPeriod.WEEK)
+        // Демо кладёт агрегаты в карту окна 0 (актуальное окно)
+        val page = state.statsByOffset.getValue(0)
 
         // Then — донат имеет ненулевую долю (подходы), легенда и drill-down заполнены
-        assertTrue(state.categoryTotals.isNotEmpty(), "Категории легенды не должны быть пусты")
+        assertTrue(page.categoryTotals.isNotEmpty(), "Категории легенды не должны быть пусты")
         assertTrue(
-            state.categoryTotals.sumOf { it.totalSets } > 0,
+            page.categoryTotals.sumOf { it.totalSets } > 0,
             "Суммарное число подходов должно быть положительным"
         )
-        assertTrue(state.exerciseTotals.isNotEmpty(), "Суммы упражнений не должны быть пусты")
-        state.exerciseTotals.forEach { (category, totals) ->
+        assertTrue(page.exerciseTotals.isNotEmpty(), "Суммы упражнений не должны быть пусты")
+        page.exerciseTotals.forEach { (category, totals) ->
             assertTrue(totals.isNotEmpty(), "У категории $category должны быть упражнения")
         }
-        state.drillGroups.forEach { (category, groups) ->
+        page.drillGroups.forEach { (category, groups) ->
             assertTrue(groups.isNotEmpty(), "У категории $category должны быть дни")
             groups.forEach { group ->
                 assertTrue(group.entries.isNotEmpty(), "Записи дня ${group.date} не должны быть пусты")
@@ -38,10 +40,11 @@ class PreviewDemoDataTest {
     fun demo_stats_state_when_category_selected_then_drill_groups_exist() {
         // When
         val state = demoStatsState(period = StatsPeriod.WEEK, selected = "PUSH")
+        val page = state.statsByOffset.getValue(0)
 
         // Then
         assertTrue(
-            state.selected != null && state.drillGroups[state.selected].orEmpty().isNotEmpty(),
+            state.selected != null && page.drillGroups[state.selected].orEmpty().isNotEmpty(),
             "У выбранной категории должны быть записи drill-down"
         )
     }

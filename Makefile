@@ -61,13 +61,40 @@ guard_domain: _ensure_secrets
 
 ## android-test: Запуск интеграционных тестов на Android устройстве со статистикой в консоли. Использование: make android-test FLAVOR=rustore (по умолчанию FLAVOR=github)
 # notClass исключает LeakCanary-регрессию (медленный heap-анализ) —
-# она гоняется отдельным memory-check
+# она гоняется отдельным memory-check; DemoDataSeederTest — тул
+# предзаполнения БД для ручных тестов, гоняется отдельным seed-demo-db.
+# Список — переменной: сырая запятая внутри $(call) делила бы аргументы
+# макроса (notClass ушёл бы обрезанным, хвост — в test_report.py вместо
+# директории результатов)
+ANDROID_TEST_NOTCLASS := com.myworkouts.ui.screens.root.MemoryLeakRegressionTest,com.myworkouts.tools.DemoDataSeederTest
 android-test: _ensure_secrets _ensure_animations_off
-	$(call run_tests,connected$(FLAVOR_TITLE)DebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=com.myworkouts.ui.screens.root.MemoryLeakRegressionTest,app/build/outputs/androidTest-results/connected/debug)
+	$(call run_tests,connected$(FLAVOR_TITLE)DebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=$(ANDROID_TEST_NOTCLASS),app/build/outputs/androidTest-results/connected/debug)
 
 ## memory-check: Прогон LeakCanary-регрессии на эмуляторе (только leak-тесты). Использование: make memory-check FLAVOR=rustore (по умолчанию FLAVOR=github)
 memory-check: _ensure_secrets _ensure_animations_off
 	$(call run_tests,connected$(FLAVOR_TITLE)DebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.myworkouts.ui.screens.root.MemoryLeakRegressionTest,app/build/outputs/androidTest-results/connected/debug)
+
+## seed-demo-db: Заполнить БД debug-приложения на эмуляторе демо-данными для ручных тестов: 365 дней, приседания ≥5 дней/нед по 10/20 повторов (1–3 подхода), остальные стандартные случайно 5–50 (повторы/секунды). Использование: make seed-demo-db [DAYS=365] [SEED=42] [FLAVOR=github]. Требует пустую БД и установленное приложение; очистка — экран «Ещё» → «Очистить данные»
+DAYS ?= 365
+SEED ?= 42
+seed-demo-db: _ensure_secrets
+	@adb get-state >/dev/null 2>&1 || { printf "$(RED)Устройство/эмулятор не найден (adb)$(RESET)\n"; exit 1; }
+	@adb shell pm path com.myworkouts >/dev/null 2>&1 || { printf "$(RED)Приложение не установлено — сначала make install$(RESET)\n"; exit 1; }
+	@./gradlew assemble$(FLAVOR_TITLE)DebugAndroidTest --console=plain
+	adb install -r app/build/outputs/apk/androidTest/$(FLAVOR)/debug/app-$(FLAVOR)-debug-androidTest.apk
+	# Ручной am instrument, НЕ connected-задача Gradle: она делает uninstall
+	# APK после прогона и стёрла бы данные; uninstall тестового APK ниже
+	# снимает только androidTest-пакет, данные приложения остаются.
+	# Успех распознаём по '^OK': am instrument всегда exit 0, даже при
+	# FAILURES (проверено) — иначе гвард «БД не пуста» выглядел бы успехом
+	@OUT=$$(adb shell am instrument -w -e class com.myworkouts.tools.DemoDataSeederTest \
+		-e seedDemo true -e days $(DAYS) -e seed $(SEED) \
+		com.myworkouts.test/androidx.test.runner.AndroidJUnitRunner); \
+	printf "%s\n" "$$OUT"; \
+	echo "$$OUT" | grep -q "^OK" || { printf "$(RED)Заполнение не выполнено — см. ошибку выше (например, БД не пуста: очистите на экране «Ещё»)$(RESET)\n"; \
+		adb uninstall com.myworkouts.test >/dev/null 2>&1 || true; exit 1; }
+	@adb uninstall com.myworkouts.test >/dev/null 2>&1 || true
+	@printf "$(GREEN)Демо-данные добавлены (SEED=$(SEED)). Очистка — экран «Ещё» → «Очистить данные»$(RESET)\n"
 
 ## emulator-fast: Выключить анимации на запущенном эмуляторе (ускоряет androidTest). Применять после каждого старта эмулятора; android-test чинит их сам перед каждым прогоном
 # Запись сверяется read-back: масштабы умеют сами откатываться в 1.0 уже после
@@ -343,4 +370,4 @@ setup_git_hooks:
 ## all: Полная проверка (сборка + тесты + линтер) и установка APK на устройство
 all: check install
 
-.PHONY: help build clean test guard_domain scripts-test lint format check install all android-test memory-check emulator-fast _ensure_animations_off screenshots screenshots-ru screenshots-en setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets rustore rustore-draft rustore-commit whats-new _rustore_build_aab
+.PHONY: help build clean test guard_domain scripts-test lint format check install all android-test memory-check emulator-fast seed-demo-db _ensure_animations_off screenshots screenshots-ru screenshots-en setup _check_jdk _check_markdownlint update_readme_versions setup_git_hooks apk _ensure_secrets _load_secrets rustore rustore-draft rustore-commit whats-new _rustore_build_aab

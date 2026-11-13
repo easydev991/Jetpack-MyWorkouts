@@ -58,6 +58,7 @@ class OverviewScreenTest {
         OverviewScreenActions(
             onTabSelect = onTabSelect,
             onStatsPeriodChange = {},
+            onStatsWindowChange = {},
             onStatsCategorySelect = {},
             onRecordsModeChange = {},
             onActivityPeriodChange = {}

@@ -135,3 +135,7 @@ fun JetpackMyWorkoutsTheme(
         content = content
     )
 }
+
+/** Порог яркости фона (`luminance`): ниже — тёмная цветовая схема. */
+@Suppress("MagicNumber") // 0.5 — условная граница «тёмный/светлый» по яркости surface
+internal const val DARK_THEME_LUMINANCE_THRESHOLD = 0.5f

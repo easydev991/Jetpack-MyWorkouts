@@ -6,7 +6,6 @@ import android.content.res.Configuration
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -54,6 +54,7 @@ import com.myworkouts.domain.usecase.ActivityPeriod
 import com.myworkouts.domain.usecase.HeatmapDayData
 import com.myworkouts.ui.state.ActivityUiState
 import com.myworkouts.ui.state.StreakCardState
+import com.myworkouts.ui.theme.DARK_THEME_LUMINANCE_THRESHOLD
 import com.myworkouts.ui.theme.HeatmapLevel1
 import com.myworkouts.ui.theme.HeatmapLevel2
 import com.myworkouts.ui.theme.HeatmapLevel3
@@ -377,6 +378,7 @@ private fun HeatmapCard(
             )
     ) {
         val emptyColor = MaterialTheme.colorScheme.surfaceContainerHighest
+        val greens = heatmapPalette()
         val cell = HEATMAP_CELL_DP.dp
         val gap = HEATMAP_GAP_DP.dp
         val columns = (heatmap.size + HEATMAP_ROWS - 1) / HEATMAP_ROWS
@@ -409,7 +411,7 @@ private fun HeatmapCard(
                         if (day.level == 0) {
                             emptyColor
                         } else {
-                            heatmapGreens[day.level - 1]
+                            greens[day.level - 1]
                         },
                     topLeft = Offset((index / HEATMAP_ROWS) * stepPx, (index % HEATMAP_ROWS) * stepPx),
                     size = Size(cellPx, cellPx),
@@ -427,19 +429,27 @@ private fun HeatmapCard(
 private val heatmapGreens = listOf(HeatmapLevel1, HeatmapLevel2, HeatmapLevel3, HeatmapLevel4)
 
 /**
+ * Шкала зелёных уровней хитмапа для текущей темы: в светлой — от светлого
+ * (уровень 1) к тёмному (уровень 4); в тёмной — в обратном порядке, чтобы
+ * «больше записей» рисовалось светлее. Легенда ([LegendRow]) и ячейки
+ * сетки ([HeatmapCard]) берут одну и ту же шкалу — расходиться не могут.
+ */
+@Composable
+private fun heatmapPalette(): List<Color> =
+    if (MaterialTheme.colorScheme.surface.luminance() < DARK_THEME_LUMINANCE_THRESHOLD) {
+        heatmapGreens.reversed()
+    } else {
+        heatmapGreens
+    }
+
+/**
  * Мини-легенда хитмапа: «Меньше» + пять образцов + «Больше», прижаты вправо.
- * Порядок шкалы зависит от темы: в светлой — от пустой ячейки к самому
- * тёмному зелёному; в тёмной — в обратном порядке (серый «пустой» тон
- * соседствует с тёмно-зелёным, и градиент остаётся плавным).
+ * Шкала — та же [heatmapPalette], что у ячеек сетки: в светлой теме — от
+ * пустой ячейки к самому тёмному зелёному; в тёмной — в обратном порядке.
  */
 @Composable
 private fun LegendRow() {
-    val legendGreens =
-        if (isSystemInDarkTheme()) {
-            heatmapGreens.reversed()
-        } else {
-            heatmapGreens
-        }
+    val legendGreens = heatmapPalette()
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp, alignment = Alignment.End),

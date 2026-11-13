@@ -51,6 +51,7 @@ import com.myworkouts.ui.viewmodel.OverviewViewModel
 internal data class OverviewScreenActions(
     val onTabSelect: (OverviewTab) -> Unit,
     val onStatsPeriodChange: (StatsPeriod) -> Unit,
+    val onStatsWindowChange: (Int) -> Unit,
     val onStatsCategorySelect: (String?) -> Unit,
     val onRecordsModeChange: (RecordsMode) -> Unit,
     val onActivityPeriodChange: (ActivityPeriod) -> Unit
@@ -83,6 +84,7 @@ fun OverviewScreen(
             OverviewScreenActions(
                 onTabSelect = viewModel::selectTab,
                 onStatsPeriodChange = viewModel::selectStatsPeriod,
+                onStatsWindowChange = viewModel::selectStatsWindow,
                 onStatsCategorySelect = viewModel::selectStatsCategory,
                 onRecordsModeChange = viewModel::selectRecordsMode,
                 onActivityPeriodChange = viewModel::selectActivityPeriod
@@ -153,7 +155,8 @@ internal fun OverviewScreenBody(
                         StatsScreen(
                             state = state.stats,
                             onPeriodChange = actions.onStatsPeriodChange,
-                            onCategoryClick = actions.onStatsCategorySelect
+                            onCategoryClick = actions.onStatsCategorySelect,
+                            onWindowChange = actions.onStatsWindowChange
                         )
                     OverviewTab.RECORDS ->
                         RecordsScreen(
@@ -272,6 +275,15 @@ internal fun OverviewSingleTabPreview() {
     )
 }
 
+/** Вкладка «Статистика» на прошлом окне недели (смещение назад на 1):
+ *  подпись дат окна под пикером сдвинулась за окном (add-stats-period-pager). */
+@Preview(showBackground = true, locale = "ru")
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true, locale = "ru")
+@Composable
+internal fun OverviewStatsPastWindowPreview() {
+    OverviewTabPreview(selectedTab = OverviewTab.STATS, statsWindowOffset = 1)
+}
+
 /** Демо-состояние «Активности» для каркасного превью. */
 private val demoActivityUiState =
     ActivityUiState(
@@ -283,7 +295,8 @@ private val demoActivityUiState =
 @Composable
 private fun OverviewTabPreview(
     selectedTab: OverviewTab,
-    visibleTabs: List<OverviewTab> = OverviewTab.entries.toList()
+    visibleTabs: List<OverviewTab> = OverviewTab.entries.toList(),
+    statsWindowOffset: Int = 0
 ) {
     JetpackMyWorkoutsTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
@@ -292,7 +305,11 @@ private fun OverviewTabPreview(
                     OverviewUiState(
                         selectedTab = selectedTab,
                         visibleTabs = visibleTabs,
-                        stats = demoStatsState(period = StatsPeriod.WEEK),
+                        stats =
+                            demoStatsState(
+                                period = StatsPeriod.WEEK,
+                                windowOffset = statsWindowOffset
+                            ),
                         records = RecordsUiState(records = demoRecords),
                         activity = demoActivityUiState
                     ),
@@ -300,6 +317,7 @@ private fun OverviewTabPreview(
                     OverviewScreenActions(
                         onTabSelect = {},
                         onStatsPeriodChange = {},
+                        onStatsWindowChange = {},
                         onStatsCategorySelect = {},
                         onRecordsModeChange = {},
                         onActivityPeriodChange = {}
