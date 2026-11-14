@@ -1,5 +1,6 @@
 package com.myworkouts.domain
 
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.File
@@ -132,12 +133,9 @@ class DomainPurityTest {
  * Заменяет вырезанное пробелами, сохраняя длину и переводы строк, —
  * номера строк в отчёте остаются точными.
  *
- * shortcut: тройные кавычки (`"""`) со встроенными `"` маскируются неточно —
- * фрагмент между внутренними кавычками остаётся видимым, и запрещённый
- * префикс там даст ложное срабатывание; чинить (отдельное состояние до
- * закрывающей `"""`), если в `domain/` появятся raw strings. Char-литералы
- * (`'a'`) не обрабатываются отдельным состоянием — в `domain/` их нет.
- * Вложенные блочные комментарии поддержаны счётчиком глубины.
+ * Обрабатываются: строки с escape (`\"`), raw strings — до закрывающих
+ * `"""` (встроенные `"` в том числе), char-литералы — до закрывающей `'`
+ * (`'\''`, `'\uXXXX'` и т.п.), вложенные блочные комментарии (счётчик глубины).
  */
 private class CommentStripper {
     private var inLineComment = false
@@ -145,6 +143,7 @@ private class CommentStripper {
     /** Глубина вложенных блочных комментариев: Kotlin допускает `/* /* */ */`. */
     private var blockDepth = 0
     private var inString = false
+    private var inRawString = false
 
     fun strip(source: String): String {
         val out = StringBuilder(source.length)
@@ -165,10 +164,11 @@ private class CommentStripper {
         return when {
             inLineComment -> consumeLineComment(c, out)
             blockDepth > 0 -> consumeBlockComment(c, next, out)
+            inRawString -> consumeRawString(source, i, out)
             inString -> consumeString(c, out)
             c == '/' && next == '/' -> startComment(out) { inLineComment = true }
             c == '/' && next == '*' -> startComment(out) { blockDepth = 1 }
-            else -> consumeCode(c, out)
+            else -> consumeCode(source, i, out)
         }
     }
 
@@ -229,12 +229,165 @@ private class CommentStripper {
         return 2
     }
 
-    private fun consumeCode(
-        c: Char,
+    private fun consumeRawString(
+        source: String,
+        i: Int,
         out: StringBuilder
     ): Int {
+        if (source.startsWith("\"\"\"", i)) {
+            // Хвост лишних кавычек (`"""abc""""`) съедается целиком: иначе
+            // остаточная `"` включила бы строковый режим и маскировала код
+            // до следующей `"` в файле.
+            var run = 0
+            while (i + run < source.length && source[i + run] == '"') run++
+            inRawString = false
+            repeat(run) { out.append(' ') }
+            return run
+        }
+        out.append(if (source[i] == '\n') '\n' else ' ')
+        return 1
+    }
+
+    // `ReturnCount` подавлен осознанно: по раннему выходу на каждый вид
+    // литерала (`"""`, `'`, `"`) — нагляднее, чем `when` с переменной
+    // потреблённой длины (прецедент — consumeBlockComment).
+    @Suppress("ReturnCount")
+    private fun consumeCode(
+        source: String,
+        i: Int,
+        out: StringBuilder
+    ): Int {
+        val c = source[i]
+        if (c == '"' && source.startsWith("\"\"\"", i)) {
+            inRawString = true
+            out.append("   ")
+            return 3
+        }
+        if (c == '\'') return consumeCharLiteral(source, i, out)
         if (c == '"') inString = true
         out.append(c)
         return 1
+    }
+
+    /**
+     * Char-литерал маскируется целиком до закрывающей `'`; escape-пары
+     * (`\'`, `\\`, `\n` и т.п.) пропускаются одним шагом, поэтому закрывающая
+     * кавычка не спутается с экранированной — `'\''` маскируется как один
+     * литерал, и код на той же строке остаётся видимым. Незакрытая `'`
+     * гасится до конца строки — иначе одиночная кавычка каскадом скрыла бы
+     * весь последующий код.
+     */
+    private fun consumeCharLiteral(
+        source: String,
+        i: Int,
+        out: StringBuilder
+    ): Int {
+        val lineEnd = source.indexOf('\n', i)
+        var end = i + 1
+        while (end < source.length && end != lineEnd && source[end] != '\'') {
+            // Escape-пара занимает два символа; `\` у границы строки или у
+            // перевода строки шагаем как обычный символ, чтобы не перескочить
+            // `\n` и не сбить счёт строк.
+            end += if (source[end] == '\\' && end + 1 < source.length && end + 1 != lineEnd) 2 else 1
+        }
+        if (end == source.length || end == lineEnd) {
+            end = if (lineEnd >= 0) lineEnd else source.length - 1
+        }
+        for (k in i..end) {
+            out.append(if (source[k] == '\n') '\n' else ' ')
+        }
+        return end - i + 1
+    }
+}
+
+/**
+ * Тесты стриппера: guard сканирует вырезанный текст, поэтому ложные
+ * утечки (видимое содержимое литералов) и лишняя маскировка кода
+ * ломают его вердикт — проверяются через результат `strip`.
+ */
+class CommentStripperTest {
+    @Test
+    fun masks_raw_string_with_embedded_quotes() {
+        // Given — raw string со встроенными кавычками
+        val source = "val s = \"\"\"x \"android.util.Log\" y\"\"\"\nval ok = 1"
+        // When
+        val stripped = CommentStripper().strip(source)
+        // Then — содержимое скрыто, код после литерала виден
+        assertTrue(stripped.contains("val ok = 1"))
+        assertTrue(!stripped.contains("android."))
+    }
+
+    @Test
+    fun masks_raw_string_with_trailing_extra_quote() {
+        // Given — хвост из 4 кавычек: закрывающие `"""` плюс лишняя
+        val source = "val s = \"\"\"abc\"\"\"\"\nval visible = 1"
+        // When
+        val stripped = CommentStripper().strip(source)
+        // Then — лишняя кавычка не включает строковый режим и не гасит код дальше
+        assertTrue(stripped.contains("val visible = 1"))
+    }
+
+    @Test
+    fun masks_multiline_raw_string_and_preserves_lines() {
+        // Given
+        val source = "val a = 1\nval s = \"\"\"\nandroid.util.Log\n\"\"\"\nval b = 2"
+        // When
+        val stripped = CommentStripper().strip(source)
+        // Then — переносы сохранены, позиции строк точны
+        assertEquals(source.lines().size, stripped.lines().size)
+        assertTrue(stripped.contains("val b = 2"))
+        assertTrue(!stripped.contains("android."))
+    }
+
+    @Test
+    fun masks_char_literal_with_quote_and_keeps_code_visible() {
+        // Given — `'"'` не должен включать строковый режим и гасить код дальше
+        val source = "val q = '\"'\nval visible = 1"
+        // When
+        val stripped = CommentStripper().strip(source)
+        // Then
+        assertTrue(stripped.contains("val visible = 1"))
+    }
+
+    @Test
+    fun masks_char_literal_with_escaped_quote() {
+        // Given
+        val source = "val q = '\\''\nval visible = 2"
+        // When
+        val stripped = CommentStripper().strip(source)
+        // Then
+        assertTrue(stripped.contains("val visible = 2"))
+    }
+
+    @Test
+    fun char_literal_with_escaped_quote_keeps_same_line_code_visible() {
+        // Given — закрывающая кавычка не спутывается с экранированной:
+        // остаточная `'` не гасит остаток строки
+        val source = "val q = '\\'' ; val ok = 1"
+        // When
+        val stripped = CommentStripper().strip(source)
+        // Then
+        assertTrue(stripped.contains("val ok = 1"))
+    }
+
+    @Test
+    fun masks_char_literal_with_escaped_backslash() {
+        // Given — `'\\'`: экранированный обратный слэш, закрывающая `'` после него
+        val source = "val q = '\\\\' ; val ok = 1"
+        // When
+        val stripped = CommentStripper().strip(source)
+        // Then
+        assertTrue(stripped.contains("val ok = 1"))
+    }
+
+    @Test
+    fun still_masks_regular_strings() {
+        // Given
+        val source = "val s = \"android.util.Log\"\nval ok = 1"
+        // When
+        val stripped = CommentStripper().strip(source)
+        // Then
+        assertTrue(stripped.contains("val ok = 1"))
+        assertTrue(!stripped.contains("android."))
     }
 }
